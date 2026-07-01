@@ -22,6 +22,14 @@ import numpy as np
 from stl import mesh as npmesh
 
 from build import cylinder, annulus, translate, bbox, save, check_watertight, OUT, ASSETS
+from notes import note_to_freq, note_to_midi, hex_to_notes, notes_to_hex, midi_to_note
+
+# 管長と周波数の較正（2026/7/1、H2Dで管長40/70/100/130mmの4本を印刷し実測、RMS 0.28mm）。
+#   f = CALIB_K / (L + CALIB_DELTA)   <=>   L = CALIB_K / f - CALIB_DELTA
+# 片閉じ管の1/4波長則そのもので、端補正 CALIB_DELTA≈14.2mm。
+CALIB_K = 91891.5      # mm*Hz
+CALIB_DELTA = 14.227   # mm（端補正）
+MIN_LEN = 6.0          # これ未満の管長は印刷が苦しいので下限を設ける
 
 HEAD = os.path.join(ASSETS, "head_v6.stl")
 HEAD_CUT_Z = 143.0      # v6座標での切断面（この面が管の上端に接する）
@@ -51,6 +59,38 @@ def compact_flute(bore_len: float, head_path: str = HEAD,
     head = _head_tris(head_path, bore_top_z=bore_len)            # ヘッド（上）
     # 管の上端とヘッドの底を少し重ねて確実に結合させる
     return np.concatenate([cap, tube, head])
+
+
+def len_for_freq(freq: float) -> float:
+    """周波数(Hz)からコンパクト笛の管長(mm)を較正式で求める。"""
+    return CALIB_K / freq - CALIB_DELTA
+
+
+def len_for_note(note: str) -> float:
+    return len_for_freq(note_to_freq(note))
+
+
+def compact_sequence(notes, head_path: str = HEAD, style: str = "row",
+                     outer_d: float = OUTER_D, bore_d: float = BORE_D, gap: float = 3.0):
+    """音階列から、各音に合わせた管長のコンパクト笛を並べて作る。"""
+    info = []
+    flutes = []
+    for n in notes:
+        L = max(MIN_LEN, len_for_note(n))
+        info.append((n, note_to_freq(n), L, L + HEAD_LEN))
+        flutes.append(compact_flute(L, head_path, outer_d, bore_d))
+    pitch = outer_d + gap
+    if style == "ring":
+        import math
+        radius = max(14.0, pitch * len(flutes) / (2 * math.pi))
+        asm = np.concatenate([translate(f, dx=radius * math.cos(2 * math.pi * i / len(flutes)),
+                                        dy=radius * math.sin(2 * math.pi * i / len(flutes)))
+                              for i, f in enumerate(flutes)])
+    else:
+        row = layout_row(flutes, pitch)
+        bar = base_bar(len(flutes), pitch, outer_d + 2.0)
+        asm = np.concatenate([row, bar])
+    return asm, info
 
 
 def layout_row(flutes, pitch: float):
@@ -94,12 +134,30 @@ def main():
                     help="較正コームの管長リスト(mm)。既定は4本（印刷時間短縮のため）。"
                          "3〜4本あれば管長と周波数の関係を直線近似できる")
     ap.add_argument("--single", type=float, default=None, help="単一笛の管長(mm)")
+    ap.add_argument("--notes", default=None, help="音階列から生成、例 'C6 D6 E6 F6 G6 A6 B6 C7'")
+    ap.add_argument("--pass-hex", default=None, help="ToneDecoderのhexパスワードから生成、例 5558564F")
+    ap.add_argument("--style", choices=["row", "ring"], default="row", help="音階列の並べ方")
     ap.add_argument("--bore", type=float, default=BORE_D)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--printer", choices=["a1mini", "h2d"], default="a1mini")
     ap.add_argument("--no-3mf", action="store_true")
     args = ap.parse_args()
 
-    if args.single is not None:
+    notes = None
+    if args.pass_hex:
+        notes = hex_to_notes(args.pass_hex)
+    elif args.notes:
+        notes = [s.strip() for s in args.notes.replace(",", " ").split()]
+
+    if notes is not None:
+        asm, info = compact_sequence(notes, style=args.style, bore_d=args.bore)
+        tag = notes_to_hex(notes)
+        name = args.out or os.path.join(OUT, f"compact_{args.style}_{tag}.stl")
+        print("音階列からコンパクト笛を生成:")
+        for n, f, L, tot in info:
+            print(f"  {n:4s} {f:7.1f}Hz  管長{L:6.1f}mm  全長{tot:6.1f}mm")
+        label = f"{len(notes)}音の{args.style}配置（hex {tag}）"
+    elif args.single is not None:
         asm = compact_flute(args.single, bore_d=args.bore)
         name = args.out or os.path.join(OUT, f"compact_L{args.single:.0f}.stl")
         label = f"単一笛 管長{args.single:.0f}mm（全長 {args.single+HEAD_LEN:.0f}mm）"
@@ -116,9 +174,9 @@ def main():
     print(f"外形寸法     : {np.round(mx-mn,1)} mm   三角形数={len(asm)}")
     print(f"保存先       : {name}")
     if not args.no_3mf:
-        from make_3mf import stl_to_a1mini_3mf
-        three = stl_to_a1mini_3mf(name)
-        print(f"印刷用3mf    : {three}")
+        from make_3mf import stl_to_3mf
+        three = stl_to_3mf(name, args.printer)
+        print(f"印刷用3mf    : {three}（{args.printer}）")
 
 
 if __name__ == "__main__":

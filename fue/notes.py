@@ -35,6 +35,11 @@ def midi_to_note(midi: int) -> str:
     return f"{NOTE_NAMES_SHARP[midi % 12]}{midi // 12 - 1}"
 
 
+def note_to_freq(note: str) -> float:
+    """'F#5' -> 739.99 Hz（平均律, A4=440Hz）。"""
+    return 440.0 * 2.0 ** ((note_to_midi(note) - 69) / 12.0)
+
+
 def midi_to_hex(midi: int) -> str:
     """78 -> '4E'  (ToneDecoder: roundedMidiNum.toString(16).toUpperCase().padStart(2,'0'))."""
     return format(midi, "02X")
