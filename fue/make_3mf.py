@@ -28,8 +28,9 @@ TEMPLATES = os.path.join(HERE, os.pardir, "templates")
 PRINTERS = {
     "a1mini": {"bed": (180.0, 180.0), "skeleton": "a1mini_skeleton.3mf",
                "project": "a1mini_project_settings.config", "suffix": "_a1mini"},
+    # H2Dには0.28の標準プリセットが無いので、積層値だけ0.28へ上書きする（BambuStudioが再計算）。
     "h2d": {"bed": (350.0, 320.0), "skeleton": "h2d_skeleton.3mf",
-            "project": None, "suffix": "_h2d"},
+            "project": None, "suffix": "_h2d", "layer_override": 0.28},
 }
 
 
@@ -172,6 +173,14 @@ def stl_to_3mf(stl_path: str, printer: str = "a1mini", out_3mf: str | None = Non
         # h2d は骨組み（実績3mf）の設定をそのまま使う（project=None）。
         if project:
             shutil.copyfile(project, os.path.join(ref, "Metadata/project_settings.config"))
+        # 積層値の上書き（H2Dなど、専用プリセットが無い場合に layer_height を差し替える）。
+        if prof.get("layer_override"):
+            import json
+            pc = os.path.join(ref, "Metadata/project_settings.config")
+            cfg = json.load(open(pc))
+            cfg["layer_height"] = prof["layer_override"]
+            cfg["print_settings_id"] = "%gmm (custom) @BBL H2D" % prof["layer_override"]
+            json.dump(cfg, open(pc, "w"), indent=1, ensure_ascii=False)
         with open(os.path.join(ref, "Metadata/filament_sequence.json"), "w") as f:
             f.write('{"plate_1":{"nozzle_sequence":[],"optimal_assignment":[],"sequence":[]}}')
         if os.path.exists(out_3mf):
