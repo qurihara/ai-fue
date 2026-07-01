@@ -160,8 +160,9 @@ def main():
     if args.lengths is not None:
         Ls = [float(x) for x in args.lengths.replace(",", " ").split()]
         flutes = [compact_flute(L, bore_d=args.bore, closed=closed) for L in Ls]
-        asm = layout_row(flutes, args.bore + 3.0)
-        asm = np.concatenate([asm, base_bar(len(Ls), args.bore + 3.0, OUTER_D + 2.0)])
+        pitch = OUTER_D + 4.0          # 外径基準で間隔をとる（重なり防止）
+        asm = layout_row(flutes, pitch)
+        asm = np.concatenate([asm, base_bar(len(Ls), pitch, OUTER_D + 2.0)])
         kind = "閉管" if closed else "開管"
         name = args.out or os.path.join(OUT, f"compact_lengths_{kind}.stl")
         print(f"管長指定で生成（{kind}, ボア{args.bore}mm）: {Ls}")
