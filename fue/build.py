@@ -1,8 +1,11 @@
 """Compact scale-flute generator.
 
-A flute = a proven whistle HEAD (recorderhead.stl, empirically tuned, supplied by
-the user) + a straight bore CYLINDER whose height comes from the F# tuning table.
-Both stand on z=0 and are centred in x/y, exactly as the 2025 FreeCAD pipeline did.
+A flute = the sounding BODY (slide-recorder-head-v6, a hollow-bore fipple flute
+supplied by the user) + a solid ROD inserted into the bore from the bottom. The
+rod height is length_inside from the F# tuning table; the remaining open air
+column (length_outside = 100 - length_inside) sets the pitch.
+Both stand on z=0 and are centred in x/y, exactly as the 2025 FreeCAD pipeline did
+(it centred the rod on the body's x/y axes, and the bore sits at that centre).
 
 Assembly is pure mesh concatenation (translate + append triangles). We deliberately
 do NOT boolean-union: BambuStudio/most slicers union overlapping solids at slice
@@ -224,25 +227,27 @@ def main():
     ap = argparse.ArgumentParser(description="compact scale-flute generator")
     ap.add_argument("--pass-hex", help="ToneDecoder hex password, e.g. 5558564F")
     ap.add_argument("--notes", help="space/comma note list, e.g. 'C6 G#5 A#5'")
-    ap.add_argument("--head", default=os.path.join(ASSETS, "recorderhead.stl"))
+    ap.add_argument("--body", default=os.path.join(ASSETS, "body_v6.stl"),
+                    help="発音する笛本体のSTL（既定は v6 本体）")
     ap.add_argument("--style", choices=["row", "ring"], default="ring")
-    ap.add_argument("--bore", type=float, default=9.0)
+    ap.add_argument("--bore", type=float, default=8.0,
+                    help="内挿する棒の直径。ボアを埋めて気柱長を length_outside に固定する")
     ap.add_argument("--gap", type=float, default=1.0)
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
     notes = _parse_notes(args)
-    asm, playable, is_real = build_sequence(notes, args.head, args.style, args.bore, args.gap)
+    asm, playable, is_real = build_sequence(notes, args.body, args.style, args.bore, args.gap)
     name = args.out or os.path.join(OUT, f"flute_{args.style}_{notes_to_hex(playable)}.stl")
     save(asm, name)
     mn, mx = bbox(asm)
     ok, open_edges = check_watertight(asm)
-    print(f"notes    : {notes}")
-    print(f"playable : {playable}  (hex {notes_to_hex(playable)})")
-    print(f"head     : {'REAL '+args.head if is_real else 'PLACEHOLDER (drop recorderhead.stl into assets/)'}")
-    print(f"size     : {np.round(mx-mn,1)} mm   tris={len(asm)}")
-    print(f"manifold : {'ok' if ok else f'{open_edges} open edges (slicer will still union overlaps)'}")
-    print(f"saved    : {name}")
+    print(f"音階列       : {notes}")
+    print(f"演奏可能域    : {playable}  (hex {notes_to_hex(playable)})")
+    print(f"本体         : {'実体 '+args.body if is_real else 'プレースホルダ（assets/body_v6.stl が見つからない）'}")
+    print(f"外形寸法     : {np.round(mx-mn,1)} mm   三角形数={len(asm)}")
+    print(f"棒とボアは重なるため本体と棒の境界は非多様体になるが、スライサが結合するので問題ない。")
+    print(f"保存先       : {name}")
 
 
 if __name__ == "__main__":
