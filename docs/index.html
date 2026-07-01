@@ -67,7 +67,8 @@
     <div style="margin-bottom:12px">
       <label class="muted" for="preset">測定対象：</label>
       <select id="preset" style="font:inherit;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.4em">
-        <option value="both">今回の印刷（折り3本＋高音8本）</option>
+        <option value="probe">高音プローブ（閉管5＋開管3）</option>
+        <option value="both">折り3本＋高音8本パネル</option>
         <option value="fold">折りパネルのみ（C6 折り0/2/3）</option>
         <option value="high">高音オクターブのみ（C7〜C8）</option>
         <option value="comb">較正コーム（40/70/100/130mm）</option>
@@ -164,6 +165,16 @@ function capture(onDone){
 
 // --- measurement table (preset-driven) ---
 const PRESETS = {
+  probe: {name:"高音プローブ(閉管5+開管3)", rows:[
+    {id:"p_c6",label:"閉管 C6 (対照)",aim:"1046Hz"},
+    {id:"p_g6",label:"閉管 G6",aim:"1568Hz"},
+    {id:"p_c7",label:"閉管 C7",aim:"2093Hz"},
+    {id:"p_g7",label:"閉管 G7",aim:"3136Hz"},
+    {id:"p_c8",label:"閉管 C8",aim:"4186Hz"},
+    {id:"p_o30",label:"開管 30mm",aim:"鳴るか?"},
+    {id:"p_o20",label:"開管 20mm",aim:"鳴るか?"},
+    {id:"p_o12",label:"開管 12mm",aim:"鳴るか?"},
+  ]},
   fold: {name:"折りパネル(C6 折り0/2/3)", rows:[
     {id:"c6n0", label:"折り0 (直管・細長)", aim:"C6 ≈1046Hz"},
     {id:"c6n2", label:"折り2 (2列ブロック)", aim:"C6 ≈1046Hz"},
@@ -182,7 +193,7 @@ const PRESETS = {
 };
 PRESETS.both = {name:"今回の印刷(折り3本+高音8本)", rows:[...PRESETS.fold.rows, ...PRESETS.high.rows]};
 
-let curPreset = "both";
+let curPreset = "probe";
 const results = {}; // id -> {freq, note}
 const curRows = () => PRESETS[curPreset].rows;
 
