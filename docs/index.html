@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI笛作り 音程測定・較正ツール</title>
+<style>
+  :root{
+    --bg:#0f1220; --card:#1a1f36; --fg:#e8ecf5; --muted:#98a2c0;
+    --accent:#5b8cff; --ok:#37c98a; --warn:#ffb454; --line:#2b3255;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+       background:var(--bg);color:var(--fg);line-height:1.6}
+  .wrap{max-width:680px;margin:0 auto;padding:20px 16px 60px}
+  h1{font-size:1.35rem;margin:.2em 0}
+  h2{font-size:1.05rem;margin:1.4em 0 .5em;color:var(--accent)}
+  p.lead{color:var(--muted);margin:.2em 0 1em}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:14px 0}
+  button{font:inherit;border:none;border-radius:9px;padding:.7em 1.1em;cursor:pointer;color:#fff;background:var(--accent)}
+  button.sec{background:#2b335c}
+  button.ok{background:var(--ok)}
+  button:disabled{opacity:.45;cursor:default}
+  .meter{display:flex;align-items:baseline;gap:.5em;justify-content:center;margin:.3em 0}
+  .hz{font-size:2.6rem;font-weight:700;font-variant-numeric:tabular-nums}
+  .note{font-size:2.6rem;font-weight:700;color:var(--accent)}
+  .cents{font-size:1rem;color:var(--muted)}
+  .centsbar{height:10px;background:#0c0f1d;border-radius:6px;position:relative;margin:.5em 0}
+  .centsbar .mid{position:absolute;left:50%;top:-3px;width:2px;height:16px;background:#444a76}
+  .centsbar .dot{position:absolute;top:-1px;width:12px;height:12px;border-radius:50%;background:var(--ok);transform:translateX(-50%);transition:left .08s}
+  table{width:100%;border-collapse:collapse;margin-top:.4em}
+  th,td{padding:.5em .4em;border-bottom:1px solid var(--line);text-align:center;font-variant-numeric:tabular-nums}
+  th{color:var(--muted);font-weight:600;font-size:.85rem}
+  td.len{font-weight:700}
+  .rowbtn{padding:.4em .8em;font-size:.9rem}
+  .filled{color:var(--ok);font-weight:700}
+  textarea{width:100%;height:150px;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);
+           border-radius:9px;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:.85rem}
+  .muted{color:var(--muted);font-size:.9rem}
+  .status{font-size:.9rem;color:var(--warn);min-height:1.4em}
+  .clar{height:6px;background:#0c0f1d;border-radius:4px;overflow:hidden;margin-top:6px}
+  .clar > i{display:block;height:100%;width:0;background:var(--ok)}
+  input.len{width:70px;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.3em;text-align:center}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AI笛作り 音程測定・較正ツール</h1>
+  <p class="lead">3Dプリントした笛を吹くと、周波数と音名を測ります。較正コーム（管長を変えた笛）の各音を測って、結果をコピーしてClaudeへ貼り付けてください。</p>
+
+  <div class="card">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button id="startBtn">マイク開始</button>
+      <span class="status" id="status">「マイク開始」を押してマイクを許可してください。</span>
+    </div>
+    <div class="meter"><span class="hz"><span id="hz">–</span><span style="font-size:1rem;color:var(--muted)"> Hz</span></span></div>
+    <div class="meter"><span class="note" id="noteName">–</span><span class="cents" id="cents"></span></div>
+    <div class="centsbar"><div class="mid"></div><div class="dot" id="centsDot" style="left:50%"></div></div>
+    <div class="clar"><i id="clarBar"></i></div>
+    <div class="muted" style="margin-top:4px">音名の下のバーは、基準音からのズレ（セント）。中央が合っている状態です。</div>
+  </div>
+
+  <h2>較正コームの測定</h2>
+  <p class="muted">各行の「測定」を押して、その管長の笛を1〜2秒吹き続けてください。安定した値を記録します。管長は編集できます（既定は 40 / 70 / 100 / 130 mm）。</p>
+  <div class="card">
+    <table id="tbl">
+      <thead><tr><th>管長 (mm)</th><th>周波数 (Hz)</th><th>音名</th><th>ズレ</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="sec rowbtn" id="addRow">行を追加</button>
+      <button class="sec rowbtn" id="resetRows">既定に戻す</button>
+    </div>
+  </div>
+
+  <h2>結果を書き出す</h2>
+  <div class="card">
+    <button class="ok" id="buildBtn">結果をまとめる</button>
+    <button class="sec" id="copyBtn">コピー</button>
+    <span class="status" id="copyStatus"></span>
+    <textarea id="out" placeholder="ここに測定結果がまとまります。コピーしてClaudeへ貼り付けてください。"></textarea>
+    <p class="muted">この内容をそのままClaudeに貼り付けると、管長と音程の対応表を作り、任意の曲のコンパクト笛を生成できます。</p>
+  </div>
+
+  <p class="muted">音程検出は <a href="https://github.com/ianprime0509/pitchy" target="_blank">pitchy</a> を使用。関連: <a href="https://github.com/qurihara/ToneDecoder" target="_blank">ToneDecoder</a></p>
+</div>
+
+<script type="module">
+import { PitchDetector } from "https://esm.sh/pitchy@4";
+
+const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const DEFAULT_LENGTHS = [40,70,100,130];
+
+const el = id => document.getElementById(id);
+let audioCtx, analyser, detector, inputBuf, raf, running=false;
+let live = {freq:0, clarity:0};
+
+function freqToNote(f){
+  if(!f) return null;
+  const midiFloat = 69 + 12*Math.log2(f/440);
+  const midi = Math.round(midiFloat);
+  const cents = Math.round((midiFloat - midi)*100);
+  const name = NOTE_NAMES[(midi%12+12)%12] + (Math.floor(midi/12)-1);
+  const hex = midi.toString(16).toUpperCase().padStart(2,"0");
+  return {midi, cents, name, hex};
+}
+
+async function start(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(stream);
+    analyser = new AnalyserNode(audioCtx,{fftSize:4096});
+    src.connect(analyser);
+    detector = PitchDetector.forFloat32Array(analyser.fftSize);
+    inputBuf = new Float32Array(detector.inputLength);
+    running = true;
+    el("startBtn").disabled = true;
+    el("status").textContent = "測定中。笛を吹いてください。";
+    loop();
+  }catch(e){
+    el("status").textContent = "マイクにアクセスできません: " + e.message;
+  }
+}
+
+function loop(){
+  analyser.getFloatTimeDomainData(inputBuf);
+  const [pitch, clarity] = detector.findPitch(inputBuf, audioCtx.sampleRate);
+  live.freq = clarity>0.9 ? pitch : 0;
+  live.clarity = clarity;
+  const info = live.freq ? freqToNote(live.freq) : null;
+  el("hz").textContent = live.freq ? live.freq.toFixed(1) : "–";
+  el("noteName").textContent = info ? info.name : "–";
+  el("cents").textContent = info ? (info.cents>=0?"+":"")+info.cents+" c" : "";
+  el("centsDot").style.left = info ? (50 + Math.max(-50,Math.min(50,info.cents/2))) + "%" : "50%";
+  el("clarBar").style.width = Math.round(clarity*100)+"%";
+  raf = requestAnimationFrame(loop);
+}
+
+// stable capture: median freq over a window where clarity is high
+function capture(onDone){
+  if(!running){ el("status").textContent="先にマイクを開始してください。"; return; }
+  const samples = [];
+  const t0 = performance.now();
+  const DUR = 1400;
+  el("status").textContent = "測定中… 吹き続けてください";
+  const tick = () => {
+    if(live.freq && live.clarity>0.92) samples.push(live.freq);
+    if(performance.now()-t0 < DUR){ requestAnimationFrame(tick); return; }
+    if(samples.length < 8){ el("status").textContent="うまく拾えませんでした。もう一度、安定して吹いてください。"; onDone(null); return; }
+    samples.sort((a,b)=>a-b);
+    const med = samples[Math.floor(samples.length/2)];
+    el("status").textContent = "測定完了。";
+    onDone(med);
+  };
+  tick();
+}
+
+// --- calibration table ---
+let lengths = [...DEFAULT_LENGTHS];
+const results = {}; // len -> {freq, note}
+
+function renderRows(){
+  const tb = el("rows"); tb.innerHTML="";
+  lengths.forEach((L,i)=>{
+    const tr = document.createElement("tr");
+    const r = results[L];
+    tr.innerHTML = `
+      <td class="len"><input class="len" type="number" value="${L}" data-i="${i}"></td>
+      <td>${r? r.freq.toFixed(1) : "–"}</td>
+      <td class="${r?'filled':''}">${r? r.note.name : "–"}</td>
+      <td class="muted">${r? ((r.note.cents>=0?'+':'')+r.note.cents+'c') : ""}</td>
+      <td><button class="rowbtn" data-measure="${L}">測定</button></td>`;
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll("input.len").forEach(inp=>{
+    inp.addEventListener("change",e=>{
+      const i=+e.target.dataset.i, nv=parseFloat(e.target.value);
+      if(!isNaN(nv)){ const old=lengths[i]; lengths[i]=nv; if(results[old]){results[nv]=results[old]; delete results[old];} renderRows(); }
+    });
+  });
+  tb.querySelectorAll("button[data-measure]").forEach(b=>{
+    b.addEventListener("click",()=>{
+      const L=parseFloat(b.dataset.measure);
+      b.disabled=true; b.textContent="…";
+      capture(med=>{
+        b.disabled=false; b.textContent="測定";
+        if(med){ results[L]={freq:med, note:freqToNote(med)}; renderRows(); }
+      });
+    });
+  });
+}
+
+el("addRow").onclick = ()=>{ lengths.push((lengths[lengths.length-1]||100)+20); renderRows(); };
+el("resetRows").onclick = ()=>{ lengths=[...DEFAULT_LENGTHS]; for(const k in results) delete results[k]; renderRows(); };
+
+el("buildBtn").onclick = ()=>{
+  const rows = lengths.filter(L=>results[L]).map(L=>{
+    const r=results[L];
+    return `管長${L}mm : ${r.freq.toFixed(1)} Hz  (${r.note.name}, ${r.note.cents>=0?'+':''}${r.note.cents}c, MIDI ${r.note.midi}, hex ${r.note.hex})`;
+  });
+  const json = JSON.stringify(lengths.filter(L=>results[L]).map(L=>({bore_len_mm:L, freq_hz:+results[L].freq.toFixed(2), note:results[L].note.name, midi:results[L].note.midi})));
+  const text = `# ai-fue コンパクト笛 較正結果\n`+
+    `# 測定日時: ${new Date().toLocaleString('ja-JP')}\n`+
+    (rows.length? rows.join("\n") : "(測定データがありません)")+
+    `\n\n# 機械可読(JSON):\n`+json+
+    `\n\n# これを ai-fue プロジェクトの Claude に貼り付けてください。管長と周波数から対応表を作ります。`;
+  el("out").value = text;
+};
+
+el("copyBtn").onclick = async ()=>{
+  const t=el("out").value; if(!t){ el("copyStatus").textContent="先に「結果をまとめる」を押してください"; return; }
+  try{ await navigator.clipboard.writeText(t); el("copyStatus").textContent="コピーしました"; }
+  catch{ el("out").select(); document.execCommand("copy"); el("copyStatus").textContent="コピーしました"; }
+};
+
+el("startBtn").onclick = start;
+renderRows();
+</script>
+</body>
+</html>

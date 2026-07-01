@@ -51,15 +51,25 @@ STLを保存すると同時に、A1 miniでそのまま印刷できる 3mf（`ou
 既存のSTLから単体で作るときは次のようにする。
 
 ```bash
-python3 fue/make_3mf.py out/flute_ring_5558564F.stl
+python3 fue/make_3mf.py out/flute_ring_5558564F.stl                 # A1 mini（既定）
+python3 fue/make_3mf.py out/compact_calibration_comb.stl --printer h2d   # H2D
 ```
 
 ### 3mf の作り方（導電性ゲームコントローラの方式を踏襲）
 
-Bambu Studio が実際に生成したA1miniの動作実績設定を骨組みとして持ち、形状とモデル設定だけを
-差し替える。印刷設定（`templates/a1mini_project_settings.config`）は単一フィラメント版に固定してあり、
-「mixed filament is not supported」で弾かれないようにしている。ベッド180×180の中央へ自動配置する。
-BambuStudioのCLIでスライスが通り（return code 0）、G-codeまで生成できることを確認済み。
+Bambu Studio が実際に生成した動作実績のある3mfを骨組みとして持ち、形状とモデル設定だけを差し替える。
+
+- **A1 mini**: 骨組みはコントローラ用3mf。印刷設定（`templates/a1mini_project_settings.config`）は
+  単一フィラメント版に固定してあり、「mixed filament is not supported」で弾かれないようにしている。
+  ベッド180×180の中央へ自動配置。BambuStudioのCLIでスライスが通り（return code 0）、G-codeまで生成できることを確認済み。
+- **H2D**: 骨組みは栗原さんの印刷実績のあるH2D 3mf（`templates/h2d_skeleton.3mf`）。ベッド350×320の中央へ配置。
+  H2Dはデュアル押出機のため、フィラメントの最終割り当ては Bambu Studio 側で調整する前提
+  （MCP/CLIでのH2D自動スライスは現状通らないため、3mfの整形性のみ検証）。
+
+### 音程測定・較正Webアプリ
+
+`docs/index.html`（GitHub Pagesで公開）。印刷した笛を吹くと周波数と音名を測る。較正コームの各音を測って、
+結果をコピーしてClaudeへ貼り付けると、管長と音程の対応表を作れる。音程検出は pitchy を使用（ToneDecoderと同系統）。
 
 ## 状態 / TODO
 

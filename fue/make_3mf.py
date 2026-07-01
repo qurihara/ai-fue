@@ -9,6 +9,7 @@
 ベッド180×180の中央（90, 90）へ、x/yの中心を原点へ寄せた状態で配置する。
 """
 from __future__ import annotations
+import argparse
 import os
 import shutil
 import tempfile
@@ -19,12 +20,17 @@ from stl import mesh as npmesh
 
 HERE = os.path.dirname(__file__)
 TEMPLATES = os.path.join(HERE, os.pardir, "templates")
-SKELETON = os.path.join(TEMPLATES, "a1mini_skeleton.3mf")
-# 単一フィラメントの A1 mini 印刷設定（BambuStudio がSTLをスライスしたものから収穫した実績版）。
-# 骨組みのコントローラ用3mfはAMSに6本のフィラメントを定義しており、単一素材の笛では
-# 「mixed filament is not supported」で弾かれるため、この単一設定で必ず上書きする。
-PROJECT_SETTINGS = os.path.join(TEMPLATES, "a1mini_project_settings.config")
-BED = (180.0, 180.0)  # A1 mini
+
+# プリンタごとの定義。skeleton は実績のある3mf（プラミング一式と印刷設定の出所）。
+#   - a1mini: 骨組みはコントローラ用3mf（AMS複数フィラメント）なので、project で単一フィラメント設定へ差し替える。
+#   - h2d: 骨組みは栗原さんの印刷実績のあるH2D 3mf。実績設定をそのまま使うので project の差し替えはしない
+#          （フィラメントの最終割り当ては Bambu Studio 側で調整する前提）。
+PRINTERS = {
+    "a1mini": {"bed": (180.0, 180.0), "skeleton": "a1mini_skeleton.3mf",
+               "project": "a1mini_project_settings.config", "suffix": "_a1mini"},
+    "h2d": {"bed": (350.0, 320.0), "skeleton": "h2d_skeleton.3mf",
+            "project": None, "suffix": "_h2d"},
+}
 
 
 def _dedupe(tris: np.ndarray):
@@ -105,13 +111,21 @@ def _model_settings(name, nfaces, cx, cy) -> str:
             '</config>\n' % (name, nfaces, name, name, cx, cy, nfaces, cx, cy))
 
 
-def stl_to_a1mini_3mf(stl_path: str, out_3mf: str | None = None,
-                      model_name: str | None = None) -> str:
-    """STL を A1 mini 印刷用 3mf へ変換して保存し、そのパスを返す。"""
-    if not os.path.exists(SKELETON):
-        raise FileNotFoundError("骨組み %s が無い" % SKELETON)
+def stl_to_3mf(stl_path: str, printer: str = "a1mini", out_3mf: str | None = None,
+               model_name: str | None = None) -> str:
+    """STL を指定プリンタ（a1mini / h2d）の印刷用 3mf へ変換して保存し、そのパスを返す。"""
+    if printer not in PRINTERS:
+        raise ValueError("未知のプリンタ: %s（%s のいずれか）" % (printer, ", ".join(PRINTERS)))
+    prof = PRINTERS[printer]
+    bed = prof["bed"]
+    skeleton = os.path.join(TEMPLATES, prof["skeleton"])
+    project = os.path.join(TEMPLATES, prof["project"]) if prof["project"] else None
+    if not os.path.exists(skeleton):
+        raise FileNotFoundError("骨組み %s が無い" % skeleton)
+    if project and not os.path.exists(project):
+        raise FileNotFoundError("印刷設定 %s が無い" % project)
     name = model_name or os.path.splitext(os.path.basename(stl_path))[0]
-    out_3mf = out_3mf or os.path.splitext(stl_path)[0] + "_a1mini.3mf"
+    out_3mf = out_3mf or os.path.splitext(stl_path)[0] + prof["suffix"] + ".3mf"
 
     m = npmesh.Mesh.from_file(stl_path)
     tris = m.vectors.astype(np.float64)
@@ -122,25 +136,42 @@ def stl_to_a1mini_3mf(stl_path: str, out_3mf: str | None = None,
     tris[:, :, 0] -= cx
     tris[:, :, 1] -= cy
     dim = mx - mn
-    if dim[0] > BED[0] or dim[1] > BED[1]:
-        raise ValueError("ベッド %gx%g に収まらない（外形 %.1fx%.1f）" % (BED[0], BED[1], dim[0], dim[1]))
+    if dim[0] > bed[0] or dim[1] > bed[1]:
+        raise ValueError("ベッド %gx%g に収まらない（外形 %.1fx%.1f）" % (bed[0], bed[1], dim[0], dim[1]))
 
     verts, faces = _dedupe(tris)
 
     work = tempfile.mkdtemp()
     ref = os.path.join(work, "ref")
     try:
-        with zipfile.ZipFile(SKELETON) as z:
+        with zipfile.ZipFile(skeleton) as z:
             z.extractall(ref)
-        with open(os.path.join(ref, "3D/Objects/object_1.model"), "w") as f:
+        # 骨組みに残る既存のオブジェクトモデル（object_2.model 等）を消してから自分のを書く。
+        objdir = os.path.join(ref, "3D/Objects")
+        if os.path.isdir(objdir):
+            for fn in os.listdir(objdir):
+                if fn.endswith(".model"):
+                    os.remove(os.path.join(objdir, fn))
+        os.makedirs(objdir, exist_ok=True)
+        with open(os.path.join(objdir, "object_1.model"), "w") as f:
             f.write(_object_model(verts, faces))
+        # 3dmodel.model.rels を object_1.model へ向け直す（骨組みが object_2 等を指す場合の対策）。
+        rels = os.path.join(ref, "3D/_rels/3dmodel.model.rels")
+        os.makedirs(os.path.dirname(rels), exist_ok=True)
+        with open(rels, "w") as f:
+            f.write('<?xml version="1.0" encoding="UTF-8"?>\n'
+                    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n'
+                    ' <Relationship Target="/3D/Objects/object_1.model" Id="rel-1" '
+                    'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>\n'
+                    '</Relationships>\n')
         with open(os.path.join(ref, "3D/3dmodel.model"), "w") as f:
-            f.write(_3dmodel(name, BED[0] / 2, BED[1] / 2))
+            f.write(_3dmodel(name, bed[0] / 2, bed[1] / 2))
         with open(os.path.join(ref, "Metadata/model_settings.config"), "w") as f:
             f.write(_model_settings(name, len(faces), cx, cy))
-        # 印刷設定を単一フィラメント版へ差し替える（骨組みの6フィラメント定義を捨てる）。
-        shutil.copyfile(PROJECT_SETTINGS, os.path.join(ref, "Metadata/project_settings.config"))
-        # フィラメント列を単一に整える。
+        # a1mini は骨組みの複数フィラメント設定を単一フィラメント版へ差し替える。
+        # h2d は骨組み（実績3mf）の設定をそのまま使う（project=None）。
+        if project:
+            shutil.copyfile(project, os.path.join(ref, "Metadata/project_settings.config"))
         with open(os.path.join(ref, "Metadata/filament_sequence.json"), "w") as f:
             f.write('{"plate_1":{"nozzle_sequence":[],"optimal_assignment":[],"sequence":[]}}')
         if os.path.exists(out_3mf):
@@ -155,10 +186,17 @@ def stl_to_a1mini_3mf(stl_path: str, out_3mf: str | None = None,
     return out_3mf
 
 
+def stl_to_a1mini_3mf(stl_path: str, out_3mf: str | None = None,
+                      model_name: str | None = None) -> str:
+    """後方互換の別名。A1 mini 用 3mf を作る。"""
+    return stl_to_3mf(stl_path, "a1mini", out_3mf, model_name)
+
+
 if __name__ == "__main__":
-    import sys
-    if len(sys.argv) < 2:
-        raise SystemExit("使い方: python make_3mf.py <stlのパス> [出力3mfのパス]")
-    out = stl_to_a1mini_3mf(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else None)
-    kb = os.path.getsize(out) / 1024
-    print("書き出した 3mf: %s (%.0f KB)" % (out, kb))
+    ap = argparse.ArgumentParser(description="STL を A1 mini / H2D 印刷用 3mf へ変換")
+    ap.add_argument("stl", help="入力STLのパス")
+    ap.add_argument("--printer", choices=list(PRINTERS), default="a1mini")
+    ap.add_argument("--out", default=None)
+    a = ap.parse_args()
+    out = stl_to_3mf(a.stl, a.printer, a.out)
+    print("書き出した 3mf（%s）: %s (%.0f KB)" % (a.printer, out, os.path.getsize(out) / 1024))
