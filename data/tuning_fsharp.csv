@@ -1,0 +1,14 @@
+note,length_outside,length_inside,filename,note_in_c
+F#5,65.3,34.7,fs5.stl,c
+G5,58.0,42.0,g5.stl,c#
+G#5,52.1,47.9,gs5.stl,d
+A5,43.4,56.6,a5.stl,d#
+A#5,38.4,61.6,as5.stl,e
+B5,32.7,67.3,b5.stl,f
+C6,28.0,72.0,c6.stl,f#
+C#6,22.8,77.2,cs6.stl,g
+D6,20.6,79.4,d6.stl,g#
+D#6,15.5,84.5,ds6.stl,a
+E6,11.5,88.5,e6.stl,a#
+F6,7.1,92.9,f6.stl,b
+F#6,3.9,96.1,fs6.stl,c2
