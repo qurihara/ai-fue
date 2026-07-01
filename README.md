@@ -40,19 +40,34 @@ python3 fue/build.py --notes "C6 G#5 A#5 C6 A#5 C6" --style ring
 # パンフルート列
 python3 fue/build.py --notes "F#5 G5 A5 B5" --style row
 
-# 本物のヘッドを使う（用意でき次第 assets/recorderhead.stl に置く）
-python3 fue/build.py --pass-hex 5558564F --head assets/recorderhead.stl
+# 別の本体STLを使う（既定は assets/body_v6.stl）
+python3 fue/build.py --pass-hex 5558564F --body assets/body_v6.stl
 ```
 
 出力は `out/` に STL。`--style ring` は回して吹く用の円環、`--style row` はパンフルート列。
 F#5..F#6 の外の音は自動で演奏可能オクターブに折り返す。
+
+STLを保存すると同時に、A1 miniでそのまま印刷できる 3mf（`out/<名前>_a1mini.3mf`）も自動で書き出す（`--no-3mf` で抑止）。
+既存のSTLから単体で作るときは次のようにする。
+
+```bash
+python3 fue/make_3mf.py out/flute_ring_5558564F.stl
+```
+
+### 3mf の作り方（導電性ゲームコントローラの方式を踏襲）
+
+Bambu Studio が実際に生成したA1miniの動作実績設定を骨組みとして持ち、形状とモデル設定だけを
+差し替える。印刷設定（`templates/a1mini_project_settings.config`）は単一フィラメント版に固定してあり、
+「mixed filament is not supported」で弾かれないようにしている。ベッド180×180の中央へ自動配置する。
+BambuStudioのCLIでスライスが通り（return code 0）、G-codeまで生成できることを確認済み。
 
 ## 状態 / TODO
 
 - [x] 音階↔MIDI↔hex マッピング（ToneDecoder互換・自己検証済み）
 - [x] チューニング表復元
 - [x] straight-bore 笛生成 + row/ring レイアウト + 台座（numpy-stl, water-tight検証）
-- [ ] **本物の `recorderhead.stl` 差し替え**（栗原さんが原本を探索中）
-- [ ] 実機チューニング再検証（プレースホルダは音響無効）
+- [x] 実機の笛本体 v6 を組み込み（本体＋内挿する棒＝length_inside）
+- [x] A1 mini 印刷用 3mf の自動生成（CLIスライス通過を確認）
+- [ ] 実機チューニング再検証（v6は再設計版のため旧F#表の再測定が必要）
 - [ ] コンパクト化: ボア折返し（U字/蛇行）で全長短縮 ← 次の主眼
 - [ ] ② リボルバー/ジェノバ回転機構、③ 3Dモデルへの秘密音階埋め込み

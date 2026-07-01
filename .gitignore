@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 out/*.stl
 .DS_Store
+out/*.3mf

@@ -234,6 +234,8 @@ def main():
                     help="内挿する棒の直径。ボアを埋めて気柱長を length_outside に固定する")
     ap.add_argument("--gap", type=float, default=1.0)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--no-3mf", action="store_true",
+                    help="A1 mini 印刷用 3mf の書き出しを行わない")
     args = ap.parse_args()
 
     notes = _parse_notes(args)
@@ -248,6 +250,11 @@ def main():
     print(f"外形寸法     : {np.round(mx-mn,1)} mm   三角形数={len(asm)}")
     print(f"棒とボアは重なるため本体と棒の境界は非多様体になるが、スライサが結合するので問題ない。")
     print(f"保存先       : {name}")
+
+    if not args.no_3mf:
+        from make_3mf import stl_to_a1mini_3mf
+        three = stl_to_a1mini_3mf(name)
+        print(f"印刷用3mf    : {three}  （A1 miniでそのまま開いて印刷できる）")
 
 
 if __name__ == "__main__":
