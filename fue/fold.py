@@ -19,6 +19,29 @@ HEAD_CUT_Z = 143.0
 HEAD_TOP_Z = 169.48
 HEAD_LEN = HEAD_TOP_Z - HEAD_CUT_Z
 
+# 較正（コンパクト笛と共通）と、折り補正。
+#   直管: f = CALIB_K/(Leff+CALIB_DELTA)
+#   折り補正: 180°折り返し1回につき実効長が約3.3mm短くなる（2026/7/1 折りパネル実測）。
+#   よって狙いの実効長Leffに対し、必要な中心線路長 = Leff + 3.3*(折り返し回数)。
+CALIB_K = 91891.5
+CALIB_DELTA = 14.227
+FOLD_CORR_PER_TURN = 3.3
+
+
+def _note_freq(note):
+    names = {"C": 0, "C#": 1, "D": 2, "D#": 3, "E": 4, "F": 5,
+             "F#": 6, "G": 7, "G#": 8, "A": 9, "A#": 10, "B": 11}
+    import re
+    m = re.match(r"([A-G]#?)(-?\d)", note)
+    midi = names[m.group(1)] + 12 * (int(m.group(2)) + 1)
+    return 440.0 * 2 ** ((midi - 69) / 12)
+
+
+def geom_len_for_note(note, N):
+    """狙いの音と折り本数Nから、彫るべき中心線路長(mm)を折り補正込みで返す。"""
+    Leff = CALIB_K / _note_freq(note) - CALIB_DELTA
+    return Leff + FOLD_CORR_PER_TURN * (N - 1)
+
 
 def centerline(L, N, bore_d, wall, top_wall):
     """N本の縦パスからなる蛇行の中心線。返り値は点列と、ブロック寸法。"""
@@ -111,6 +134,7 @@ if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser(description="折り曲げボアのコンパクト笛")
     ap.add_argument("--L", type=float, help="ボアの中心線長さ(mm)")
+    ap.add_argument("--note", help="狙いの音（折り補正込みでLを自動計算）、例 C6")
     ap.add_argument("--N", type=int, default=2, help="折り（縦パス）本数")
     ap.add_argument("--panel", help="テストパネル指定 'label:L:N,...'（例 C6n1:73.6:1,C6n2:73.6:2）")
     ap.add_argument("--bore", type=float, default=8.0)
@@ -130,7 +154,10 @@ if __name__ == "__main__":
                      info["path_len"], info["passes"]))
         print("外形", np.round(mesh.extents, 1), "saved", a.out)
     else:
-        flute, info = folded_flute(a.L, a.N, a.head, a.bore)
+        L = a.L if a.L is not None else geom_len_for_note(a.note, a.N)
+        if a.note:
+            print("狙い %s → 折り補正込み中心線路長 %.1fmm（折り%d）" % (a.note, L, a.N))
+        flute, info = folded_flute(L, a.N, a.head, a.bore)
         flute.export(a.out)
         print("L=%.1f N=%d bore=%.1f -> ブロック %.0fx%.0fx%.0f 全長%.0fmm 実路長%.1fmm"
               % (a.L, a.N, a.bore, info['W'], info['D'], info['H'], info['total_H'], info['path_len']))

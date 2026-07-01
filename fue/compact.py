@@ -52,13 +52,17 @@ def _head_tris(head_path: str, bore_top_z: float) -> np.ndarray:
 
 
 def compact_flute(bore_len: float, head_path: str = HEAD,
-                  outer_d: float = OUTER_D, bore_d: float = BORE_D) -> np.ndarray:
-    """1本のコンパクト笛。閉端キャップ＋中空管＋ヘッド。z=0の閉端に立つ。"""
-    cap = cylinder(outer_d, CAP_TH, z0=0.0)                      # 閉端（下）
-    tube = annulus(outer_d / 2, bore_d / 2, bore_len - CAP_TH, z0=CAP_TH)  # 中空管
+                  outer_d: float = OUTER_D, bore_d: float = BORE_D,
+                  closed: bool = True) -> np.ndarray:
+    """1本のコンパクト笛。中空管＋ヘッド。closed=Trueは先端キャップ付き（閉管, f=c/4L）、
+    Falseは先端を開けた開管（f=c/2L, 同じ音に管が2倍必要）。z=0の下端に立つ。"""
     head = _head_tris(head_path, bore_top_z=bore_len)            # ヘッド（上）
-    # 管の上端とヘッドの底を少し重ねて確実に結合させる
-    return np.concatenate([cap, tube, head])
+    if closed:
+        cap = cylinder(outer_d, CAP_TH, z0=0.0)                  # 閉端（下）
+        tube = annulus(outer_d / 2, bore_d / 2, bore_len - CAP_TH, z0=CAP_TH)
+        return np.concatenate([cap, tube, head])
+    tube = annulus(outer_d / 2, bore_d / 2, bore_len, z0=0.0)    # 先端開放（下端が開口）
+    return np.concatenate([tube, head])
 
 
 def len_for_freq(freq: float) -> float:
@@ -71,14 +75,15 @@ def len_for_note(note: str) -> float:
 
 
 def compact_sequence(notes, head_path: str = HEAD, style: str = "row",
-                     outer_d: float = OUTER_D, bore_d: float = BORE_D, gap: float = 3.0):
+                     outer_d: float = OUTER_D, bore_d: float = BORE_D, gap: float = 3.0,
+                     closed: bool = True):
     """音階列から、各音に合わせた管長のコンパクト笛を並べて作る。"""
     info = []
     flutes = []
     for n in notes:
         L = max(MIN_LEN, len_for_note(n))
         info.append((n, note_to_freq(n), L, L + HEAD_LEN))
-        flutes.append(compact_flute(L, head_path, outer_d, bore_d))
+        flutes.append(compact_flute(L, head_path, outer_d, bore_d, closed))
     pitch = outer_d + gap
     if style == "ring":
         import math
@@ -135,13 +140,16 @@ def main():
                          "3〜4本あれば管長と周波数の関係を直線近似できる")
     ap.add_argument("--single", type=float, default=None, help="単一笛の管長(mm)")
     ap.add_argument("--notes", default=None, help="音階列から生成、例 'C6 D6 E6 F6 G6 A6 B6 C7'")
+    ap.add_argument("--lengths", default=None, help="管長を直接指定して並べる、例 '30,15'")
     ap.add_argument("--pass-hex", default=None, help="ToneDecoderのhexパスワードから生成、例 5558564F")
     ap.add_argument("--style", choices=["row", "ring"], default="row", help="音階列の並べ方")
     ap.add_argument("--bore", type=float, default=BORE_D)
+    ap.add_argument("--open", action="store_true", help="開管にする（先端を開ける。f=c/2L）")
     ap.add_argument("--out", default=None)
     ap.add_argument("--printer", choices=["a1mini", "h2d"], default="a1mini")
     ap.add_argument("--no-3mf", action="store_true")
     args = ap.parse_args()
+    closed = not args.open
 
     notes = None
     if args.pass_hex:
@@ -149,16 +157,26 @@ def main():
     elif args.notes:
         notes = [s.strip() for s in args.notes.replace(",", " ").split()]
 
-    if notes is not None:
-        asm, info = compact_sequence(notes, style=args.style, bore_d=args.bore)
+    if args.lengths is not None:
+        Ls = [float(x) for x in args.lengths.replace(",", " ").split()]
+        flutes = [compact_flute(L, bore_d=args.bore, closed=closed) for L in Ls]
+        asm = layout_row(flutes, args.bore + 3.0)
+        asm = np.concatenate([asm, base_bar(len(Ls), args.bore + 3.0, OUTER_D + 2.0)])
+        kind = "閉管" if closed else "開管"
+        name = args.out or os.path.join(OUT, f"compact_lengths_{kind}.stl")
+        print(f"管長指定で生成（{kind}, ボア{args.bore}mm）: {Ls}")
+        label = f"管長{Ls}mm の{kind}"
+    elif notes is not None:
+        asm, info = compact_sequence(notes, style=args.style, bore_d=args.bore, closed=closed)
         tag = notes_to_hex(notes)
-        name = args.out or os.path.join(OUT, f"compact_{args.style}_{tag}.stl")
-        print("音階列からコンパクト笛を生成:")
+        kind = "閉管" if closed else "開管"
+        name = args.out or os.path.join(OUT, f"compact_{args.style}_{tag}_{kind}.stl")
+        print(f"音階列からコンパクト笛を生成（{kind}, ボア{args.bore}mm）:")
         for n, f, L, tot in info:
             print(f"  {n:4s} {f:7.1f}Hz  管長{L:6.1f}mm  全長{tot:6.1f}mm")
-        label = f"{len(notes)}音の{args.style}配置（hex {tag}）"
+        label = f"{len(notes)}音の{args.style}配置（hex {tag}, {kind}）"
     elif args.single is not None:
-        asm = compact_flute(args.single, bore_d=args.bore)
+        asm = compact_flute(args.single, bore_d=args.bore, closed=closed)
         name = args.out or os.path.join(OUT, f"compact_L{args.single:.0f}.stl")
         label = f"単一笛 管長{args.single:.0f}mm（全長 {args.single+HEAD_LEN:.0f}mm）"
     else:
