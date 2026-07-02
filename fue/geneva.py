@@ -19,7 +19,7 @@ from shapely.affinity import rotate as srotate, translate as stranslate
 from shapely.ops import unary_union
 
 
-def geneva_2d(N, D, pin_r=2.5, clr=0.35, axle_r=2.1):
+def geneva_2d(N, D, pin_r=2.0, clr=0.35, axle_r=1.6):
     Rc = D * np.sin(np.pi / N)          # クランクのピン距離（駆動中心→ピン）
     R2 = D * np.cos(np.pi / N)          # 割り出し盤の半径（スロット入口）
     Rw = R2 + pin_r + 3                 # 盤の外半径（入口の少し外）
@@ -49,18 +49,21 @@ def geneva_2d(N, D, pin_r=2.5, clr=0.35, axle_r=2.1):
     return wheel, driver, dict(Rc=round(Rc, 1), R2=round(R2, 1), Rw=round(Rw, 1), Rlock=round(Rlock, 1), D=D, N=N)
 
 
-def build(N=6, D=44.0, th=6.0, base_th=3.0, post_h=None, axle_r=2.1):
+def build(N=6, D=28.0, th=4.0, base_th=2.5, post_h=None, axle_r=1.6):
+    """テスト版はミニチュア（D小さめ・薄板）。台はスラブをやめ、2ハブ＋細バーで材料節約。"""
     wheel2d, driver2d, g = geneva_2d(N, D, axle_r=axle_r)
     wheel = trimesh.creation.extrude_polygon(wheel2d, height=th)
     driver = trimesh.creation.extrude_polygon(driver2d, height=th)
-    # 台と2本の軸（driven=原点, driver=(D,0)）。組み立て用に別STLで返す
-    span = g["Rw"] + D + g["Rc"] + 12
-    base = trimesh.creation.box(extents=[g["Rw"] + D + g["Rc"] + 20, 2 * g["Rw"] + 12, base_th])
-    base.apply_translation([(D) / 2, 0, -base_th / 2])
+    # --- 最小の台: 各軸の下に小さなハブ台座 + それを繋ぐ細いバー + 軸 ---
+    hub_r = axle_r + 4.0
     ph = post_h or th + 3
-    post_a = trimesh.creation.cylinder(radius=axle_r, height=ph, sections=48); post_a.apply_translation([0, 0, ph / 2])
-    post_b = trimesh.creation.cylinder(radius=axle_r, height=ph, sections=48); post_b.apply_translation([D, 0, ph / 2])
-    stand = trimesh.boolean.union([base, post_a, post_b])
+    parts = []
+    for x0 in (0.0, D):
+        pad = trimesh.creation.cylinder(radius=hub_r, height=base_th, sections=48); pad.apply_translation([x0, 0, -base_th / 2])
+        post = trimesh.creation.cylinder(radius=axle_r, height=ph, sections=48); post.apply_translation([x0, 0, ph / 2])
+        parts += [pad, post]
+    bar = trimesh.creation.box(extents=[D, hub_r * 1.4, base_th]); bar.apply_translation([D / 2, 0, -base_th / 2])
+    stand = trimesh.boolean.union(parts + [bar])
     return wheel, driver, stand, g
 
 
