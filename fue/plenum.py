@@ -62,14 +62,16 @@ def gable_prism(x0w, x1w, y_half, z_base, z_wall, z_peak):
     return _prism_x(x0w, x1w, yz)
 
 
-def build(head_stl, pipes, gap_x=20.0):
-    """pipes=[(air_len, ), ...] 2本想定。全長は T+HEAD_LEN で共通。"""
-    T = 60.0
-    xs = [(-gap_x/2), (gap_x/2)]
+def build(head_stl, airs, gap_x=18.0, T=None):
+    """airs=[気柱長,...] のN本。外形・全長は共通（T+HEAD_LEN）。Tは省略時 max(airs)+4。"""
+    N = len(airs)
+    if T is None:
+        T = max(airs) + 4.0
+    xs = [(i - (N - 1) / 2.0) * gap_x for i in range(N)]
     bodies = []
     heads = []
     mouth_z = T + HEAD_LEN
-    for x0, air in zip(xs, pipes):
+    for x0, air in zip(xs, airs):
         bodies.append(pipe_body(x0, T, air))
         heads.append(place_head(head_stl, x0, T))
     body_union = trimesh.boolean.union(bodies)
@@ -77,8 +79,8 @@ def build(head_stl, pipes, gap_x=20.0):
     # プレナム（切妻）: 歌口(z=mouth_z)の上に載せる
     zb = mouth_z
     z_wall = zb + 5.0
-    z_peak = zb + 17.0
-    xw0, xw1 = xs[0] - 12, xs[1] + 12
+    z_peak = zb + 15.0
+    xw0, xw1 = xs[0] - 11, xs[-1] + 11
     yh = 9.0
     outer = gable_prism(xw0, xw1, yh, zb, z_wall, z_peak)
     inner = gable_prism(xw0+2, xw1-2, yh-2, zb+2, z_wall, z_peak-3)

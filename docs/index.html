@@ -67,6 +67,7 @@
   <div class="card">
     <canvas id="spec" style="width:100%;height:170px;background:#0c0f1d;border-radius:8px;display:block"></canvas>
     <div class="muted" style="margin-top:6px">検出ピーク（強い順・最大6本）: <b id="peaks" style="color:var(--ok)">–</b></div>
+    <div class="muted" style="margin-top:6px">基音（倍音を除外＝鳴っている笛）: <b id="funds" style="color:var(--accent);font-size:1.05rem">–</b></div>
     <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button id="chordBtn">和音を測定して記録</button>
       <span class="status" id="chordStatus"></span>
@@ -147,6 +148,21 @@ function topPeaks(K=6, floorDb=-72, minGapHz=250){
   return picked;
 }
 
+// 倍音を除外して基音だけ残す（低い山から順に、整数倍の山を倍音として消す）
+function fundamentals(freqs){
+  const f = freqs.slice().sort((a,b)=>a-b);
+  const harm = new Array(f.length).fill(false);
+  for(let i=0;i<f.length;i++){
+    if(harm[i]) continue;
+    for(let j=i+1;j<f.length;j++){
+      if(harm[j]) continue;
+      const r = f[j]/f[i], n = Math.round(r);
+      if(n>=2 && Math.abs(r-n) < 0.04) harm[j] = true;   // 4%以内で整数倍＝倍音
+    }
+  }
+  return f.filter((_,i)=>!harm[i]);
+}
+
 function drawSpec(peaks){
   const c = el("spec"); if(!c.width) return;
   const ctx = c.getContext("2d"), W=c.width, H=c.height;
@@ -216,6 +232,8 @@ function loop(){
   const peaks = topPeaks();
   live.peaks = peaks;
   el("peaks").textContent = peaks.length ? peaks.map(p=>Math.round(p.hz)+"Hz").join("  ,  ") : "–";
+  const funds = fundamentals(peaks.map(p=>p.hz));
+  el("funds").textContent = funds.length ? funds.map(Math.round).join(" , ")+"  （"+funds.length+"本）" : "–";
   drawSpec(peaks);
   raf = requestAnimationFrame(loop);
 }
@@ -344,8 +362,9 @@ el("chordBtn").onclick = ()=>{
     const need = Math.max(2, frames.length*0.4);   // 4割以上のフレームで見えた山だけ採用
     const keep = clusters.filter(c=>c.length>=need).map(c=>{ const s=c.slice().sort((a,b)=>a-b); return Math.round(s[Math.floor(s.length/2)]); });
     if(keep.length){
-      el("chordStatus").textContent = "検出: " + keep.map(h=>h+"Hz").join(" , ");
-      const line = `# 和音 ${new Date().toLocaleString('ja-JP')}: ` + keep.map(h=>h+"Hz").join(" , ");
+      const funds = fundamentals(keep);
+      el("chordStatus").textContent = "基音 " + funds.length + "本: " + funds.map(h=>h+"Hz").join(" , ");
+      const line = `# 和音 ${new Date().toLocaleString('ja-JP')}  基音(${funds.length}本): ` + funds.map(h=>h+"Hz").join(" , ") + `   全ピーク: ` + keep.map(h=>h+"Hz").join(" , ");
       el("out").value = (el("out").value ? el("out").value+"\n" : "") + line;
     } else {
       el("chordStatus").textContent = "うまく拾えませんでした。安定して吹いてもう一度。";
