@@ -58,7 +58,8 @@
     <div class="meter"><span class="note" id="noteName">–</span><span class="cents" id="cents"></span></div>
     <div class="centsbar"><div class="mid"></div><div class="dot" id="centsDot" style="left:50%"></div></div>
     <div class="clar"><i id="clarBar"></i></div>
-    <div class="muted" style="margin-top:4px">音名の下のバーは、基準音からのズレ（セント）。中央が合っている状態です。</div>
+    <div class="muted" style="margin-top:8px">スペクトルのピーク（可聴域外もOK）: <b id="peak" style="color:var(--ok);font-size:1.1rem">–</b> Hz　<span id="srate"></span></div>
+    <div class="muted" style="margin-top:4px">上の音名は楽音向けの検出（pitchy）。モスキート音のような高音や可聴域外は、こちらの「スペクトルのピーク」が頼りになります。</div>
   </div>
 
   <h2>測定</h2>
@@ -100,7 +101,8 @@ const DEFAULT_LENGTHS = [40,70,100,130];
 
 const el = id => document.getElementById(id);
 let audioCtx, analyser, detector, inputBuf, raf, running=false;
-let live = {freq:0, clarity:0};
+let freqData;                       // FFTの振幅スペクトル（dB）
+let live = {freq:0, clarity:0, peak:0, peakDb:-Infinity};
 
 function freqToNote(f){
   if(!f) return null;
@@ -117,12 +119,14 @@ async function start(){
     const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
     audioCtx = new (window.AudioContext||window.webkitAudioContext)();
     const src = audioCtx.createMediaStreamSource(stream);
-    analyser = new AnalyserNode(audioCtx,{fftSize:4096});
+    analyser = new AnalyserNode(audioCtx,{fftSize:8192});   // 8192で高音の分解能を確保
     src.connect(analyser);
     detector = PitchDetector.forFloat32Array(analyser.fftSize);
     inputBuf = new Float32Array(detector.inputLength);
+    freqData = new Float32Array(analyser.frequencyBinCount);
     running = true;
     el("startBtn").disabled = true;
+    el("srate").textContent = "サンプルレート " + Math.round(audioCtx.sampleRate) + "Hz（検出上限 " + Math.round(audioCtx.sampleRate/2) + "Hz）";
     el("status").textContent = "測定中。笛を吹いてください。";
     loop();
   }catch(e){
@@ -141,24 +145,36 @@ function loop(){
   el("cents").textContent = info ? (info.cents>=0?"+":"")+info.cents+" c" : "";
   el("centsDot").style.left = info ? (50 + Math.max(-50,Math.min(50,info.cents/2))) + "%" : "50%";
   el("clarBar").style.width = Math.round(clarity*100)+"%";
+
+  // FFTスペクトルの最大ピーク（pitchyが苦手な高音・可聴域外でも動く）
+  analyser.getFloatFrequencyData(freqData);
+  const binHz = audioCtx.sampleRate / analyser.fftSize;
+  const minBin = Math.floor(200 / binHz);        // 200Hz未満の暗騒音を無視
+  let pk=-Infinity, pki=-1;
+  for(let i=minBin;i<freqData.length;i++){ if(freqData[i]>pk){ pk=freqData[i]; pki=i; } }
+  live.peakDb = pk;
+  live.peak = (pk > -75 && pki>0) ? pki*binHz : 0;   // -75dBを超える明確なピークのみ
+  el("peak").textContent = live.peak ? Math.round(live.peak) : "–";
   raf = requestAnimationFrame(loop);
 }
 
-// stable capture: median freq over a window where clarity is high
+// stable capture: median over a window. pitchy(楽音)とFFTピーク(高音・可聴域外)の両方を拾う
 function capture(onDone){
   if(!running){ el("status").textContent="先にマイクを開始してください。"; return; }
-  const samples = [];
+  const fs = [], ps = [];
   const t0 = performance.now();
   const DUR = 1400;
   el("status").textContent = "測定中… 吹き続けてください";
+  const median = arr => arr.length ? arr.slice().sort((a,b)=>a-b)[Math.floor(arr.length/2)] : null;
   const tick = () => {
-    if(live.freq && live.clarity>0.92) samples.push(live.freq);
+    if(live.freq && live.clarity>0.92) fs.push(live.freq);
+    if(live.peak) ps.push(live.peak);
     if(performance.now()-t0 < DUR){ requestAnimationFrame(tick); return; }
-    if(samples.length < 8){ el("status").textContent="うまく拾えませんでした。もう一度、安定して吹いてください。"; onDone(null); return; }
-    samples.sort((a,b)=>a-b);
-    const med = samples[Math.floor(samples.length/2)];
+    const f = fs.length>=8 ? median(fs) : null;
+    const p = ps.length>=8 ? median(ps) : null;
+    if(f===null && p===null){ el("status").textContent="うまく拾えませんでした。もう一度、安定して吹いてください。"; onDone(null); return; }
     el("status").textContent = "測定完了。";
-    onDone(med);
+    onDone({freq:f, peak:p});
   };
   tick();
 }
@@ -201,21 +217,24 @@ function renderRows(){
   const tb = el("rows"); tb.innerHTML="";
   curRows().forEach(r=>{
     const res = results[r.id];
+    const shownHz = res ? (res.freq!=null ? res.freq.toFixed(1) : (res.peak!=null ? res.peak.toFixed(0)+" (ピーク)" : "–")) : "–";
+    const noteStr = res && res.note ? res.note.name+" "+(res.note.cents>=0?'+':'')+res.note.cents+"c"
+                    : (res && res.freq==null && res.peak!=null ? "高音（ピーク値）" : "–");
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td class="len">${r.label}</td>
       <td class="muted">${r.aim}</td>
-      <td>${res? res.freq.toFixed(1) : "–"}</td>
-      <td class="${res?'filled':''}">${res? res.note.name+" "+(res.note.cents>=0?'+':'')+res.note.cents+"c" : "–"}</td>
+      <td>${shownHz}</td>
+      <td class="${res?'filled':''}">${noteStr}</td>
       <td><button class="rowbtn" data-id="${r.id}">測定</button></td>`;
     tb.appendChild(tr);
   });
   tb.querySelectorAll("button[data-id]").forEach(b=>{
     b.addEventListener("click",()=>{
       b.disabled=true; b.textContent="…";
-      capture(med=>{
+      capture(res=>{
         b.disabled=false; b.textContent="測定";
-        if(med){ results[b.dataset.id]={freq:med, note:freqToNote(med)}; renderRows(); }
+        if(res){ results[b.dataset.id]={freq:res.freq, peak:res.peak, note: res.freq!=null? freqToNote(res.freq): null}; renderRows(); }
       });
     });
   });
@@ -227,9 +246,13 @@ el("buildBtn").onclick = ()=>{
   const done = curRows().filter(r=>results[r.id]);
   const lines = done.map(r=>{
     const res=results[r.id];
-    return `${r.label} (ねらい ${r.aim}) : ${res.freq.toFixed(1)} Hz  [${res.note.name} ${res.note.cents>=0?'+':''}${res.note.cents}c, MIDI ${res.note.midi}]`;
+    if(res.freq!=null){
+      return `${r.label} (ねらい ${r.aim}) : ${res.freq.toFixed(1)} Hz  [${res.note.name} ${res.note.cents>=0?'+':''}${res.note.cents}c, MIDI ${res.note.midi}]`+
+             (res.peak!=null? `  (FFTピーク ${res.peak.toFixed(0)}Hz)`:"");
+    }
+    return `${r.label} (ねらい ${r.aim}) : FFTピーク ${res.peak!=null?res.peak.toFixed(0):"-"} Hz（楽音検出できず＝高音/可聴域外の可能性）`;
   });
-  const json = JSON.stringify(done.map(r=>({id:r.id, label:r.label, freq_hz:+results[r.id].freq.toFixed(2), note:results[r.id].note.name, midi:results[r.id].note.midi})));
+  const json = JSON.stringify(done.map(r=>{const res=results[r.id];return {id:r.id, label:r.label, freq_hz: res.freq!=null?+res.freq.toFixed(2):null, peak_hz: res.peak!=null?+res.peak.toFixed(1):null, note: res.note?res.note.name:null};}));
   el("out").value = `# ai-fue 測定結果（${PRESETS[curPreset].name}）\n`+
     `# 測定日時: ${new Date().toLocaleString('ja-JP')}\n`+
     (lines.length? lines.join("\n") : "(まだ測定していません)")+
