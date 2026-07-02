@@ -62,6 +62,17 @@
     <div class="muted" style="margin-top:4px">上の音名は楽音向けの検出（pitchy）。モスキート音のような高音や可聴域外は、こちらの「スペクトルのピーク」が頼りになります。</div>
   </div>
 
+  <h2>複数ピーク（和音）検出</h2>
+  <p class="lead">プレナム笛のように複数の音が同時に鳴ると、FFTのスペクトルに複数の山として現れます。下のグラフの山と、検出したピーク一覧で確認できます。目標③（秘密の和音笛）の要です。</p>
+  <div class="card">
+    <canvas id="spec" style="width:100%;height:170px;background:#0c0f1d;border-radius:8px;display:block"></canvas>
+    <div class="muted" style="margin-top:6px">検出ピーク（強い順・最大6本）: <b id="peaks" style="color:var(--ok)">–</b></div>
+    <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button id="chordBtn">和音を測定して記録</button>
+      <span class="status" id="chordStatus"></span>
+    </div>
+  </div>
+
   <h2>測定</h2>
   <p class="muted">測定対象を選び、各行の「測定」を押して、その笛を1〜2秒吹き続けてください。安定した値を記録します。</p>
   <div class="card">
@@ -114,6 +125,51 @@ function freqToNote(f){
   return {midi, cents, name, hex};
 }
 
+const SPEC_MAX_HZ = 8000;   // グラフ・ピーク検出の上限（1〜7kHzの笛を見る）
+
+// FFTスペクトル(dB)から上位ピークを検出。局所最大かつ floor超え、最小間隔で間引き。
+function topPeaks(K=6, floorDb=-72, minGapHz=250){
+  if(!freqData) return [];
+  const binHz = audioCtx.sampleRate / analyser.fftSize;
+  const minBin = Math.floor(250 / binHz);
+  const maxBin = Math.min(freqData.length-1, Math.floor(SPEC_MAX_HZ / binHz));
+  const cand = [];
+  for(let i=minBin;i<=maxBin;i++){
+    if(freqData[i] > floorDb && freqData[i] >= freqData[i-1] && freqData[i] >= freqData[i+1])
+      cand.push({hz:i*binHz, db:freqData[i]});
+  }
+  cand.sort((a,b)=>b.db-a.db);
+  const picked = [];
+  for(const c of cand){
+    if(picked.every(p=>Math.abs(p.hz-c.hz)>=minGapHz)){ picked.push(c); if(picked.length>=K) break; }
+  }
+  picked.sort((a,b)=>a.hz-b.hz);
+  return picked;
+}
+
+function drawSpec(peaks){
+  const c = el("spec"); if(!c.width) return;
+  const ctx = c.getContext("2d"), W=c.width, H=c.height;
+  ctx.clearRect(0,0,W,H);
+  const binHz = audioCtx.sampleRate / analyser.fftSize;
+  const maxBin = Math.min(freqData.length, Math.floor(SPEC_MAX_HZ / binHz));
+  // スペクトルの塗り
+  ctx.beginPath(); ctx.moveTo(0,H);
+  for(let i=0;i<maxBin;i++){
+    const x = i/maxBin*W;
+    const y = H - Math.max(0,Math.min(1,(freqData[i]+100)/80))*H;
+    ctx.lineTo(x,y);
+  }
+  ctx.lineTo(W,H); ctx.closePath();
+  ctx.fillStyle = "rgba(91,140,255,0.45)"; ctx.fill();
+  // 1kHz目盛り
+  ctx.fillStyle = "#3a4270"; ctx.font = "10px sans-serif";
+  for(let f=1000; f<=SPEC_MAX_HZ; f+=1000){ const x=f/SPEC_MAX_HZ*W; ctx.fillRect(x,0,1,H); ctx.fillText((f/1000)+"k", x+2, H-2); }
+  // ピークの縦線＋周波数
+  ctx.fillStyle = "#37c98a"; ctx.font = "11px sans-serif";
+  for(const p of peaks){ const x=p.hz/SPEC_MAX_HZ*W; ctx.fillRect(x-1,0,2,H); ctx.fillText(Math.round(p.hz), x+3, 12); }
+}
+
 async function start(){
   try{
     const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
@@ -124,6 +180,7 @@ async function start(){
     detector = PitchDetector.forFloat32Array(analyser.fftSize);
     inputBuf = new Float32Array(detector.inputLength);
     freqData = new Float32Array(analyser.frequencyBinCount);
+    const cv = el("spec"); cv.width = cv.clientWidth || 600; cv.height = cv.clientHeight || 170;
     running = true;
     el("startBtn").disabled = true;
     el("srate").textContent = "サンプルレート " + Math.round(audioCtx.sampleRate) + "Hz（検出上限 " + Math.round(audioCtx.sampleRate/2) + "Hz）";
@@ -155,6 +212,11 @@ function loop(){
   live.peakDb = pk;
   live.peak = (pk > -75 && pki>0) ? pki*binHz : 0;   // -75dBを超える明確なピークのみ
   el("peak").textContent = live.peak ? Math.round(live.peak) : "–";
+
+  const peaks = topPeaks();
+  live.peaks = peaks;
+  el("peaks").textContent = peaks.length ? peaks.map(p=>Math.round(p.hz)+"Hz").join("  ,  ") : "–";
+  drawSpec(peaks);
   raf = requestAnimationFrame(loop);
 }
 
@@ -264,6 +326,32 @@ el("copyBtn").onclick = async ()=>{
   const t=el("out").value; if(!t){ el("copyStatus").textContent="先に「結果をまとめる」を押してください"; return; }
   try{ await navigator.clipboard.writeText(t); el("copyStatus").textContent="コピーしました"; }
   catch{ el("out").select(); document.execCommand("copy"); el("copyStatus").textContent="コピーしました"; }
+};
+
+el("chordBtn").onclick = ()=>{
+  if(!running){ el("chordStatus").textContent="先にマイクを開始してください"; return; }
+  el("chordStatus").textContent = "測定中… 吹き続けてください";
+  const t0 = performance.now(), DUR = 1500, frames = [];
+  const tick = ()=>{
+    if(live.peaks && live.peaks.length) frames.push(live.peaks.map(p=>p.hz));
+    if(performance.now()-t0 < DUR){ requestAnimationFrame(tick); return; }
+    const all = [].concat(...frames).sort((a,b)=>a-b);
+    const clusters = [];
+    for(const f of all){
+      const c = clusters[clusters.length-1];
+      if(c && f - c[c.length-1] < 250) c.push(f); else clusters.push([f]);
+    }
+    const need = Math.max(2, frames.length*0.4);   // 4割以上のフレームで見えた山だけ採用
+    const keep = clusters.filter(c=>c.length>=need).map(c=>{ const s=c.slice().sort((a,b)=>a-b); return Math.round(s[Math.floor(s.length/2)]); });
+    if(keep.length){
+      el("chordStatus").textContent = "検出: " + keep.map(h=>h+"Hz").join(" , ");
+      const line = `# 和音 ${new Date().toLocaleString('ja-JP')}: ` + keep.map(h=>h+"Hz").join(" , ");
+      el("out").value = (el("out").value ? el("out").value+"\n" : "") + line;
+    } else {
+      el("chordStatus").textContent = "うまく拾えませんでした。安定して吹いてもう一度。";
+    }
+  };
+  tick();
 };
 
 el("startBtn").onclick = start;
