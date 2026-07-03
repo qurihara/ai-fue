@@ -148,7 +148,10 @@ function topPeaks(K=6, floorDb=-72, minGapHz=250){
   return picked;
 }
 
-// 倍音を除外して基音だけ残す（低い山から順に、整数倍の山を倍音として消す）
+// 倍音を除外して基音だけ残す。
+// (1) 低い山から順に、整数倍(±5%)の山を倍音として消す。
+// (2) 秘密笛は基音を1オクターブ帯に収める設計なので、最低基音の2倍以上のピークは
+//     倍音/過吹きとして無視する（前回 6401Hz が整数倍判定を逃れて残った問題への対策）。
 function fundamentals(freqs){
   const f = freqs.slice().sort((a,b)=>a-b);
   const harm = new Array(f.length).fill(false);
@@ -157,10 +160,15 @@ function fundamentals(freqs){
     for(let j=i+1;j<f.length;j++){
       if(harm[j]) continue;
       const r = f[j]/f[i], n = Math.round(r);
-      if(n>=2 && Math.abs(r-n) < 0.04) harm[j] = true;   // 4%以内で整数倍＝倍音
+      if(n>=2 && Math.abs(r-n) < 0.05) harm[j] = true;   // 5%以内で整数倍＝倍音
     }
   }
-  return f.filter((_,i)=>!harm[i]);
+  let funds = f.filter((_,i)=>!harm[i]);
+  if(funds.length){
+    const lo = funds[0];
+    funds = funds.filter(x => x/lo < 1.95);              // 帯域ルール: 最低基音の2倍未満だけ残す
+  }
+  return funds;
 }
 
 function drawSpec(peaks){
