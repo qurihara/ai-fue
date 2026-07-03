@@ -32,11 +32,17 @@ def pipe_body(x0, T, air_len, r_o=OUTER_D/2, r_b=BORE_D/2):
     return trimesh.boolean.difference([outer, bore])
 
 
-def place_head(head_stl, x0, z_bottom):
+def place_head(head_stl, x0, z_bottom, yaw=np.pi/2):
+    """ヘッドをx0上に置く。yaw=90°(既定)で側面窓を指で塞ぎやすい向きへ回す。
+    bbox中心を軸に回してからx0へ置くので、回転後もボアはx0付近に保たれる。"""
     m = trimesh.load(head_stl)
     b = m.bounds
     cx, cy = (b[0][0]+b[1][0])/2, (b[0][1]+b[1][1])/2
-    m.apply_translation([x0 - cx, -cy, z_bottom - b[0][2]])   # 切断面(min z)を z_bottom へ
+    m.apply_translation([-cx, -cy, 0])                        # bbox中心xyを原点へ
+    if yaw:
+        m.apply_transform(trimesh.transformations.rotation_matrix(yaw, [0, 0, 1]))
+    b2 = m.bounds
+    m.apply_translation([x0, 0, z_bottom - b2[0][2]])         # x0上へ、切断面(min z)を z_bottom へ
     return m
 
 
