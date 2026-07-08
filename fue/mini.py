@@ -38,7 +38,9 @@ TOP_CAP = 2.0         # 生やすボアの上端キャップ厚
 ENDCORR = 1.9         # 端補正(mm)。2026/7/7 C6直管(N1)実測で 4.5→1.9 に更新（直管が+55c上ずり）
 FLAT_FOLD_CORR = 3.5  # flat折り補正(mm/折)。折り1回ごとに実効長が縮み音程が上がる。
                       # 2026/7/7 C6でN=1/2/3実測（1081/1134/1184Hz）→約3.4-3.7mm/折。旧compact.py 3.3と一致
-C4 = 343000.0 / 4.0   # c/4 (mm/s /4)
+C4 = 343000.0 / 4.0   # c/4 (mm/s /4)  ＝閉管 f=c/4L 用
+C2 = 343000.0 / 2.0   # c/2 (mm/s /2)  ＝開管(トーンホール笛) f=c/2L 用
+WH_ECO = 6.0          # 開管の実効端補正(mm)。第一近似。実測で更新
 
 
 def predict_freq(z_top):
@@ -282,6 +284,141 @@ def pan_flute(notes=None, N=2, gap=0.0, axis="z", mirror_y=None):
     return mesh, infos
 
 
+# ---------------------------------------------------------------------------
+# トーンホール笛（開管・直管）＝ミニ・ティンホイッスル。
+# 実績ヘッド＋直管ボアを OPEN foot（上端開口）にし、側面にトーンホールを開ける。
+# 指で穴を塞ぐと音程が変わる（リコーダー/ティンホイッスル式）。開管 f=c/2L。
+# 穴位置は第一近似 z=Z_WINDOW + C2/f − WH_ECO。実測で WH_ECO と穴径を較正する。
+# 印刷：寝かせ（rotate_y=90）で穴が上面に来る／ボア横向きでブリッジ、実質サポート小。
+# ---------------------------------------------------------------------------
+def _open_z_for_note(note):
+    return Z_WINDOW + C2 / fold._note_freq(note) - WH_ECO
+
+
+def whistle(base="C6", scale=None, bore_r=3.0, hole_r=1.5, foot_wall=1.0, head=None):
+    """開管トーンホール笛。base=全閉(最低音)、scale=各穴を開けたときの音（低い順）。
+    既定は7穴で基音C6〜C7の全音階1オクターブ（全閉=C6, 全開=C7）。過吹きで2オクターブ目。
+    穴は窓と同じ面(−y)に開ける。片面のみ（貫通させない）ので指で塞げる。"""
+    if scale is None:
+        scale = ["D6", "E6", "F6", "G6", "A6", "B6", "C7"]   # C6基音の全音階7穴＝1オクターブ
+    FW = 2 * bore_r + 2 * foot_wall                     # 外形角（壁 foot_wall）
+    z_foot = _open_z_for_note(base)                     # 全閉=最低音の実効フット
+    z0 = CUT_Z - 1.0
+    H = z_foot                                          # 上端で開口（キャップ無し）
+    # 外形角柱（ヘッド上に body）: z0..H
+    outer = trimesh.creation.box(extents=[FW, FW, H - z0])
+    outer.apply_translation([CX, CY, (z0 + H) / 2.0])
+    # ボア（丸・上端まで貫通＝OPEN）: z=CUT_Z-2 .. H+1
+    bore = trimesh.creation.cylinder(radius=bore_r, height=(H + 1) - (CUT_Z - 2), sections=48)
+    bore.apply_translation([CX, CY, ((CUT_Z - 2) + (H + 1)) / 2.0])
+    solid = trimesh.boolean.difference([outer, bore], engine="manifold")
+    # トーンホール（窓と同じ面=-y から半径方向にボアへ）。片面のみ（貫通させない）。
+    holes = []
+    zpos = []
+    Lh = FW / 2 + 1.0                                   # -y面外→ボア中心を少し越える
+    for note in scale:
+        z = _open_z_for_note(note)
+        zpos.append((note, z))
+        c = trimesh.creation.cylinder(radius=hole_r, height=Lh, sections=32)
+        c.apply_transform(trimesh.transformations.rotation_matrix(np.radians(90), [1, 0, 0]))  # 軸→y
+        c.apply_translation([CX, CY - FW / 2 - 0.5 + Lh / 2, z])   # -y面から内側へ、ボアで止める
+        holes.append(c)
+    void = trimesh.boolean.union(holes, engine="manifold")
+    solid = trimesh.boolean.difference([solid, void], engine="manifold")
+    # 吹込口クリアランス：ヘッド(-y面)のフリュー/窓/ウインドウェイ前を確実に開ける（トーンホールより低いz）
+    mouth = trimesh.creation.box(extents=[FW + 4, 7.0, Z_WINDOW + 3.0])
+    mouth.apply_translation([CX, CY - 6.5, (Z_WINDOW + 3.0) / 2.0 - 2.0])
+    solid = trimesh.boolean.difference([solid, mouth], engine="manifold")
+    h = head if head is not None else _mini_head()
+    flute = trimesh.util.concatenate([solid, h])
+    # flat向き：rotate_y 90 → 管軸を水平・穴を上面へ。ベッドに落とし中心化
+    flute.apply_transform(trimesh.transformations.rotation_matrix(np.radians(90), [0, 1, 0]))
+    flute.apply_translation([0, 0, -flute.bounds[0][2]])
+    bb = flute.bounds
+    flute.apply_translation([-(bb[0][0] + bb[1][0]) / 2.0, -(bb[0][1] + bb[1][1]) / 2.0, 0])
+    info = dict(base=base, scale=scale, z_foot=z_foot, holes=zpos, bore_r=bore_r,
+                hole_r=hole_r, FW=FW, dims=tuple(np.round(flute.extents, 1)))
+    return flute, info
+
+
+def whistle_fold(base="C6", scale=None, bore_r=3.0, hole_r=1.5, foot_wall=1.0, pitch=8.0, head=None):
+    """開管トーンホール笛の1回折り版。ボアをU字に1回折り返して全長を約半分に。
+    脚1(窓側)は穴なしの戻り管、脚2(フット側)に全トーンホール＋開口フット。穴は脚2の外面。
+    音響路長=脚1+折返し+脚2 で開管 f=c/2L。第一近似、実測で WH_ECO/穴径/折り補正を較正。"""
+    if scale is None:
+        scale = ["D6", "E6", "F6", "G6", "A6", "B6", "C7"]
+    FW = 2 * bore_r + 2 * foot_wall
+    Ltot = C2 / fold._note_freq(base) - WH_ECO          # 窓→開口フットの実効路長
+    Lfold = np.pi * (pitch / 2.0)                        # 折返し半周(近似)
+    z0 = 16.0                                            # 脚1の下端(ヘッドボアへ連結)
+    # 脚1(穴なし戻り管)は、最も窓寄りの穴(最高音)より手前で折り返す＝全穴を脚2に乗せる
+    d_top = C2 / fold._note_freq(scale[-1]) - WH_ECO
+    Lg1 = max(20.0, d_top - Lfold - 4.0)
+    Lg2 = Ltot - Lfold - Lg1
+    z_fold = z0 + Lg1                                    # 折返しの高さ
+    y2 = CY + pitch                                      # 脚2のy
+    z_foot = z_fold - Lg2                                # 脚2フット高さ(ここで開口)
+
+    def path_point(d):                                   # 窓(=z0基準)から路長dの点
+        if d <= Lg1:
+            return np.array([CX, CY, z0 + d])
+        d2 = d - Lg1
+        if d2 <= Lfold:
+            th = np.pi * (d2 / Lfold); cy = (CY + y2) / 2.0; r = pitch / 2.0
+            return np.array([CX, cy - r * np.cos(th), z_fold + r * np.sin(th)])
+        return np.array([CX, y2, z_fold - (d2 - Lfold)])
+
+    # ボアU字の void（脚1→折返し→脚2、フットは少し延ばして開口）
+    pts = [np.array([CX, CY, z0 - 2.0])]
+    pts += [path_point(d) for d in np.linspace(0.5, Ltot, 40)]
+    pts.append(np.array([CX, y2, z_foot - 2.0]))         # 開口フット(下へ突き出す)
+    void = _round_serpentine_void(pts, bore_r)
+
+    # 外形（両脚を囲む角柱）。フットは z_foot で開口させるため下端=z_foot。
+    y_lo, y_hi = CY - FW / 2, y2 + FW / 2
+    z_hi = z_fold + bore_r + foot_wall
+    solid = trimesh.creation.box(extents=[FW, y_hi - y_lo, z_hi - z_foot])
+    solid.apply_translation([CX, (y_lo + y_hi) / 2.0, (z_foot + z_hi) / 2.0])
+    # ヘッド差し込みスロット
+    slot = trimesh.creation.box(extents=[FW + 0.02, FW + 0.02, CUT_Z + 0.5])
+    slot.apply_translation([CX, CY, (CUT_Z + 0.5) / 2.0 - 0.25])
+    solid = trimesh.boolean.difference([solid, slot], engine="manifold")
+    solid = trimesh.boolean.difference([solid, void], engine="manifold")
+
+    # トーンホール（脚2の外面=+y からボアへ、片面のみ）
+    holes, zpos = [], []
+    Lh = FW / 2 + 1.0
+    for note in scale:
+        d = C2 / fold._note_freq(note) - WH_ECO
+        p = path_point(d)                                 # 脚2上の点(はず)
+        c = trimesh.creation.cylinder(radius=hole_r, height=Lh, sections=32)
+        c.apply_transform(trimesh.transformations.rotation_matrix(np.radians(90), [1, 0, 0]))  # 軸y
+        c.apply_translation([CX, y2 + FW / 2 + 0.5 - Lh / 2, p[2]])   # +y面から内側へ
+        holes.append(c); zpos.append((note, float(p[2])))
+    solid = trimesh.boolean.difference([solid, trimesh.boolean.union(holes, engine="manifold")], engine="manifold")
+    # 吹込口/窓クリアランス（リークを出さない2切り欠き）:
+    #  ① 吹込口＝ヘッド下(z<Z_WINDOW-1 ＝ボア/空洞より下)を全周開放。ここは中実の足なのでボア露出なし。
+    #     幅は leg2(CY+pitch)を削らないよう y=CY-5〜CY+4 に限定。→ 底の吹込口(-x端)がフル開放。
+    zc = Z_WINDOW - 1.0
+    inlet_cut = trimesh.creation.box(extents=[FW + 6, 9.0, zc - (z_foot - 1.0)])
+    inlet_cut.apply_translation([CX, CY - 0.5, ((z_foot - 1.0) + zc) / 2.0])
+    #  ② 窓＝-y側だけ z=Z_WINDOW-1〜CUT_Z。leg1ボア(CY)や+yには触れない＝リーク無し。
+    win_cut = trimesh.creation.box(extents=[FW + 6, 5.0, CUT_Z - zc])
+    win_cut.apply_translation([CX, CY - 5.5, (zc + CUT_Z) / 2.0])
+    solid = trimesh.boolean.difference([solid, inlet_cut, win_cut], engine="manifold")
+
+    h = head if head is not None else _mini_head()
+    flute = trimesh.util.concatenate([solid, h])
+    flute.apply_transform(trimesh.transformations.rotation_matrix(np.radians(90), [0, 1, 0]))
+    flute.apply_translation([0, 0, -flute.bounds[0][2]])
+    bb = flute.bounds
+    flute.apply_translation([-(bb[0][0] + bb[1][0]) / 2.0, -(bb[0][1] + bb[1][1]) / 2.0, 0])
+    info = dict(base=base, scale=scale, Ltot=Ltot, Lg1=Lg1, Lg2=Lg2, z_fold=z_fold,
+                pitch=pitch, holes=zpos, bore_r=bore_r, hole_r=hole_r, FW=FW,
+                dims=tuple(np.round(flute.extents, 1)))
+    return flute, info
+
+
 def measure_comb(gap=4.0):
     """較正用の少数スイープ：直管2本(F7,C7)＋折り1本(C6, N=3)。
     直管2点で ENDCORR を較正し、折りC6で折り補正と低音側を確認。"""
@@ -314,13 +451,37 @@ def main():
     ap.add_argument("--flat-comb", action="store_true", help="flat測定コーム(C7/A6/F6/C6, 面内蛇行)")
     ap.add_argument("--fold-sweep", help="音固定・折り数スイープ。値=音名(例C6)。--Ns併用可")
     ap.add_argument("--Ns", default="1,2,3", help="fold-sweepの折り数リスト（既定 1,2,3）")
+    ap.add_argument("--whistle", help="開管トーンホール笛(直管)。値=基音(全閉の最低音, 例C6)")
+    ap.add_argument("--whistle-fold", help="開管トーンホール笛(1回折り・短い)。値=基音(例C6)")
     ap.add_argument("--pan-flute", action="store_true", help="1オクターブのパンフルート型一体楽器")
     ap.add_argument("--pan-notes", help="パンフルートの音名リスト（既定 Cメジャー C6..C7）")
     ap.add_argument("--pan-N", type=int, default=2, help="パンフルート各管の折りパス数N（既定2=1折り）")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
 
-    if a.pan_flute:
+    if a.whistle_fold:
+        flute, info = whistle_fold(base=a.whistle_fold)
+        name = a.out or os.path.join(OUT, "mini_whistlefold_%s.stl" % a.whistle_fold)
+        flute.export(name)
+        print("開管トーンホール笛(1回折り) base=%s: 外形%s watertight=%s 路長%.0f(脚%.0f+折+脚%.0f)"
+              % (a.whistle_fold, info["dims"], flute.is_watertight, info["Ltot"], info["Lg1"], info["Lg2"]))
+        for note, z in info["holes"]:
+            print("    穴 %-3s z=%.1f" % (note, z))
+        print("  -> %s" % name)
+    elif a.whistle:
+        flute, info = whistle(base=a.whistle)
+        name = a.out or os.path.join(OUT, "mini_whistle_%s.stl" % a.whistle)
+        flute.export(name)
+        print("開管トーンホール笛 base=%s（全閉=%s、穴を低い順に開けて音階、C↑は過吹き）:" % (a.whistle, a.whistle))
+        print("  外形%s watertight=%s ボアØ%.0f 穴Ø%.0f 外形角%.0f" %
+              (info["dims"], flute.is_watertight, 2 * info["bore_r"], 2 * info["hole_r"], info["FW"]))
+        print("  トーンホール位置(窓からの実効長方向 z, mm):")
+        prev = None
+        for note, z in info["holes"]:
+            gap = "" if prev is None else " (間隔%.1f)" % (z - prev)
+            print("    %-3s z=%5.1f%s" % (note, z, gap)); prev = z
+        print("  -> %s" % name)
+    elif a.pan_flute:
         notes = a.pan_notes.replace(",", " ").split() if a.pan_notes else None
         mesh, infos = pan_flute(notes=notes, N=a.pan_N)
         name = a.out or os.path.join(OUT, "mini_panflute.stl")
