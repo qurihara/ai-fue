@@ -353,9 +353,10 @@ def penta_notes(root="C6"):
     return [notemod.midi_to_note(m + s) for s in (0, 2, 4, 7, 9)]
 
 
-def strap_lug(mesh, hole_d=5.0, wall=3.0, depth=FOOT, cx=None):
+def strap_lug(mesh, hole_d=5.0, wall=3.0, depth=FOOT / 3.0, cx=None):
     """タワー上面にストラップ用の耳（縦タブ＋横穴）を載せて返す。
     穴の軸は y（水平）＝寝かせ丸ボアと同じ自己ブリッジで印刷できる。
+    タブ厚 depth はスラブ厚の1/3(約2.3mm)＝ストラップ紐には十分で嵩張らない。
     タブの足元が最上段スラブの実体に乗るよう、上面直下の断面から x 位置をクランプする。"""
     b = mesh.bounds
     T = b[1][2]
