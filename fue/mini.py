@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import fold  # _note_freq, centerline, bore_solid
 
 ROOT = os.path.join(os.path.dirname(__file__), os.pardir)
-MINI_STL = os.path.join(ROOT, "mini", "recorder-mini-c-v2.stl")
+MINI_STL = os.path.join(ROOT, "mini", "recorder-mini-c-v3.stl")   # v3=v2+底に外7/内6mmの吸込口(z[-4,0])
 OUT = os.path.join(ROOT, "out")
 
 # --- mini-c-v2 の実測ジオメトリ ---
@@ -57,21 +57,29 @@ def z_top_for_note(note):
 
 
 def _mini_head():
-    """実績ヘッド：mini-c-v2 を z≤CUT_Z で切り出す（発音部を保持）。"""
+    """実績ヘッド：mini-c-v3 を切り出す（発音部＋底の吸込口Ø6を保持）。
+    v3=v2整列版で、窓/ウインドウェイ/ボアは v2 と同じ z、底 z[-4,0] に外7/内6mmの吸込口。
+    切り出しは z=-6..CUT_Z+1（吸込口も残す）。音響は v2 と不変（吸込口を足しただけ）。"""
     m = trimesh.load(MINI_STL)
-    big = trimesh.creation.box(extents=[FOOT + 4, FOOT + 4, CUT_Z + 2])
-    big.apply_translation([CX, CY, (CUT_Z + 2) / 2.0 - 1.0])   # z -1..CUT_Z
+    big = trimesh.creation.box(extents=[FOOT + 4, FOOT + 4, CUT_Z + 7])
+    big.apply_translation([CX, CY, (CUT_Z + 7) / 2.0 - 6.0])   # z -6..CUT_Z+1
     head = trimesh.boolean.intersection([m, big], engine="manifold")
     return head
 
 
-def _bore_extension(z_top):
-    """ヘッド上に生やす閉じ角ボア。外形7×7・内寸BORE、z=CUT_Z-1..z_top（上端閉）。"""
+def _bore_extension(z_top, round_bore=False):
+    """ヘッド上に生やす閉じボア。外形7×7・内寸BORE、z=CUT_Z-1..z_top（上端閉）。
+    round_bore=True で丸ボア（Ø=BORE）。横倒し(flat/spigot-up)印刷で天井が自己ブリッジし、
+    ボア内部にサポートが入らない。"""
     z0 = CUT_Z - 1.0
     outer = trimesh.creation.box(extents=[FOOT, FOOT, (z_top + TOP_CAP) - z0])
     outer.apply_translation([CX, CY, (z0 + z_top + TOP_CAP) / 2.0])
     # ボア空洞: z=CUT_Z-2 .. z_top（上端で閉じ、下はヘッドのボアへ連結）
-    void = trimesh.creation.box(extents=[BORE, BORE, z_top - (CUT_Z - 2.0)])
+    vh = z_top - (CUT_Z - 2.0)
+    if round_bore:
+        void = trimesh.creation.cylinder(radius=BORE / 2.0, height=vh, sections=48)
+    else:
+        void = trimesh.creation.box(extents=[BORE, BORE, vh])
     void.apply_translation([CX, CY, ((CUT_Z - 2.0) + z_top) / 2.0])
     return trimesh.boolean.difference([outer, void], engine="manifold")
 
@@ -200,6 +208,28 @@ def flat_flute(note=None, Lg=None, N=3, z_low=4.0, r=3.0, end_wall=1.2, pitch=7.
     # 実際に鳴る音＝幾何路長から折り縮みを差し引いた実効長で予測（Lgは折り補正込みなので相殺）
     freq = C4 / (Lg + ENDCORR - FLAT_FOLD_CORR * (N - 1))
     info = dict(N=N, z_high=z_high, freq=freq, r=r, kind="flat%d" % N,
+                dims=tuple(np.round(flute.extents, 1)))
+    return flute, info
+
+
+# --- 大ヘッド(mini を2倍にスケール)の flat 笛：低音1オクターブ(C5〜B5)用 ---
+# mini ヘッド単体は約1オクターブ(C6〜C7)しか綺麗に鳴らない。低い1オクターブは
+# ヘッドを2倍にした大ヘッドが安定して鳴る(2026/7/10 実機で確認。1.5/1.75倍は不安定で不採用)。
+# 較正は 2倍笛の実測(C5=522/F5=686/A5=848, さらにE5/B5で検証, C5〜B5を±16c)から:
+#   f = BIGHEAD_A / (2*Lg + BIGHEAD_B)   （Lg=スケール前のmini路長, 物理ボア=2*Lg）
+BIGHEAD_SCALE = 2.0
+BIGHEAD_A = 90165.0
+BIGHEAD_B = 5.60
+
+
+def bighead_flat_flute(note, N=2, head=None):
+    """大ヘッド(2倍)の flat 笛。低音(C5〜B5)を較正どおりの音程で生成する。"""
+    f = fold._note_freq(note)
+    Lg = (BIGHEAD_A / f - BIGHEAD_B) / 2.0
+    flute, info = flat_flute(Lg=Lg, N=N, head=head)
+    flute.apply_scale(BIGHEAD_SCALE)
+    info.update(note=note, bighead=True, scale=BIGHEAD_SCALE,
+                freq=BIGHEAD_A / (2 * Lg + BIGHEAD_B),
                 dims=tuple(np.round(flute.extents, 1)))
     return flute, info
 
@@ -341,7 +371,7 @@ def whistle(base="C6", scale=None, bore_r=3.0, hole_r=1.5, foot_wall=1.0, head=N
     return flute, info
 
 
-def whistle_fold(base="C6", scale=None, bore_r=3.0, hole_r=1.5, foot_wall=1.0, pitch=8.0, head=None):
+def whistle_fold(base="C6", scale=None, bore_r=3.0, hole_r=1.5, foot_wall=1.0, pitch=8.0, mouth_len=8.0, head=None):
     """開管トーンホール笛の1回折り版。ボアをU字に1回折り返して全長を約半分に。
     脚1(窓側)は穴なしの戻り管、脚2(フット側)に全トーンホール＋開口フット。穴は脚2の外面。
     音響路長=脚1+折返し+脚2 で開管 f=c/2L。第一近似、実測で WH_ECO/穴径/折り補正を較正。"""
@@ -376,7 +406,7 @@ def whistle_fold(base="C6", scale=None, bore_r=3.0, hole_r=1.5, foot_wall=1.0, p
 
     # 外形（両脚を囲む角柱）。フットは z_foot で開口させるため下端=z_foot。
     y_lo, y_hi = CY - FW / 2, y2 + FW / 2
-    z_hi = z_fold + bore_r + foot_wall
+    z_hi = z_fold + pitch / 2.0 + bore_r + foot_wall     # 折返し半径(pitch/2)ぶん延長し、折返しボア上端(apex+bore_r)を foot_wall で覆う
     solid = trimesh.creation.box(extents=[FW, y_hi - y_lo, z_hi - z_foot])
     solid.apply_translation([CX, (y_lo + y_hi) / 2.0, (z_foot + z_hi) / 2.0])
     # ヘッド差し込みスロット
@@ -397,15 +427,27 @@ def whistle_fold(base="C6", scale=None, bore_r=3.0, hole_r=1.5, foot_wall=1.0, p
         holes.append(c); zpos.append((note, float(p[2])))
     solid = trimesh.boolean.difference([solid, trimesh.boolean.union(holes, engine="manifold")], engine="manifold")
     # 吹込口/窓クリアランス（リークを出さない2切り欠き）:
-    #  ① 吹込口＝ヘッド下(z<Z_WINDOW-1 ＝ボア/空洞より下)を全周開放。ここは中実の足なのでボア露出なし。
-    #     幅は leg2(CY+pitch)を削らないよう y=CY-5〜CY+4 に限定。→ 底の吹込口(-x端)がフル開放。
+    #  ① 吹込口＝ヘッド下(z<Z_WINDOW-1 ＝ボア/空洞より下)を全周開放。
+    #  ② 窓＝-y側だけ z=Z_WINDOW-1〜CUT_Z。leg1ボア(CY)や+yには触れない＝リーク無し。
     zc = Z_WINDOW - 1.0
     inlet_cut = trimesh.creation.box(extents=[FW + 6, 9.0, zc - (z_foot - 1.0)])
     inlet_cut.apply_translation([CX, CY - 0.5, ((z_foot - 1.0) + zc) / 2.0])
-    #  ② 窓＝-y側だけ z=Z_WINDOW-1〜CUT_Z。leg1ボア(CY)や+yには触れない＝リーク無し。
     win_cut = trimesh.creation.box(extents=[FW + 6, 5.0, CUT_Z - zc])
     win_cut.apply_translation([CX, CY - 5.5, (zc + CUT_Z) / 2.0])
     solid = trimesh.boolean.difference([solid, inlet_cut, win_cut], engine="manifold")
+
+    # 吹込口マウスピース：この笛は下からでなく左(=最終-x)から吹く。左から筒を差して吹けるよう、
+    # 開口端(leg2 foot)より mouth_len だけ左へ突出させ、右端はヘッド左端(=底 z=0)まで伸ばして接続する。
+    # inlet_cut の後に union するので削られない。内孔はヘッド底ボア(z=0 で開口)へ貫通させ送気路をつなぐ。
+    mp_ro, mp_ri = 3.75, 2.6                              # 外Ø7.5(筒を差す)/内Ø5.2(送気路)
+    mp_zbot = z_foot - mouth_len                          # 突出先端(設計z＝最終-x側の最左点)
+    mp_ztop = 1.0                                         # ヘッド底(z=0)へ1mm食い込ませて接続
+    mp_out = trimesh.creation.cylinder(radius=mp_ro, height=mp_ztop - mp_zbot, sections=48)
+    mp_out.apply_translation([CX, CY, (mp_zbot + mp_ztop) / 2.0])
+    solid = trimesh.boolean.union([solid, mp_out], engine="manifold")
+    mp_bore = trimesh.creation.cylinder(radius=mp_ri, height=2.0 - (mp_zbot - 1.0), sections=48)
+    mp_bore.apply_translation([CX, CY, ((mp_zbot - 1.0) + 2.0) / 2.0])
+    solid = trimesh.boolean.difference([solid, mp_bore], engine="manifold")
 
     h = head if head is not None else _mini_head()
     flute = trimesh.util.concatenate([solid, h])
@@ -414,7 +456,7 @@ def whistle_fold(base="C6", scale=None, bore_r=3.0, hole_r=1.5, foot_wall=1.0, p
     bb = flute.bounds
     flute.apply_translation([-(bb[0][0] + bb[1][0]) / 2.0, -(bb[0][1] + bb[1][1]) / 2.0, 0])
     info = dict(base=base, scale=scale, Ltot=Ltot, Lg1=Lg1, Lg2=Lg2, z_fold=z_fold,
-                pitch=pitch, holes=zpos, bore_r=bore_r, hole_r=hole_r, FW=FW,
+                pitch=pitch, holes=zpos, bore_r=bore_r, hole_r=hole_r, FW=FW, mouth_len=mouth_len,
                 dims=tuple(np.round(flute.extents, 1)))
     return flute, info
 

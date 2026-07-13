@@ -1,9 +1,15 @@
 __pycache__/
 *.pyc
-out/*.stl
 .DS_Store
-out/*.3mf
 
-# out/ は一時・再生成可（fue/*.py で作り直せる）ので無視。
+# out/ は一時・再生成可（fue/*.py で作り直せる）ので丸ごと無視。
+out/
+
+# temp/ のスライス中間物・gcode・展開物は無視（再生成可）。
+# 印刷プロファイル temp/*_profile.json はレシピなので追跡する。
+temp/*
+!temp/*_profile.json
+result.json
+
 # コードだけで再現できない「版スナップショットSTL」と「印刷用3mf/swap」は
 # 3D_Print/ に置いてgit管理する（3D_Print/ は無視しない）。
