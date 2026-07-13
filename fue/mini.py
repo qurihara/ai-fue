@@ -23,6 +23,7 @@ import trimesh
 
 sys.path.insert(0, os.path.dirname(__file__))
 import fold  # _note_freq, centerline, bore_solid
+import notes as notemod  # note_to_midi / midi_to_note（音名の移調用）
 
 ROOT = os.path.join(os.path.dirname(__file__), os.pardir)
 MINI_STL = os.path.join(ROOT, "mini", "recorder-mini-c-v3.stl")   # v3=v2+底に外7/内6mmの吸込口(z[-4,0])
@@ -282,7 +283,7 @@ def fold_sweep_comb(note="C6", Ns=(1, 2, 3), gap=6.0):
 # 最小のブロック＝モジュール化向き）。axis="y" なら横並び。gap=0 で段が密着し一体化する。
 # 窓は側面(±y)、吹込口は前面(x=0)で、各段は別zに来るので塞がない。土台(プレート)は付けない。
 # ---------------------------------------------------------------------------
-def pan_flute(notes=None, N=2, gap=0.0, axis="z", mirror_y=None):
+def pan_flute(notes=None, N=2, gap=0.0, axis="z", mirror_y=None, bighead=False):
     if notes is None:
         notes = ["C6", "D6", "E6", "F6", "G6", "A6", "B6", "C7"]   # Cメジャー1オクターブ
     if mirror_y is None:
@@ -291,7 +292,10 @@ def pan_flute(notes=None, N=2, gap=0.0, axis="z", mirror_y=None):
     flutes, infos = [], []
     off = 0.0
     for i, note in enumerate(notes):
-        f, info = flat_flute(note=note, N=N, head=head)
+        if bighead:
+            f, info = bighead_flat_flute(note, N=N, head=head)
+        else:
+            f, info = flat_flute(note=note, N=N, head=head)
         if mirror_y[i]:
             f.apply_transform(np.diag([1.0, -1.0, 1.0, 1.0]))     # y方向に鏡像（窓が −y→+y へ）
             f.fix_normals()
@@ -312,6 +316,79 @@ def pan_flute(notes=None, N=2, gap=0.0, axis="z", mirror_y=None):
     bb = mesh.bounds
     mesh.apply_translation([-(bb[0][0] + bb[1][0]) / 2.0, -(bb[0][1] + bb[1][1]) / 2.0, -bb[0][2]])
     return mesh, infos
+
+
+# ---------------------------------------------------------------------------
+# クロマチック2オクターブ（C5〜C7）一式とペンタトニック・ペンダント。
+# 低音1オクターブ(C5〜B5)は大ヘッド(2倍)、高音(C6〜C7)は mini ヘッド。
+# v3ヘッドなので各笛の吹込端に外Ø7/内Ø6(大ヘッドは14/12)の吸込口が4mm(大8mm)突き出す。
+# ---------------------------------------------------------------------------
+CHROM_LOW = ["C5", "C#5", "D5", "D#5", "E5", "F5", "F#5", "G5", "G#5", "A5", "A#5", "B5"]
+CHROM_HIGH = ["C6", "C#6", "D6", "D#6", "E6", "F6", "F#6", "G6", "G#6", "A6", "A#6", "B6", "C7"]
+
+
+def flat_row(row_notes, N=1, gap=3.0, bighead=False):
+    """flat笛を独立のまま横一列（+y方向・gapで分離）。吹込端(-x)を x=0 に揃える。
+    連結しない＝1本ずつ切り離して測定できる較正/検証プレート向き。"""
+    head = _mini_head()
+    flutes, infos = [], []
+    yoff = 0.0
+    for note in row_notes:
+        if bighead:
+            f, info = bighead_flat_flute(note, N=N, head=head)
+        else:
+            f, info = flat_flute(note=note, N=N, head=head)
+        f.apply_translation([-f.bounds[0][0], yoff - f.bounds[0][1], -f.bounds[0][2]])
+        info["label"] = note
+        info["y"] = yoff
+        yoff += f.extents[1] + gap
+        flutes.append(f)
+        infos.append(info)
+    return trimesh.util.concatenate(flutes), infos
+
+
+def penta_notes(root="C6"):
+    """root から始まるメジャーペンタトニック5音（ドレミソラ＝+0,2,4,7,9半音）。"""
+    m = notemod.note_to_midi(root)
+    return [notemod.midi_to_note(m + s) for s in (0, 2, 4, 7, 9)]
+
+
+def strap_lug(mesh, hole_d=5.0, wall=3.0, depth=FOOT, cx=None):
+    """タワー上面にストラップ用の耳（縦タブ＋横穴）を載せて返す。
+    穴の軸は y（水平）＝寝かせ丸ボアと同じ自己ブリッジで印刷できる。
+    タブの足元が最上段スラブの実体に乗るよう、上面直下の断面から x 位置をクランプする。"""
+    b = mesh.bounds
+    T = b[1][2]
+    R = hole_d / 2.0 + wall
+    # 最上段スラブの x 範囲（上面の1mm下の断面）にタブを収める
+    sec = mesh.section(plane_origin=[0, 0, T - 1.0], plane_normal=[0, 0, 1])
+    xa, xb = sec.bounds[0][0], sec.bounds[1][0]
+    if cx is None:
+        cx = 0.0
+    cx = min(max(cx, xa + R + 1.0), xb - R - 1.0)
+    rot_y = trimesh.transformations.rotation_matrix(np.radians(90), [1, 0, 0])
+    box = trimesh.creation.box(extents=[2 * R, depth, 6.0])
+    box.apply_translation([cx, 0, T + 3.0])
+    cap = trimesh.creation.cylinder(radius=R, height=depth, sections=64)
+    cap.apply_transform(rot_y)
+    cap.apply_translation([cx, 0, T + 6.0])
+    hole = trimesh.creation.cylinder(radius=hole_d / 2.0, height=depth + 2.0, sections=48)
+    hole.apply_transform(rot_y)
+    hole.apply_translation([cx, 0, T + 6.0])
+    lug = trimesh.boolean.union([box, cap], engine="manifold")
+    lug = trimesh.boolean.difference([lug, hole], engine="manifold")
+    return trimesh.util.concatenate([mesh, lug]), dict(cx=cx, hole_z=T + 6.0, top=T + 6.0 + R)
+
+
+def pentatonic_pendant(root="C6", N=2, ring=True):
+    """ペンタトニック5音（ドレミソラ）だけを z 積層でつないだ携帯用パンフルート。
+    ring=True で最上段の上面にストラップ耳を付ける（穴Ø5・横穴＝自己ブリッジ）。"""
+    nts = penta_notes(root)
+    mesh, infos = pan_flute(notes=nts, N=N)
+    lug_info = None
+    if ring:
+        mesh, lug_info = strap_lug(mesh)
+    return mesh, infos, lug_info
 
 
 # ---------------------------------------------------------------------------
@@ -498,10 +575,53 @@ def main():
     ap.add_argument("--pan-flute", action="store_true", help="1オクターブのパンフルート型一体楽器")
     ap.add_argument("--pan-notes", help="パンフルートの音名リスト（既定 Cメジャー C6..C7）")
     ap.add_argument("--pan-N", type=int, default=2, help="パンフルート各管の折りパス数N（既定2=1折り）")
+    ap.add_argument("--chrom-low", action="store_true", help="低音クロマチックC5〜B5（大ヘッド12本）をZ積層タワーに")
+    ap.add_argument("--chrom-high", action="store_true", help="高音クロマチックC6〜C7（mini13本・N=1直管）を独立横並びプレートに")
+    ap.add_argument("--chrom-groups", action="store_true", help="低音を4本ずつA/B/Cの独立横並びプレート3枚に（大ヘッド・N=2）")
+    ap.add_argument("--pentatonic", help="ペンタトニック・ペンダント。値=ルート音（例 C6）。ドレミソラ5音＋ストラップ耳")
+    ap.add_argument("--no-ring", action="store_true", help="--pentatonic のストラップ耳を省く")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
 
-    if a.whistle_fold:
+    if a.chrom_low:
+        mesh, infos = pan_flute(notes=CHROM_LOW, N=2, bighead=True)
+        mesh.apply_translation([-mesh.bounds[0][0], 0, 0])   # 吹込端を x=0 へ（旧版と同じ框）
+        name = a.out or os.path.join(OUT, "chrom_low_zstack.stl")
+        mesh.export(name)
+        print("低音クロマチックタワー（大ヘッド・v3吸込口付き・N=2・Z積層12段）:")
+        for i in infos:
+            print("  %-4s %s 予測%6.0fHz" % (i["label"], i["dims"], i["freq"]))
+        print("外形", np.round(mesh.extents, 1), "->", name)
+    elif a.chrom_high:
+        mesh, infos = flat_row(CHROM_HIGH, N=1, gap=3.0, bighead=False)
+        name = a.out or os.path.join(OUT, "chrom2oct_D_C6-C7_mini.stl")
+        mesh.export(name)
+        print("高音クロマチックプレート（mini・v3吸込口付き・N=1直管・独立13本）:")
+        for i in infos:
+            print("  %-4s %s 予測%6.0fHz" % (i["label"], i["dims"], i["freq"]))
+        print("外形", np.round(mesh.extents, 1), "->", name)
+    elif a.chrom_groups:
+        groups = [("A", CHROM_LOW[0:4]), ("B", CHROM_LOW[4:8]), ("C", CHROM_LOW[8:12])]
+        for tag, nts in groups:
+            mesh, infos = flat_row(nts, N=2, gap=5.0, bighead=True)
+            label = "%s_%s-%s" % (tag, nts[0].replace("#", "s"), nts[-1].replace("#", "s"))
+            name = os.path.join(OUT, "chrom2oct_%s.stl" % label)
+            mesh.export(name)
+            print("低音グループ%s（大ヘッド・v3吸込口付き・N=2・独立%d本）: 外形%s -> %s"
+                  % (tag, len(nts), np.round(mesh.extents, 1), name))
+            for i in infos:
+                print("  %-4s %s 予測%6.0fHz" % (i["label"], i["dims"], i["freq"]))
+    elif a.pentatonic:
+        mesh, infos, lug = pentatonic_pendant(root=a.pentatonic, N=a.pan_N, ring=not a.no_ring)
+        name = a.out or os.path.join(OUT, "penta_pendant_%s.stl" % a.pentatonic)
+        mesh.export(name)
+        print("ペンタトニック・ペンダント（ドレミソラ5音・Z積層・N=%d）:" % a.pan_N)
+        for i in infos:
+            print("  %-4s %s 予測%6.0fHz" % (i["label"], i["dims"], i["freq"]))
+        if lug:
+            print("  ストラップ耳: 穴Ø5 中心 x=%.1f z=%.1f 頂部z=%.1f" % (lug["cx"], lug["hole_z"], lug["top"]))
+        print("外形", np.round(mesh.extents, 1), "->", name)
+    elif a.whistle_fold:
         flute, info = whistle_fold(base=a.whistle_fold)
         name = a.out or os.path.join(OUT, "mini_whistlefold_%s.stl" % a.whistle_fold)
         flute.export(name)
