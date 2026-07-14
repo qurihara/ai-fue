@@ -22,7 +22,8 @@ import trimesh
 OUT = os.path.join(os.path.dirname(__file__), os.pardir, "out")
 
 WALL = 2.0
-PORT_R = 2.0            # ポート/シート穴 半径
+PORT_R = 3.0           # ポート/シート穴 半径。v3ヘッドの吸込口(外Ø7/内Ø6)の内径Ø6に一致させる
+                       # （2026/7/14 Ø4→Ø6。前版はポートと吸込口の径がズレて送気が漏れ鳴らなかった）
 SHEET_T = 1.0          # シート厚
 SLOT_CL = 0.3          # シート溝クリアランス（片側）。シート1mm(PLA)前提。溝=1.0+2*0.3=1.6mm
 STEP_Y = 8.0           # 楽譜の1時間ステップの送り量(mm)
@@ -293,9 +294,13 @@ def pipe_bank(notes=None, pitch=8.0, plate_t=2.0):
         notes = ["C6", "D6", "E6", "F6", "G6", "A6", "B6", "C7"]
     rev = list(notes)[::-1]                               # 逆順：長管を+xへ
     pan, pi = organ_panflute(notes=rev, pitch=pitch, round_bore=True)
+    # v3吸込口の底(z=-4)が板の上面(z=0)にちょうど載るよう持ち上げる。こうしないと
+    # 外Ø7スピゴットが板を突き抜けてシート溝に突き出し、シートのスクロールを妨げる。
+    pan.apply_translation([0, 0, -pan.bounds[0][2]])       # 吸込口の底 → z=0（板上面に着座）
     xs = pi["xs"]; b0, b1 = pan.bounds
     plate = trimesh.creation.box(extents=[(b1[0] - b0[0]) + 4.0, b1[1] - b0[1] + 4.0, plate_t])
     plate.apply_translation([(b0[0] + b1[0]) / 2.0, (b0[1] + b1[1]) / 2.0, -plate_t / 2.0])
+    # 板の穴＝Ø6（PORT_R）で各吸込口ボア(x_i,0)と同軸に貫通
     holes = [trimesh.creation.cylinder(radius=PORT_R, height=plate_t + 2, sections=32) for _ in xs]
     for hh, x in zip(holes, xs):
         hh.apply_translation([x, 0, -plate_t / 2.0])
