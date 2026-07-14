@@ -22,10 +22,13 @@ import trimesh
 OUT = os.path.join(os.path.dirname(__file__), os.pardir, "out")
 
 WALL = 2.0
-PORT_R = 3.0           # ポート/シート穴 半径。v3ヘッドの吸込口(外Ø7/内Ø6)の内径Ø6に一致させる
+PORT_R = 3.0           # ポート半径。v3ヘッドの吸込口(外Ø7/内Ø6)の内径Ø6に一致させる
                        # （2026/7/14 Ø4→Ø6。前版はポートと吸込口の径がズレて送気が漏れ鳴らなかった）
+SHEET_HOLE_R = 2.5     # 穴あきシートの穴 半径（Ø5）。ポートØ6より小さくして隣列の閉じ代(ランド)を
+                       # 稼ぐ（ピッチ8で Ø5なら片側1.5mmランド）。送気はポートØ6が律速なので通気は十分。
 SHEET_T = 1.0          # シート厚
-SLOT_CL = 0.3          # シート溝クリアランス（片側）。シート1mm(PLA)前提。溝=1.0+2*0.3=1.6mm
+SLOT_CL = 0.15         # シート溝クリアランス（片側）。シート1mm(PLA)前提。溝=1.0+2*0.15=1.3mm
+                       # （2026/7/14 0.3→0.15。前版は溝1.6mmが緩く送気漏れが大きかった＝実機確認）
 STEP_Y = 8.0           # 楽譜の1時間ステップの送り量(mm)
 
 
@@ -104,7 +107,7 @@ def punched_sheet(score, n=8, pitch=8.0, W=None, lead=8.0, slot_len=6.0, step_y=
     for t, notes in enumerate(score):
         y = -L / 2 + lead + (t + 0.5) * step_y
         for i in notes:
-            holes.append(_y_slot(xs[i], y, slot_len))
+            holes.append(_y_slot(xs[i], y, slot_len, r=SHEET_HOLE_R))
     if holes:
         strip = trimesh.boolean.difference([strip, trimesh.boolean.union(holes, engine="manifold")], engine="manifold")
     info = dict(n=n, steps=steps, W=W, L=L, slot_len=slot_len, step_y=step_y, land=step_y - slot_len,
