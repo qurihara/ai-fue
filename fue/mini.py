@@ -254,24 +254,31 @@ def flat_measure_comb(specs=None, gap=5.0):
     return trimesh.util.concatenate(flutes), infos
 
 
-def thin_comb(note="C6", N=1, thicks=(7.0, 5.0, 4.0, 3.0, 2.0), gap=4.0):
-    """薄さ（厚み＝寝かせた時のz高さ）を振った測定コーム。TPUスマホケース付随の極薄
-    緊急ホイッスル向けに、音・路長を固定してボアの厚みが発音にどう効くかを測る。
-    各笛は proven flat_flute を z方向にだけ非一様スケールして厚みTにしたもの
-    （丸ボアØ6→楕円 6×(6T/7)、フィッポルもz方向に圧縮される）。基準は厚み7mm。"""
+def thin_comb(note="C6", N=1, thicks=(7.0, 5.0, 4.0, 3.0, 2.0), gap=4.0, axis="z"):
+    """薄さ（厚み）を振った測定コーム。TPUスマホケース付随の極薄緊急ホイッスル向けに、
+    音・路長を固定して「どの方向にどこまで薄くできるか」を測る。proven flat_flute を
+    指定軸だけ非一様スケールして厚みTにする。
+      axis="z"（既定）：高さ方向を圧縮。丸ボアØ6→横長楕円6×(6T/7)。窓(x-z)がz方向に潰れ、
+                        寝かせ印刷ではボア天井が幅広で自己ブリッジしにくい。
+      axis="y"：幅方向を圧縮。丸ボア→縦長楕円(6T/7)×6。窓は-y面にあるので窓の形(x-z)は不変で、
+               寝かせ印刷ではボア天井が細くなり自己ブリッジしやすい（栗原さんの予想）。
+    どちらも壁は同率で薄くなる（壁=T/14）ため印刷下限は同程度だが、窓形状と印刷性は異なる。"""
+    ax = 2 if axis == "z" else 1
     head = _mini_head()
     base, binfo = flat_flute(note=note, N=N, head=head)
-    t0 = float(base.extents[2])                      # 7.0mm
+    t0 = float(base.extents[ax])                     # 元の厚み（z:7 / y:7〜）
     flutes, infos = [], []
-    yoff = 0.0
+    off = 0.0
     for T in thicks:
         f = base.copy()
-        f.apply_transform(np.diag([1.0, 1.0, T / t0, 1.0]))       # z→厚みT
-        f.apply_translation([0.0, yoff - f.bounds[0][1], -f.bounds[0][2]])
-        infos.append(dict(note=note, N=N, thick=round(T, 2), freq=binfo["freq"],
-                          label="%s t%.1f" % (note, T), y=yoff,
+        s = [1.0, 1.0, 1.0, 1.0]; s[ax] = T / t0
+        f.apply_transform(np.diag(s))                # 指定軸→厚みT
+        # y方向に並べる（コーム）。各笛を床(z=0)へ、y方向にoffで分離
+        f.apply_translation([0.0, off - f.bounds[0][1], -f.bounds[0][2]])
+        infos.append(dict(note=note, N=N, thick=round(T, 2), axis=axis, freq=binfo["freq"],
+                          label="%s %s t%.1f" % (note, axis, T), off=off,
                           dims=tuple(np.round(f.extents, 1)), watertight=bool(f.is_watertight)))
-        yoff += f.extents[1] + gap
+        off += f.extents[1] + gap
         flutes.append(f)
     mesh = trimesh.util.concatenate(flutes)
     bb = mesh.bounds
@@ -609,13 +616,14 @@ def main():
     ap.add_argument("--thin-comb", help="薄さ(厚み)スイープの測定コーム。値=音名(例C6)。極薄ホイッスル探索用")
     ap.add_argument("--thicks", default="7,5,4,3,2", help="thin-combの厚みリスト(mm, 既定 7,5,4,3,2)")
     ap.add_argument("--thin-N", type=int, default=1, help="thin-combの折りパス数N（既定1=直管）")
+    ap.add_argument("--thin-axis", default="z", choices=["z", "y"], help="thin-combの圧縮軸（z=高さ/y=幅, 既定z）")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
 
     if a.thin_comb:
         thicks = tuple(float(x) for x in a.thicks.replace(",", " ").split())
-        mesh, infos = thin_comb(note=a.thin_comb, N=a.thin_N, thicks=thicks)
-        name = a.out or os.path.join(OUT, "mini_thin_comb_%s.stl" % a.thin_comb)
+        mesh, infos = thin_comb(note=a.thin_comb, N=a.thin_N, thicks=thicks, axis=a.thin_axis)
+        name = a.out or os.path.join(OUT, "mini_thin_comb_%s_%s.stl" % (a.thin_comb, a.thin_axis))
         mesh.export(name)
         print("薄さ(厚み)スイープ・コーム（音・路長固定, 厚みだけ変化, N=%d）:" % a.thin_N)
         for i in infos:
