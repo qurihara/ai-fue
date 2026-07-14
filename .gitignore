@@ -2,14 +2,13 @@ __pycache__/
 *.pyc
 .DS_Store
 
-# out/ は一時・再生成可（fue/*.py で作り直せる）ので丸ごと無視。
-out/
+# 全出力は out/ にフラットに集約し、丸ごと git 管理する（2026/7/14〜）。
+# STL・印刷3mf/swap・版スナップショットも全部 out/ 直下に置いて追跡。
+# 例外：PNG レンダー（診断画像）は再生成物なので無視。
+out/*.png
 
 # temp/ のスライス中間物・gcode・展開物は無視（再生成可）。
 # 印刷プロファイル temp/*_profile.json はレシピなので追跡する。
 temp/*
 !temp/*_profile.json
 result.json
-
-# コードだけで再現できない「版スナップショットSTL」と「印刷用3mf/swap」は
-# 3D_Print/ に置いてgit管理する（3D_Print/ は無視しない）。

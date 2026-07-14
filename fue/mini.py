@@ -254,6 +254,31 @@ def flat_measure_comb(specs=None, gap=5.0):
     return trimesh.util.concatenate(flutes), infos
 
 
+def thin_comb(note="C6", N=1, thicks=(7.0, 5.0, 4.0, 3.0, 2.0), gap=4.0):
+    """薄さ（厚み＝寝かせた時のz高さ）を振った測定コーム。TPUスマホケース付随の極薄
+    緊急ホイッスル向けに、音・路長を固定してボアの厚みが発音にどう効くかを測る。
+    各笛は proven flat_flute を z方向にだけ非一様スケールして厚みTにしたもの
+    （丸ボアØ6→楕円 6×(6T/7)、フィッポルもz方向に圧縮される）。基準は厚み7mm。"""
+    head = _mini_head()
+    base, binfo = flat_flute(note=note, N=N, head=head)
+    t0 = float(base.extents[2])                      # 7.0mm
+    flutes, infos = [], []
+    yoff = 0.0
+    for T in thicks:
+        f = base.copy()
+        f.apply_transform(np.diag([1.0, 1.0, T / t0, 1.0]))       # z→厚みT
+        f.apply_translation([0.0, yoff - f.bounds[0][1], -f.bounds[0][2]])
+        infos.append(dict(note=note, N=N, thick=round(T, 2), freq=binfo["freq"],
+                          label="%s t%.1f" % (note, T), y=yoff,
+                          dims=tuple(np.round(f.extents, 1)), watertight=bool(f.is_watertight)))
+        yoff += f.extents[1] + gap
+        flutes.append(f)
+    mesh = trimesh.util.concatenate(flutes)
+    bb = mesh.bounds
+    mesh.apply_translation([-(bb[0][0] + bb[1][0]) / 2, -(bb[0][1] + bb[1][1]) / 2, 0])
+    return mesh, infos
+
+
 def fold_sweep_comb(note="C6", Ns=(1, 2, 3), gap=6.0):
     """音（＝路長）を固定し折り数 N だけ振るコーム。各笛を y方向に段積み（長さが大きく
     違うため）。同一路長でNを変える→音程差＝折り補正、鳴りやすさ差＝発音性 vs 折り。
@@ -581,8 +606,23 @@ def main():
     ap.add_argument("--chrom-groups", action="store_true", help="低音を4本ずつA/B/Cの独立横並びプレート3枚に（大ヘッド・N=2）")
     ap.add_argument("--pentatonic", help="ペンタトニック・ペンダント。値=ルート音（例 C6）。ドレミソラ5音＋ストラップ耳")
     ap.add_argument("--no-ring", action="store_true", help="--pentatonic のストラップ耳を省く")
+    ap.add_argument("--thin-comb", help="薄さ(厚み)スイープの測定コーム。値=音名(例C6)。極薄ホイッスル探索用")
+    ap.add_argument("--thicks", default="7,5,4,3,2", help="thin-combの厚みリスト(mm, 既定 7,5,4,3,2)")
+    ap.add_argument("--thin-N", type=int, default=1, help="thin-combの折りパス数N（既定1=直管）")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
+
+    if a.thin_comb:
+        thicks = tuple(float(x) for x in a.thicks.replace(",", " ").split())
+        mesh, infos = thin_comb(note=a.thin_comb, N=a.thin_N, thicks=thicks)
+        name = a.out or os.path.join(OUT, "mini_thin_comb_%s.stl" % a.thin_comb)
+        mesh.export(name)
+        print("薄さ(厚み)スイープ・コーム（音・路長固定, 厚みだけ変化, N=%d）:" % a.thin_N)
+        for i in infos:
+            print("  %-7s 厚み%.1fmm 外形%s wt=%s 予測%6.0fHz" %
+                  (i["label"], i["thick"], i["dims"], i["watertight"], i["freq"]))
+        print("外形", np.round(mesh.extents, 1), "->", name)
+        return
 
     if a.chrom_low:
         mesh, infos = pan_flute(notes=CHROM_LOW, N=2, bighead=True)
