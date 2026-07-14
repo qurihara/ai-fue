@@ -254,7 +254,7 @@ def reader_monolithic_printpose(**kw):
 # 各笛はヘッド(下から吹く)を下端にし、吹込口(底 z=0)をポート位置に一致させて載せる。
 # 音は共鳴管長で決める（閉管 予測式を流用）。上部の連結板で一体化（底=吹込口は開放）。
 # ---------------------------------------------------------------------------
-def organ_panflute(notes=None, pitch=8.0, round_bore=False):
+def organ_panflute(notes=None, pitch=8.0, round_bore=False, web=True):
     import sys as _s
     _s.path.insert(0, os.path.dirname(__file__))
     import mini
@@ -274,12 +274,20 @@ def organ_panflute(notes=None, pitch=8.0, round_bore=False):
         pipes.append(pipe)
         infos.append(dict(note=note, x=x, z_top=zt, freq=mini.predict_freq(zt)))
     body = trimesh.util.concatenate(pipes)
-    # 上部連結板（各ヘッド上・z=20〜24, 底の吹込口は開放）でrigid一体化
-    b0, b1 = body.bounds
-    web = trimesh.creation.box(extents=[b1[0] - b0[0] + 2, 8.0, 4.0])
-    web.apply_translation([(b0[0] + b1[0]) / 2, 0, 22.0])
-    mesh = trimesh.util.concatenate([body, web])
-    info = dict(notes=notes, xs=xs, pitch=pitch, pipes=infos, dims=tuple(np.round(mesh.extents, 1)))
+    if web:
+        # 連結板（z=20〜24）。ボア中心(x_i,0)を通るので、そのままだと各笛のボアを塞ぐ
+        # （2026/7/14 発覚：気柱が分断され鳴らなかった真因）。ボア逃げ穴を開けて桁だけ残す。
+        b0, b1 = body.bounds
+        webbox = trimesh.creation.box(extents=[b1[0] - b0[0] + 2, 8.0, 4.0])
+        webbox.apply_translation([(b0[0] + b1[0]) / 2, 0, 22.0])
+        clr = mini.BORE / 2.0 + 0.4                    # ボア半径+0.4mmの逃げ
+        holes = [trimesh.creation.cylinder(radius=clr, height=4 + 2, sections=40) for _ in xs]
+        for hh, x in zip(holes, xs):
+            hh.apply_translation([x, 0, 22.0])
+        webbox = trimesh.boolean.difference([webbox, trimesh.boolean.union(holes, engine="manifold")], engine="manifold")
+        body = trimesh.boolean.union([body, webbox], engine="manifold")
+    mesh = body
+    info = dict(notes=notes, xs=xs, pitch=pitch, pipes=infos, web=web, dims=tuple(np.round(mesh.extents, 1)))
     return mesh, info
 
 
@@ -296,7 +304,9 @@ def pipe_bank(notes=None, pitch=8.0, plate_t=2.0):
     if notes is None:
         notes = ["C6", "D6", "E6", "F6", "G6", "A6", "B6", "C7"]
     rev = list(notes)[::-1]                               # 逆順：長管を+xへ
-    pan, pi = organ_panflute(notes=rev, pitch=pitch, round_bore=True)
+    # web=False：オルガンでは下の穴あき板＋チャンバーで一体化されるので連結板は不要
+    # （連結板はボアを塞ぐため使わない。2026/7/14修正）
+    pan, pi = organ_panflute(notes=rev, pitch=pitch, round_bore=True, web=False)
     # v3吸込口の底(z=-4)が板の上面(z=0)にちょうど載るよう持ち上げる。こうしないと
     # 外Ø7スピゴットが板を突き抜けてシート溝に突き出し、シートのスクロールを妨げる。
     pan.apply_translation([0, 0, -pan.bounds[0][2]])       # 吸込口の底 → z=0（板上面に着座）
