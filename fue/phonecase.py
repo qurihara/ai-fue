@@ -13,6 +13,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 import mini
 
 OUT = os.path.join(os.path.dirname(__file__), os.pardir, "out")
+MINI_V2 = os.path.join(os.path.dirname(__file__), os.pardir, "mini", "recorder-mini-c-v2.stl")
+V2_CX, V2_CY = 1.5, -16.0     # mini_v2 のボア中心（窓=-y面）
 
 
 def phone_case(phone_w=72.0, phone_h=150.0, phone_t=8.0, wall=2.0, back=2.0, lip=2.5):
@@ -29,36 +31,42 @@ def phone_case(phone_w=72.0, phone_h=150.0, phone_t=8.0, wall=2.0, back=2.0, lip
     return case, info
 
 
-def case_with_whistle(note="C6", N=1, **kw):
-    """ケース殻の +x 側面の周辺部に 7mm flat笛を一体化。笛の長手をケース高さ(y)に沿わせ、
-    窓(-y面)を +x 外側に向け、吹込口(-x端)をケース下端の角に出す（吹ける位置）。"""
+def case_with_whistle(corner="br", overlap=2.0, margin=2.0, **kw):
+    """ケース殻の『短辺(下端)の角』に mini_v2 リコーダー(7×7×40)そのものを寝かせて一体化。
+    管軸を短辺(x)方向に沿わせ、窓(-y面)を下端外へ向け、吹込口(管の一端)を角に出す。
+    corner: 'br'=右下 / 'bl'=左下。overlap=ケース下壁への食い込み。"""
     case, ci = phone_case(**kw)
     cw, ch, cd = ci["case_w"], ci["case_h"], ci["case_d"]
-    f, fi = mini.flat_flute(note=note, N=N)          # 長手x, 窓-y, 厚みz（7mm）
-    # z軸+90°回転: (x,y)->(-y,x)。長手x→+y、窓-y面の法線(0,-1)->(+1,0)=+x（外向き）。
-    f.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2.0, [0, 0, 1]))
-    fb = f.bounds
-    fl_len = fb[1][1] - fb[0][1]      # 笛の長さ(いまy方向)
-    fl_th = fb[1][0] - fb[0][0]       # 笛の厚み(いまx方向, 7mm)
-    fl_h = fb[1][2] - fb[0][2]        # 笛の高さ(z, 7mm)
-    # 配置：+x側壁の外面に貼る（少し食い込ませて一体化）。y中央、背面側(z=0..)に載せる。
-    x_place = cw / 2.0 - 1.0          # 側壁外面に1mm食い込み
-    f.apply_translation([x_place - fb[0][0], -(fb[0][1] + fb[1][1]) / 2.0, -fb[0][2] + 0.5])
-    combo = trimesh.boolean.union([case, f], engine="manifold")
-    info = dict(case=ci, flute=dict(note=note, N=N, len=round(fl_len, 1), th=round(fl_th, 1)),
+    m = trimesh.load(MINI_V2)                                   # 7×7×40, bore=z, 窓=-y
+    m.apply_translation([-V2_CX, -V2_CY, 0])                    # ボア軸を(0,0)へ: x,y∈±3.5, z∈[0,40]
+    m.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2.0, [0, 1, 0]))  # z(bore)→x
+    b = m.bounds                                               # x∈[0,40](管軸), y∈±3.5(窓-y), z∈±3.5(厚み)
+    flen = b[1][0] - b[0][0]
+    sx = 1.0 if corner == "br" else -1.0
+    # 管軸を短辺xに沿わせ、角へ寄せる。窓(-y)は下端外へ、厚みzはケース中面へ。
+    if sx > 0:
+        tx = (cw / 2.0 - margin) - b[1][0]                     # 右端を右壁内側へ
+    else:
+        tx = (-cw / 2.0 + margin) - b[0][0]                    # 左端を左壁内側へ
+    ty = (-ch / 2.0 + overlap) - b[1][1]                       # 笛の+y端を下端に overlap 食い込ませ、-y(窓)は下へ突出
+    tz = cd / 2.0 - (b[0][2] + b[1][2]) / 2.0                  # 厚み中央（ケース断面内）
+    m.apply_translation([tx, ty, tz])
+    combo = trimesh.boolean.union([case, m], engine="manifold")
+    info = dict(case=ci, flute="mini_v2", flute_len=round(flen, 1), corner=corner,
                 dims=tuple(np.round(combo.extents, 1)), watertight=bool(combo.is_watertight))
     return combo, info
 
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    combo, info = case_with_whistle()
-    name = os.path.join(OUT, "phonecase_whistle_demo.stl")
+    # Pixel 7: 155.6 × 73.2 × 8.7mm
+    combo, info = case_with_whistle(corner="br", phone_w=73.2, phone_h=155.6, phone_t=8.7)
+    name = os.path.join(OUT, "phonecase_pixel7_whistle.stl")
     combo.export(name)
-    print("スマホケース＋7mm警報笛 PoC:")
-    print("  ケース %.0fx%.0fx%.0f  笛 %s(N=%d) 長さ%.0fmm" %
+    print("Pixel7 ケース＋mini_v2 リコーダー（短辺の角に一体）:")
+    print("  ケース %.1fx%.1fx%.1f  笛=%s(管長%.0fmm) 角=%s" %
           (info["case"]["case_w"], info["case"]["case_h"], info["case"]["case_d"],
-           info["flute"]["note"], info["flute"]["N"], info["flute"]["len"]))
+           info["flute"], info["flute_len"], info["corner"]))
     print("  外形%s watertight=%s -> %s" % (info["dims"], info["watertight"], name))
 
 
