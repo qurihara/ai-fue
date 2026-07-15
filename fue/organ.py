@@ -254,7 +254,7 @@ def reader_monolithic_printpose(**kw):
 # 各笛はヘッド(下から吹く)を下端にし、吹込口(底 z=0)をポート位置に一致させて載せる。
 # 音は共鳴管長で決める（閉管 予測式を流用）。上部の連結板で一体化（底=吹込口は開放）。
 # ---------------------------------------------------------------------------
-def organ_panflute(notes=None, pitch=8.0, round_bore=False, web=True):
+def organ_panflute(notes=None, pitch=8.0, round_bore=False, web=True, fold=2):
     import sys as _s
     _s.path.insert(0, os.path.dirname(__file__))
     import mini
@@ -265,14 +265,20 @@ def organ_panflute(notes=None, pitch=8.0, round_bore=False, web=True):
     head = mini._mini_head()
     pipes, infos = [], []
     for x, note in zip(xs, notes):
-        zt = mini.z_top_for_note(note)                 # 閉管：上端z
-        ext = mini._bore_extension(zt, round_bore=round_bore)   # ヘッド上の閉じボア（round=横倒しでボア内サポート0）
-        h = head.copy()
-        pipe = trimesh.util.concatenate([h, ext])
-        # ヘッドのxy中心(CX,CY)を原点化→ポート位置xへ（y=0中心）
-        pipe.apply_translation([-mini.CX + x, -mini.CY, 0])
+        if fold and fold >= 2:
+            # 実績の1回折れ（flat_flute N=fold・丸ボア面内蛇行）を『立てたまま』縦笛に。
+            # 直管はこのオクターブで安定発音しない（実機確認）ため折れ版を採用。
+            pipe, pinfo = mini.flat_flute(note=note, N=fold, head=head.copy(), flatten=False)
+            pipe.apply_translation([x, 0, 0])          # ボア(=原点)→ポート位置x
+            freq = pinfo["freq"]; zt = None
+        else:
+            zt = mini.z_top_for_note(note)             # 直管（旧）
+            ext = mini._bore_extension(zt, round_bore=round_bore)
+            pipe = trimesh.util.concatenate([head.copy(), ext])
+            pipe.apply_translation([-mini.CX + x, -mini.CY, 0])
+            freq = mini.predict_freq(zt)
         pipes.append(pipe)
-        infos.append(dict(note=note, x=x, z_top=zt, freq=mini.predict_freq(zt)))
+        infos.append(dict(note=note, x=x, z_top=zt, freq=freq))
     body = trimesh.util.concatenate(pipes)
     if web:
         # 連結板（z=20〜24）。ボア中心(x_i,0)を通るので、そのままだと各笛のボアを塞ぐ

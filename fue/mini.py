@@ -174,8 +174,10 @@ def _round_serpentine_void(pts, r):
     return trimesh.boolean.union(parts, engine="manifold")
 
 
-def flat_flute(note=None, Lg=None, N=3, z_low=4.0, r=3.0, end_wall=1.2, pitch=7.0, head=None):
+def flat_flute(note=None, Lg=None, N=3, z_low=4.0, r=3.0, end_wall=1.2, pitch=7.0, head=None, flatten=True):
     """flat印刷用：実績ヘッド＋丸ボアの面内蛇行。出力STLは既にflat向き（窓横向き）。
+    flatten=False で寝かせず立てたまま返す（オルガンの縦笛用）：ヘッドボア(CX,CY)を原点xyへ、
+    ヘッド下端(吹込口)を z=0 へ置く。折れは +y 方向にN-1本ぶん深くなる（窓=-y面）。
     end_wall: +x端（折り返しがある端）の外側に残す壁厚(mm)。折り返しは半径 r の丸みで
     z_high+r まで張り出すため、端の壁は最低でも r 分を見込む必要がある。旧版は端壁が
     TOP_CAP=2mm しか無く r=3mm の折り返しが端面を突き抜けて穴が開いていた（実機で確認）。"""
@@ -201,14 +203,18 @@ def flat_flute(note=None, Lg=None, N=3, z_low=4.0, r=3.0, end_wall=1.2, pitch=7.
     solid = trimesh.boolean.difference([solid, slot], engine="manifold")
     hollow = trimesh.boolean.difference([solid, void], engine="manifold")
     flute = trimesh.util.concatenate([hollow, h])
-    # flat向きにベイク（y軸まわり90°→管軸を水平・窓を横向き）、ベッドに落とし中心化
-    flute.apply_transform(trimesh.transformations.rotation_matrix(np.radians(90), [0, 1, 0]))
-    flute.apply_translation([0, 0, -flute.bounds[0][2]])
-    bb = flute.bounds
-    flute.apply_translation([-(bb[0][0] + bb[1][0]) / 2.0, -(bb[0][1] + bb[1][1]) / 2.0, 0])
+    if flatten:
+        # flat向きにベイク（y軸まわり90°→管軸を水平・窓を横向き）、ベッドに落とし中心化
+        flute.apply_transform(trimesh.transformations.rotation_matrix(np.radians(90), [0, 1, 0]))
+        flute.apply_translation([0, 0, -flute.bounds[0][2]])
+        bb = flute.bounds
+        flute.apply_translation([-(bb[0][0] + bb[1][0]) / 2.0, -(bb[0][1] + bb[1][1]) / 2.0, 0])
+    else:
+        # 立てたまま：ボア(CX,CY)を原点xyへ、ヘッド下端(吹込口)を z=0 へ
+        flute.apply_translation([-CX, -CY, -flute.bounds[0][2]])
     # 実際に鳴る音＝幾何路長から折り縮みを差し引いた実効長で予測（Lgは折り補正込みなので相殺）
     freq = C4 / (Lg + ENDCORR - FLAT_FOLD_CORR * (N - 1))
-    info = dict(N=N, z_high=z_high, freq=freq, r=r, kind="flat%d" % N,
+    info = dict(N=N, z_high=z_high, freq=freq, r=r, kind="flat%d" % N, flatten=flatten,
                 dims=tuple(np.round(flute.extents, 1)))
     return flute, info
 
