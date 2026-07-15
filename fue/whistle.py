@@ -25,9 +25,9 @@ OUT = os.path.join(os.path.dirname(__file__), os.pardir, "out")
 C4 = 343000.0 / 4.0     # 閉管 c/4（mm/s /4）
 
 
-def flat_whistle(L=26.0, W=20.0, T=6.0, wall=1.2, bore_y=2.5,
+def flat_whistle(L=26.0, W=20.0, T=8.0, wall=1.2, bore_y=2.5,
                  flue=0.8, wall_wf=1.0, cutup=4.0, winway=9.0,
-                 win_inset=1.2, cap=1.5, win_frac=0.85):
+                 win_inset=1.2, cap=1.5, win_frac=0.85, T_body=None):
     """薄い平型ホイッスル1本。
       L        閉ボア長（閉端→窓下端, z）。音程を決める（閉管 f≈C4/(L+端補正)）。
       W,T      外形の幅(x)・厚み(y)。Tはケースからのはみだしなのでできるだけ小さく。
@@ -44,8 +44,21 @@ def flat_whistle(L=26.0, W=20.0, T=6.0, wall=1.2, bore_y=2.5,
     ry = bore_y / 2.0                       # ボア-y壁 = -ry
     H = cap + L + cutup + winway
     half_x = bore_x * win_frac / 2.0
+    if T_body is None:
+        T_body = T                          # None=一様厚
+    zc = cap + L                            # 胴↔頭の境界（窓の下端）
 
-    col = trimesh.creation.box(extents=[W, T, H]); col.apply_translation([0, 0, H / 2.0])
+    # 外形＝段付き厚み：頭部(z>=zc, 厚T・windwayが要る) ＋ 胴体(z<zc, 薄T_body・ボア+壁のみ)。
+    # 段差は45°チャンファ(高さchf=(T-T_body)/2)でテーパさせ、立て置き印刷で自己支持させる。
+    chf = max((T - T_body) / 2.0, 0.0)
+    head = trimesh.creation.box(extents=[W, T, H - zc]); head.apply_translation([0, 0, (zc + H) / 2.0])
+    body = trimesh.creation.box(extents=[W, T_body, zc - chf]); body.apply_translation([0, 0, (zc - chf) / 2.0])
+    parts = [head, body]
+    if chf > 1e-6:
+        lo = [[sx * W / 2.0, sy * T_body / 2.0, zc - chf] for sx in (-1, 1) for sy in (-1, 1)]
+        hi = [[sx * W / 2.0, sy * T / 2.0, zc] for sx in (-1, 1) for sy in (-1, 1)]
+        parts.append(trimesh.PointCloud(np.array(lo + hi, float)).convex_hull)
+    col = trimesh.boolean.union(parts, engine="manifold")
     # ボア（閉スロット）: z=cap .. cap+L+cutup、閉端はcap厚で塞ぐ
     bz0, bz1 = cap, cap + L + cutup
     bore = trimesh.creation.box(extents=[bore_x, bore_y, bz1 - bz0])
@@ -65,7 +78,7 @@ def flat_whistle(L=26.0, W=20.0, T=6.0, wall=1.2, bore_y=2.5,
     # windwayが外壁を突き破っていないか（ywo > -T/2 が必須）
     ok_flue = ywo > (-T / 2.0 + 0.1)
     offset = wall_wf + flue / 2.0
-    info = dict(W=W, T=T, L=L, bore=(round(bore_x, 1), round(bore_y, 1)), cutup=cutup,
+    info = dict(W=W, T=T, T_body=T_body, L=L, bore=(round(bore_x, 1), round(bore_y, 1)), cutup=cutup,
                 flue=flue, offset=round(offset, 2), H=round(H, 1),
                 flue_wall_ok=bool(ok_flue), back_wall=round(-T / 2.0 - ywo, 2),
                 freq=C4 / (L + 8.0), watertight=bool(whistle.is_watertight),
@@ -73,9 +86,9 @@ def flat_whistle(L=26.0, W=20.0, T=6.0, wall=1.2, bore_y=2.5,
     return whistle, info
 
 
-def voicing_comb(L=26.0, T=6.0, gap=6.0, variants=None):
-    """『鳴るか』を見るボイシング変奏コーム。管長L・厚みT固定で、flue–labiumオフセット
-    (wall_wf) と cutup を振った数本を横一列に。1回刷って鳴る組合せを選ぶ。"""
+def voicing_comb(L=26.0, T=8.0, T_body=5.0, gap=6.0, variants=None):
+    """『鳴るか』を見るボイシング変奏コーム。管長L・頭厚T・胴厚T_body固定で、flue–labium
+    オフセット(wall_wf) と cutup を振った数本を横一列に。1回刷って鳴る組合せを選ぶ。"""
     if variants is None:
         variants = [
             ("o0.6c3.5", dict(wall_wf=0.6, cutup=3.5)),
@@ -86,7 +99,7 @@ def voicing_comb(L=26.0, T=6.0, gap=6.0, variants=None):
     flutes, infos = [], []
     xoff = 0.0
     for label, kw in variants:
-        f, info = flat_whistle(L=L, T=T, **kw)
+        f, info = flat_whistle(L=L, T=T, T_body=T_body, **kw)
         w = f.extents[0]
         f.apply_translation([xoff + w / 2.0, 0, 0])
         info["label"] = label; info["x"] = xoff
@@ -104,13 +117,14 @@ def main():
     ap.add_argument("--voicing", action="store_true", help="ボイシング変奏コーム（鳴る組合せ探し）")
     ap.add_argument("--single", action="store_true", help="単体1本")
     ap.add_argument("--L", type=float, default=26.0)
-    ap.add_argument("--T", type=float, default=6.0)
+    ap.add_argument("--T", type=float, default=8.0, help="頭部(フィッポル)の厚み")
+    ap.add_argument("--T-body", type=float, default=5.0, dest="T_body", help="胴体(共鳴)の厚み＝実効的な薄さ")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
     os.makedirs(OUT, exist_ok=True)
     if a.voicing:
-        mesh, infos = voicing_comb(L=a.L, T=a.T)
-        name = a.out or os.path.join(OUT, "whistle_voicing_L%.0f_T%.0f.stl" % (a.L, a.T))
+        mesh, infos = voicing_comb(L=a.L, T=a.T, T_body=a.T_body)
+        name = a.out or os.path.join(OUT, "whistle_voicing_L%.0f_T%.0f_b%.0f.stl" % (a.L, a.T, a.T_body))
         mesh.export(name)
         print("平型ホイッスル ボイシングコーム（L=%.0f・厚みT=%.0f・立て置き印刷）:" % (a.L, a.T))
         for i in infos:
@@ -119,8 +133,8 @@ def main():
                      i["watertight"], i["freq"]))
         print("外形", np.round(mesh.extents, 1), "->", name)
     else:
-        f, info = flat_whistle(L=a.L, T=a.T)
-        name = a.out or os.path.join(OUT, "whistle_L%.0f_T%.0f.stl" % (a.L, a.T))
+        f, info = flat_whistle(L=a.L, T=a.T, T_body=a.T_body)
+        name = a.out or os.path.join(OUT, "whistle_L%.0f_T%.0f_b%.0f.stl" % (a.L, a.T, a.T_body))
         f.export(name)
         print("平型ホイッスル L=%.0f T=%.0f: 外形%s ボア%s flue壁OK=%s watertight=%s 予測%.0fHz -> %s"
               % (a.L, a.T, info["dims"], info["bore"], info["flue_wall_ok"], info["watertight"],
