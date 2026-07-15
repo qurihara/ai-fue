@@ -146,6 +146,34 @@ def thin_voicing_comb(L=24.0, T=5.0, gap=5.0, variants=None):
     return mesh, infos
 
 
+def size_search_comb(L=24.0, T=5.0, gap=5.0):
+    """1プレートで『鳴る voicing』と『最小幅W』を同時に探す。
+    上流3本＝W=18固定で voicing(flue/cutup/labium)を振り鳴る組合せを見る。
+    下流4本＝その中庸 voicing で幅W=[14,11,8,6] を振り、どこまで細くして鳴るかを見る。"""
+    mid = dict(flue=1.0, cutup=3.5, labium_off=0.6)
+    variants = [
+        ("v_f0.8c3",   dict(W=18, flue=0.8, cutup=3.0, labium_off=0.4)),
+        ("v_f1.0c3.5", dict(W=18, **mid)),
+        ("v_f1.2c4.5", dict(W=18, flue=1.2, cutup=4.5, labium_off=1.0)),
+        ("w14", dict(W=14, **mid)),
+        ("w11", dict(W=11, **mid)),
+        ("w8",  dict(W=8,  **mid)),
+        ("w6",  dict(W=6,  **mid)),
+    ]
+    flutes, infos = [], []
+    xoff = 0.0
+    for label, kw in variants:
+        f, info = thin_whistle(L=L, T=T, **kw)
+        w = f.extents[0]
+        f.apply_translation([xoff + w / 2.0, 0, 0])
+        info["label"] = label; xoff += w + gap
+        flutes.append(f); infos.append(info)
+    mesh = trimesh.util.concatenate(flutes)
+    bb = mesh.bounds
+    mesh.apply_translation([-(bb[0][0] + bb[1][0]) / 2.0, -(bb[0][1] + bb[1][1]) / 2.0, 0])
+    return mesh, infos
+
+
 def voicing_comb(L=26.0, T=8.0, T_body=5.0, gap=6.0, variants=None):
     """『鳴るか』を見るボイシング変奏コーム。管長L・頭厚T・胴厚T_body固定で、flue–labium
     オフセット(wall_wf) と cutup を振った数本を横一列に。1回刷って鳴る組合せを選ぶ。"""
