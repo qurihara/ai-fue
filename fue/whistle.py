@@ -86,6 +86,66 @@ def flat_whistle(L=26.0, W=20.0, T=8.0, wall=1.2, bore_y=2.5,
     return whistle, info
 
 
+def thin_whistle(L=24.0, W=18.0, T=5.0, wall=1.0, flue=1.0, cutup=3.5,
+                 winway=8.0, labium_off=0.6, cap=1.5, win_frac=0.85):
+    """一様に薄い平型ホイッスル（頭も胴も厚みT）。ミニヘッドの実測に倣い、windwayを
+    ボアの-y横ではなく『軸方向(z)に下』へ置く＝厚み方向に重ねない。
+      座標: x=幅(広), y=厚み(薄T), z=長さ(下端=吹込, 上端=閉端)。印刷は立てて(z上)。
+      流れ: 下から吹く → 縦windway(-y面寄り, z=0..wl) → 窓(-y面, z=wl..wl+cutup, 45°ひさし)
+             → labium(ボア-y壁の下端) → 平ボア(z=wl.., 上端閉) が鳴る。
+    厚み内訳: windway域=壁+flue+壁、ボア域=壁+bore_y+壁。両者は別zなので max で決まり、
+    T=5mm(壁1・flue1・bore_y3)でも成立＝頭部も薄い。"""
+    bore_x = W - 2 * wall
+    bore_y = T - 2 * wall                      # 平ボアの厚み（=内寸フル）
+    H = cap + L + cutup + winway               # 全高（下からwinway, 窓, ボアL, 上capの順ではなく後述）
+    half_x = bore_x * win_frac / 2.0
+    yf = -T / 2.0                              # -y面
+    y_in = yf + wall                           # 内-y壁
+    wl = cap + winway                          # windway上端＝窓下端のz
+    col = trimesh.creation.box(extents=[W, T, H]); col.apply_translation([0, 0, H / 2.0])
+    # windway＋吹込口：-y内壁沿いの厚flueの縦チャンネル。下端(z=0)まで開けて吹込口に。
+    ww = trimesh.creation.box(extents=[2 * half_x, flue, wl + 0.1])
+    ww.apply_translation([0, y_in + flue / 2.0, wl / 2.0 - 0.05])
+    # ボア（平・上端閉）：z=wl .. H-cap。y=内寸フル。labiumはボア-y壁(=y_in+labium_off)。
+    by0, by1 = wl, H - cap
+    bore = trimesh.creation.box(extents=[bore_x, bore_y - labium_off, by1 - by0])
+    bore.apply_translation([0, (y_in + labium_off + (T / 2.0 - wall)) / 2.0, (by0 + by1) / 2.0])
+    # 窓（-y面→windway出口を大気へ, z=wl..wl+cutup, 45°ひさしで自立）
+    win = box._window_void(0.0, y_face=yf - 0.1, y_inner=y_in + labium_off,
+                           z0=wl, z1=wl + cutup, half_x=half_x)
+    voids = trimesh.util.concatenate([ww, bore, win])
+    whistle = trimesh.boolean.difference([col, voids], engine="manifold")
+    freq = C4 / (L + 8.0)
+    info = dict(W=W, T=T, L=L, bore=(round(bore_x, 1), round(bore_y - labium_off, 1)),
+                flue=flue, cutup=cutup, labium_off=labium_off, H=round(H, 1),
+                uniform_thin=True, watertight=bool(whistle.is_watertight),
+                dims=tuple(np.round(whistle.extents, 1)), freq=freq)
+    return whistle, info
+
+
+def thin_voicing_comb(L=24.0, T=5.0, gap=5.0, variants=None):
+    """一様薄型 thin_whistle の発音組合せ探しコーム（flue厚・cutup・labiumオフセットを振る）。"""
+    if variants is None:
+        variants = [
+            ("f0.8c3l0.4", dict(flue=0.8, cutup=3.0, labium_off=0.4)),
+            ("f1.0c3.5l0.6", dict(flue=1.0, cutup=3.5, labium_off=0.6)),
+            ("f1.0c4l0.8", dict(flue=1.0, cutup=4.0, labium_off=0.8)),
+            ("f1.2c4.5l1.0", dict(flue=1.2, cutup=4.5, labium_off=1.0)),
+        ]
+    flutes, infos = [], []
+    xoff = 0.0
+    for label, kw in variants:
+        f, info = thin_whistle(L=L, T=T, **kw)
+        w = f.extents[0]
+        f.apply_translation([xoff + w / 2.0, 0, 0])
+        info["label"] = label; xoff += w + gap
+        flutes.append(f); infos.append(info)
+    mesh = trimesh.util.concatenate(flutes)
+    bb = mesh.bounds
+    mesh.apply_translation([-(bb[0][0] + bb[1][0]) / 2.0, -(bb[0][1] + bb[1][1]) / 2.0, 0])
+    return mesh, infos
+
+
 def voicing_comb(L=26.0, T=8.0, T_body=5.0, gap=6.0, variants=None):
     """『鳴るか』を見るボイシング変奏コーム。管長L・頭厚T・胴厚T_body固定で、flue–labium
     オフセット(wall_wf) と cutup を振った数本を横一列に。1回刷って鳴る組合せを選ぶ。"""
