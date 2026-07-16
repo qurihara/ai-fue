@@ -174,7 +174,7 @@ def _round_serpentine_void(pts, r):
     return trimesh.boolean.union(parts, engine="manifold")
 
 
-def flat_flute(note=None, Lg=None, N=3, z_low=4.0, r=3.0, end_wall=1.2, pitch=7.0, head=None, flatten=True):
+def flat_flute(note=None, Lg=None, N=3, z_low=4.0, r=3.0, end_wall=1.2, pitch=7.0, head=None, flatten=True, owall=0.0):
     """flat印刷用：実績ヘッド＋丸ボアの面内蛇行。出力STLは既にflat向き（窓横向き）。
     flatten=False で寝かせず立てたまま返す（オルガンの縦笛用）：ヘッドボア(CX,CY)を原点xyへ、
     ヘッド下端(吹込口)を z=0 へ置く。折れは +y 方向にN-1本ぶん深くなる（窓=-y面）。
@@ -196,7 +196,10 @@ def flat_flute(note=None, Lg=None, N=3, z_low=4.0, r=3.0, end_wall=1.2, pitch=7.
         pts.append([CX, yi, nz]); cur = nz            # 縦パス
     void = _round_serpentine_void([np.array(p, float) for p in pts], r)
     y0, y1 = CY - FOOT / 2, CY + (N - 1) * pitch + FOOT / 2
-    solid = trimesh.creation.box(extents=[FOOT, y1 - y0, H])
+    # owall: 胴を左右(x=管の並び方向)へ広げてボア側壁を厚くする。オルガンのように笛間に
+    # 隙間があると 0.5mm 壁ではボア片面が密閉されず無発音になる(実機で確認)。owall>0 で
+    # 側壁を owall 分厚くし、さらに並べたとき隣と重なって一体化(=実績パンフルート状態)させる。
+    solid = trimesh.creation.box(extents=[FOOT + 2 * owall, y1 - y0, H])
     solid.apply_translation([CX, (y0 + y1) / 2.0, H / 2.0])
     slot = trimesh.creation.box(extents=[FOOT + 0.02, FOOT + 0.02, CUT_Z + 0.5])
     slot.apply_translation([CX, CY, (CUT_Z + 0.5) / 2.0 - 0.25])

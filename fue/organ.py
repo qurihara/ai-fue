@@ -31,6 +31,8 @@ SLOT_CL = 0.2          # シート溝クリアランス（片側）。シート1
                        # 実機履歴: 初代=溝1.6mm(スカスカ) / 2台目=溝1.3mm(きつすぎ) →
                        # 2026/7/15 その中間寄りの1.4mm(2台目より+0.1mmゆとり)に調整
 STEP_Y = 8.0           # 楽譜の1時間ステップの送り量(mm)
+OWALL = 0.75           # 笛胴のx方向増厚(片側)。ピッチ8・FOOT7では隣と 8-(7+2*0.75)=-1.5mm＝
+                       # 0.5mm重なって一体スラブ化＝密閉（0.5mm壁が大気に漏れる無発音を解消, 2026/7/16）
 
 
 def reader_block(n=8, pitch=8.0, chest_h=12.0, depth=22.0, blow_r=4.0):
@@ -255,7 +257,10 @@ def reader_monolithic_printpose(**kw):
 # 各笛はヘッド(下から吹く)を下端にし、吹込口(底 z=0)をポート位置に一致させて載せる。
 # 音は共鳴管長で決める（閉管 予測式を流用）。上部の連結板で一体化（底=吹込口は開放）。
 # ---------------------------------------------------------------------------
-def organ_panflute(notes=None, pitch=8.0, round_bore=False, web=True, fold=2):
+def organ_panflute(notes=None, pitch=8.0, round_bore=False, web=True, fold=2, owall=0.0):
+    """owall>0: 各笛の胴をx方向へ owall 厚くして隣とオーバーラップさせ、boolean union で
+    一体スラブ化する（=実績パンフルートと同じ密閉状態）。オルガンは笛間に隙間があると
+    ボア片面が大気に漏れて無発音になるため、pipe_bank から owall>0 で呼ぶ（2026/7/16）。"""
     import sys as _s
     _s.path.insert(0, os.path.dirname(__file__))
     import mini
@@ -269,7 +274,7 @@ def organ_panflute(notes=None, pitch=8.0, round_bore=False, web=True, fold=2):
         if fold and fold >= 2:
             # 実績の1回折れ（flat_flute N=fold・丸ボア面内蛇行）を『立てたまま』縦笛に。
             # 直管はこのオクターブで安定発音しない（実機確認）ため折れ版を採用。
-            pipe, pinfo = mini.flat_flute(note=note, N=fold, head=head.copy(), flatten=False)
+            pipe, pinfo = mini.flat_flute(note=note, N=fold, head=head.copy(), flatten=False, owall=owall)
             pipe.apply_translation([x, 0, 0])          # ボア(=原点)→ポート位置x
             freq = pinfo["freq"]; zt = None
         else:
@@ -280,7 +285,10 @@ def organ_panflute(notes=None, pitch=8.0, round_bore=False, web=True, fold=2):
             freq = mini.predict_freq(zt)
         pipes.append(pipe)
         infos.append(dict(note=note, x=x, z_top=zt, freq=freq))
-    body = trimesh.util.concatenate(pipes)
+    if owall > 0:
+        body = trimesh.boolean.union(pipes, engine="manifold")   # 重なった胴を一体スラブに密閉
+    else:
+        body = trimesh.util.concatenate(pipes)
     if web:
         # 連結板（z=20〜24）。ボア中心(x_i,0)を通るので、そのままだと各笛のボアを塞ぐ
         # （2026/7/14 発覚：気柱が分断され鳴らなかった真因）。ボア逃げ穴を開けて桁だけ残す。
@@ -313,7 +321,7 @@ def pipe_bank(notes=None, pitch=8.0, plate_t=2.0):
     rev = list(notes)[::-1]                               # 逆順：長管を+xへ
     # web=False：オルガンでは下の穴あき板＋チャンバーで一体化されるので連結板は不要
     # （連結板はボアを塞ぐため使わない。2026/7/14修正）
-    pan, pi = organ_panflute(notes=rev, pitch=pitch, round_bore=True, web=False)
+    pan, pi = organ_panflute(notes=rev, pitch=pitch, round_bore=True, web=False, owall=OWALL)
     # v3吸込口の底(z=-4)が板の上面(z=0)にちょうど載るよう持ち上げる。こうしないと
     # 外Ø7スピゴットが板を突き抜けてシート溝に突き出し、シートのスクロールを妨げる。
     pan.apply_translation([0, 0, -pan.bounds[0][2]])       # 吸込口の底 → z=0（板上面に着座）

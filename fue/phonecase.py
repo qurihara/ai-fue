@@ -32,32 +32,56 @@ def phone_case(phone_w=72.0, phone_h=150.0, phone_t=8.0, wall=2.0, back=2.0, lip
     return case, info
 
 
-def case_with_whistle(corner="br", overlap=1.5, margin=2.0, flute_stl=HALF40, **kw):
-    """ケース殻の『短辺(下端)の角』に 半割り極薄笛(40×4×7mm・厚み4mm) を一体化。
-    管軸(40mm)を短辺(x)方向、幅(7mm)を短辺の奥行き(y)、厚み(4mm)をケース背面外へ薄く突出。
-    corner: 'br'=右下 / 'bl'=左下。flute_stl=HALF40(短・約3.5kHz) or HALF60(長・約1.8kHz)。"""
+def case_with_whistle(corner="br", margin=0.0, embed=1.0, flute_stl=HALF40, **kw):
+    """半割り極薄笛(40×4×7mm)を『ケースの短辺(下端)の縁に沿わせて』一体化する。
+    管軸(x)=短辺方向、吹込口(ヘッド側=STL local x-min)を頂点(角)へ端揃えし頂点方向へ向ける。
+    窓(平坦カット面=local y-min)は短辺の外(-y)へ向けて露出。厚み4mmが短辺縁から外へ薄く出る。
+    corner: 'br'=右下(吹込口が右角) / 'bl'=左下(左角)。embed=縁への食い込み(mm)。
+    flute_stl=HALF40(短・約3.5kHz) or HALF60(長・約1.8kHz)。"""
     case, ci = phone_case(**kw)
     cw, ch, cd = ci["case_w"], ci["case_h"], ci["case_d"]
-    m = trimesh.load(flute_stl)                                # 40(x,管軸)×4(y,厚み)×7(z,幅)
+    m = trimesh.load(flute_stl)                                # x=管軸(吹込口=x-min), y=厚み4(窓=y-min), z=幅7
     b0 = m.bounds
     m.apply_translation([-(b0[0][0] + b0[1][0]) / 2.0, -(b0[0][1] + b0[1][1]) / 2.0,
                          -(b0[0][2] + b0[1][2]) / 2.0])         # 中心を原点へ
-    # y(厚み4)→ケースz(背面外へ薄く), z(幅7)→ケースy(短辺の奥行き)。x軸まわり-90°: (x,y,z)->(x,z,-y)
-    m.apply_transform(trimesh.transformations.rotation_matrix(-np.pi / 2.0, [1, 0, 0]))
-    b = m.bounds                                              # x=40(管軸), y=7(幅), z=4(厚み)
+    right = corner in ("br", "tr")
+    if right:
+        # y軸まわり180°: 吹込口(x-min)を+x端へ回す。窓(y-min)は-y面のまま維持
+        m.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [0, 1, 0]))
+    b = m.bounds                                              # x=管軸(40), y=厚み(4), z=幅(7)
     flen = b[1][0] - b[0][0]
-    sx = 1.0 if corner == "br" else -1.0
-    if sx > 0:
-        tx = (cw / 2.0 - margin) - b[1][0]                     # 右端を右壁内側へ
+    # x: 吹込口端を頂点(左右壁の外面 ±cw/2)へ端揃え
+    if right:
+        tx = (cw / 2.0 - margin) - b[1][0]                     # 吹込口(+x端)→右角
     else:
-        tx = (-cw / 2.0 + margin) - b[0][0]                    # 左端を左壁内側へ
-    ty = (-ch / 2.0 + overlap + (b[1][1] - b[0][1]) / 2.0) - (b[0][1] + b[1][1]) / 2.0  # 下端沿い
-    tz = -b[1][2] - 0.01 + 1.0                                 # 背面(z=0)外へ厚み分突出＋1mm食い込み
+        tx = (-cw / 2.0 + margin) - b[0][0]                    # 吹込口(-x端)→左角
+    # y: 下短辺の縁(y=-ch/2)に載せ、厚み分を外(-y)へ突出。embed 分だけ縁へ食い込ませ接合
+    ty = (-ch / 2.0 + embed) - b[1][1]                         # 笛の上端(y-max)を縁より embed 内側へ
+    # z: 背面(z=0)側に寄せて配置（幅7mmが背面から立ち上がる）
+    tz = -b[0][2]
     m.apply_translation([tx, ty, tz])
     combo = trimesh.boolean.union([case, m], engine="manifold")
+    fb = m.bounds
     info = dict(case=ci, flute=os.path.basename(flute_stl), flute_len=round(flen, 1), corner=corner,
+                flute_x=(round(fb[0][0], 1), round(fb[1][0], 1)), flute_y=(round(fb[0][1], 1), round(fb[1][1], 1)),
                 dims=tuple(np.round(combo.extents, 1)), watertight=bool(combo.is_watertight))
     return combo, info
+
+
+def _render(combo, path):
+    """全体は笛が小さすぎて見えないため、下短辺の角(笛周辺)を拡大した3面を描く。"""
+    import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+    b = combo.bounds
+    ylo = b[0][1]                                   # 下端(笛が突出する側)
+    fig = plt.figure(figsize=(15, 5))
+    for i, (t, (el, az)) in enumerate([("corner iso", (20, -70)), ("bottom (from -y)", (2, -90)), ("under (from below)", (80, -90))]):
+        ax = fig.add_subplot(1, 3, i + 1, projection="3d")
+        ax.add_collection3d(Poly3DCollection(combo.triangles, alpha=0.5, facecolor="#8899cc", edgecolor="#556"))
+        ax.set_xlim(-45, 45); ax.set_ylim(ylo - 4, ylo + 36); ax.set_zlim(-16, 18)
+        ax.view_init(elev=el, azim=az); ax.set_title(t, fontsize=9)
+        ax.set_xlabel("x"); ax.set_ylabel("y"); ax.set_zlabel("z")
+    plt.tight_layout(); plt.savefig(path, dpi=90); plt.close()
 
 
 def main():
@@ -66,11 +90,14 @@ def main():
     combo, info = case_with_whistle(corner="br", phone_w=73.2, phone_h=155.6, phone_t=8.7)
     name = os.path.join(OUT, "phonecase_pixel7_whistle.stl")
     combo.export(name)
-    print("Pixel7 ケース＋mini_v2 リコーダー（短辺の角に一体）:")
+    print("Pixel7 ケース＋半割り極薄笛（短辺の縁に沿わせ・吹込口を右角に端揃え）:")
     print("  ケース %.1fx%.1fx%.1f  笛=%s(管長%.0fmm) 角=%s" %
           (info["case"]["case_w"], info["case"]["case_h"], info["case"]["case_d"],
            info["flute"], info["flute_len"], info["corner"]))
+    print("  笛x範囲%s y範囲%s（吹込口=x右端が頂点, 窓=-y外向き）" % (info["flute_x"], info["flute_y"]))
     print("  外形%s watertight=%s -> %s" % (info["dims"], info["watertight"], name))
+    _render(combo, os.path.join(OUT, "phonecase_pixel7_half_views.png"))
+    print("  render -> out/phonecase_pixel7_half_views.png")
 
 
 if __name__ == "__main__":
