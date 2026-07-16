@@ -106,6 +106,31 @@ def half_calib_comb(lengths=None, gap=0.0, merge=True, overlap=0.3):
     return comb, infos
 
 
+# --- 実測較正から作るダイアトニック音階コーム＆限界探索コーム ---
+A_MAJOR = ["A6", "B6", "C#7", "D7", "E7", "F#7", "G#7", "A7"]   # 較正範囲(G#6〜A7)に収まる1オクターブ
+LIMIT_LENGTHS = [28, 36, 44, 52, 60, 68, 76, 84, 92]           # 既知36-64を超えて両端(高/低)へ延ばし限界を探る
+
+
+def scale_comb(notes=None, gap=0.0, merge=True):
+    """実測較正 length_for_note で各音の管長を求めたダイアトニック音階コーム。既定=A majorオクターブ。"""
+    if notes is None:
+        notes = A_MAJOR
+    lengths = [round(length_for_note(n), 1) for n in notes]
+    comb, infos = half_calib_comb(lengths=lengths, gap=gap, merge=merge)
+    for info, n, L in zip(infos, notes, lengths):
+        info["note"] = n
+    return comb, infos, notes, lengths
+
+
+def limit_comb(lengths=None, gap=0.0, merge=True):
+    """音域の限界探索コーム：既知の良音域(36〜64mm)を超えて短側(高音・オーバーブロー限界)と
+    長側(低音・駆動限界)へ延ばす。どこまで綺麗に鳴るかを実測して可能音域の上限下限を確定する。"""
+    if lengths is None:
+        lengths = LIMIT_LENGTHS
+    comb, infos = half_calib_comb(lengths=lengths, gap=gap, merge=merge)
+    return comb, infos, lengths
+
+
 def _render(comb, infos, path):
     import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
@@ -122,17 +147,32 @@ def _render(comb, infos, path):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    comb, infos = half_calib_comb()
-    name = os.path.join(OUT, "halfcut_calib_comb.stl")
+    mode = "scale" if "--scale" in sys.argv else ("limit" if "--limit" in sys.argv else "calib")
+    if mode == "scale":
+        comb, infos, notes, lengths = scale_comb()
+        stem = "halfcut_scale_Amajor"
+        print("半割り笛 音階コーム（A major オクターブ・実測較正で管長決定・D字/平置き）:")
+        for it in infos:
+            print("    %-4s L=%4.1fmm  行y=%5.1f  予測 %5.0fHz" % (it["note"], it["L"], it["y"], it["freq"]))
+    elif mode == "limit":
+        comb, infos, lengths = limit_comb()
+        stem = "halfcut_limit_comb"
+        print("半割り笛 限界探索コーム（既知36-64mmを超えて両端へ。予測は外挿=要実測）:")
+        for it in infos:
+            print("    L=%2dmm  行y=%5.1f  予測 %5.0fHz  フット先 x=%.1f" % (it["L"], it["y"], it["freq"], it["x_foot"]))
+    else:
+        comb, infos = half_calib_comb()
+        stem = "halfcut_calib_comb"
+        print("半割り笛 較正コーム（D字断面のまま長さのみ可変・平置きサポートフリー）:")
+        print("  管長→音程（実測較正 f=%.0f/(L%+.1f)。範囲 G#6〜A7 の約1.1oct）" % (_A, _E))
+        for it in infos:
+            print("    L=%2dmm  行y=%5.1f  概算 %5.0fHz  フット先 x=%.1f" % (it["L"], it["y"], it["freq"], it["x_foot"]))
+    name = os.path.join(OUT, stem + ".stl")
     comb.export(name)
-    print("半割り笛 較正コーム（D字断面のまま長さのみ可変・平置きサポートフリー）:")
-    print("  管長→音程（実測較正 f=%.0f/(L%+.1f)。範囲 G#6〜A7 の約1.1oct）" % (_A, _E))
-    for it in infos:
-        print("    L=%2dmm  行y=%5.1f  概算 %5.0fHz  フット先 x=%.1f" % (it["L"], it["y"], it["freq"], it["x_foot"]))
     print("  笛数=%d 外形=%s watertight=%s -> %s" %
           (len(infos), tuple(np.round(comb.extents, 1)), comb.is_watertight, name))
-    _render(comb, infos, os.path.join(OUT, "halfcut_calib_comb_views.png"))
-    print("  render -> out/halfcut_calib_comb_views.png")
+    _render(comb, infos, os.path.join(OUT, stem + "_views.png"))
+    print("  render -> out/%s_views.png" % stem)
 
 
 if __name__ == "__main__":
