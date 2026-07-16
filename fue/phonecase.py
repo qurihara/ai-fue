@@ -13,8 +13,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 import mini
 
 OUT = os.path.join(os.path.dirname(__file__), os.pardir, "out")
-MINI_V2 = os.path.join(os.path.dirname(__file__), os.pardir, "mini", "recorder-mini-c-v2.stl")
-V2_CX, V2_CY = 1.5, -16.0     # mini_v2 のボア中心（窓=-y面）
+# 薄型の本命＝v2円筒を半割りした極薄笛(40×4×7mm・厚み4mm・弱い力で安定発音・0.08mm積層で良好)
+HALF40 = os.path.join(os.path.dirname(__file__), os.pardir, "mini", "recorder-mini-c-v3-half-v2-40.stl")
+HALF60 = os.path.join(os.path.dirname(__file__), os.pardir, "mini", "recorder-mini-c-v3-half-v2-60.stl")
 
 
 def phone_case(phone_w=72.0, phone_h=150.0, phone_t=8.0, wall=2.0, back=2.0, lip=2.5):
@@ -31,28 +32,30 @@ def phone_case(phone_w=72.0, phone_h=150.0, phone_t=8.0, wall=2.0, back=2.0, lip
     return case, info
 
 
-def case_with_whistle(corner="br", overlap=2.0, margin=2.0, **kw):
-    """ケース殻の『短辺(下端)の角』に mini_v2 リコーダー(7×7×40)そのものを寝かせて一体化。
-    管軸を短辺(x)方向に沿わせ、窓(-y面)を下端外へ向け、吹込口(管の一端)を角に出す。
-    corner: 'br'=右下 / 'bl'=左下。overlap=ケース下壁への食い込み。"""
+def case_with_whistle(corner="br", overlap=1.5, margin=2.0, flute_stl=HALF40, **kw):
+    """ケース殻の『短辺(下端)の角』に 半割り極薄笛(40×4×7mm・厚み4mm) を一体化。
+    管軸(40mm)を短辺(x)方向、幅(7mm)を短辺の奥行き(y)、厚み(4mm)をケース背面外へ薄く突出。
+    corner: 'br'=右下 / 'bl'=左下。flute_stl=HALF40(短・約3.5kHz) or HALF60(長・約1.8kHz)。"""
     case, ci = phone_case(**kw)
     cw, ch, cd = ci["case_w"], ci["case_h"], ci["case_d"]
-    m = trimesh.load(MINI_V2)                                   # 7×7×40, bore=z, 窓=-y
-    m.apply_translation([-V2_CX, -V2_CY, 0])                    # ボア軸を(0,0)へ: x,y∈±3.5, z∈[0,40]
-    m.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2.0, [0, 1, 0]))  # z(bore)→x
-    b = m.bounds                                               # x∈[0,40](管軸), y∈±3.5(窓-y), z∈±3.5(厚み)
+    m = trimesh.load(flute_stl)                                # 40(x,管軸)×4(y,厚み)×7(z,幅)
+    b0 = m.bounds
+    m.apply_translation([-(b0[0][0] + b0[1][0]) / 2.0, -(b0[0][1] + b0[1][1]) / 2.0,
+                         -(b0[0][2] + b0[1][2]) / 2.0])         # 中心を原点へ
+    # y(厚み4)→ケースz(背面外へ薄く), z(幅7)→ケースy(短辺の奥行き)。x軸まわり-90°: (x,y,z)->(x,z,-y)
+    m.apply_transform(trimesh.transformations.rotation_matrix(-np.pi / 2.0, [1, 0, 0]))
+    b = m.bounds                                              # x=40(管軸), y=7(幅), z=4(厚み)
     flen = b[1][0] - b[0][0]
     sx = 1.0 if corner == "br" else -1.0
-    # 管軸を短辺xに沿わせ、角へ寄せる。窓(-y)は下端外へ、厚みzはケース中面へ。
     if sx > 0:
         tx = (cw / 2.0 - margin) - b[1][0]                     # 右端を右壁内側へ
     else:
         tx = (-cw / 2.0 + margin) - b[0][0]                    # 左端を左壁内側へ
-    ty = (-ch / 2.0 + overlap) - b[1][1]                       # 笛の+y端を下端に overlap 食い込ませ、-y(窓)は下へ突出
-    tz = cd / 2.0 - (b[0][2] + b[1][2]) / 2.0                  # 厚み中央（ケース断面内）
+    ty = (-ch / 2.0 + overlap + (b[1][1] - b[0][1]) / 2.0) - (b[0][1] + b[1][1]) / 2.0  # 下端沿い
+    tz = -b[1][2] - 0.01 + 1.0                                 # 背面(z=0)外へ厚み分突出＋1mm食い込み
     m.apply_translation([tx, ty, tz])
     combo = trimesh.boolean.union([case, m], engine="manifold")
-    info = dict(case=ci, flute="mini_v2", flute_len=round(flen, 1), corner=corner,
+    info = dict(case=ci, flute=os.path.basename(flute_stl), flute_len=round(flen, 1), corner=corner,
                 dims=tuple(np.round(combo.extents, 1)), watertight=bool(combo.is_watertight))
     return combo, info
 
