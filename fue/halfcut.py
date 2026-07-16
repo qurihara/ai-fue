@@ -22,14 +22,40 @@ BASE_STL = os.path.join(os.path.dirname(__file__), os.pardir, "mini", "recorder-
 FOOT_THR = 20.0
 BASE_LEN = 40.0
 
-# 実測アンカー2点からの log 線形補間（f = f40 * exp(k*(L-40))）。あくまで概算＝要実測。
-_F40, _F60 = 3500.0, 1830.0
-_K = np.log(_F60 / _F40) / (60.0 - 40.0)          # ≈ -0.0325 /mm （1オクターブ≈21.3mm）
+# 実測較正（2026/7/17, 較正コーム8本の clean run＝高→低で単音抽出）: 管長L[mm]→基本周波数f[Hz]。
+# 音域は G#6(64mm,1682Hz)〜A7(36mm,3615Hz) の約1.1オクターブ。全長よく鳴った。
+CALIB = [(36, 3615), (40, 3041), (44, 2689), (48, 2361), (52, 2168), (56, 1980), (60, 1816), (64, 1682)]
+# 物理閉管モデル f = A/(L+e) が最良（RMS≈16cent・最大33cent。log線形はRMS57centで不可）。
+# 1/f = (1/A)L + e/A の線形回帰で係数を得る。
+_CL = np.array([p[0] for p in CALIB], float)
+_CF = np.array([p[1] for p in CALIB], float)
+_invA, _eoverA = np.polyfit(_CL, 1.0 / _CF, 1)
+_A = 1.0 / _invA
+_E = _eoverA * _A                                  # ≈ A=89086, e=-10.9
 
 
 def est_freq(L):
-    """2アンカーの log 線形補間による概算周波数[Hz]（要実測で較正）。"""
-    return _F40 * np.exp(_K * (L - BASE_LEN))
+    """実測較正 f=A/(L+e) による周波数[Hz]。"""
+    return _A / (L + _E)
+
+
+def length_for_freq(f):
+    """目標周波数 f[Hz] を出す管長[mm]（est_freq の逆）。"""
+    return _A / f - _E
+
+
+def note_freq(note):
+    """音名(例 'A6','C#7')→周波数[Hz]（A4=440・平均律）。"""
+    idx = {'C': 0, 'C#': 1, 'D': 2, 'D#': 3, 'E': 4, 'F': 5,
+           'F#': 6, 'G': 7, 'G#': 8, 'A': 9, 'A#': 10, 'B': 11}
+    name, octv = note[:-1], int(note[-1])
+    midi = 12 * (octv + 1) + idx[name]
+    return 440.0 * 2 ** ((midi - 69) / 12.0)
+
+
+def length_for_note(note):
+    """音名→その音を出す管長[mm]（較正範囲 36〜64mm 内が実用。範囲外は外挿=要確認）。"""
+    return length_for_freq(note_freq(note))
 
 
 def half_flute(L, base=None):
@@ -100,7 +126,7 @@ def main():
     name = os.path.join(OUT, "halfcut_calib_comb.stl")
     comb.export(name)
     print("半割り笛 較正コーム（D字断面のまま長さのみ可変・平置きサポートフリー）:")
-    print("  管長→概算音程（要実測。log補間 f=%.0f*exp(%.4f*(L-40)); 1oct≈%.1fmm）" % (_F40, _K, np.log(2) / -_K))
+    print("  管長→音程（実測較正 f=%.0f/(L%+.1f)。範囲 G#6〜A7 の約1.1oct）" % (_A, _E))
     for it in infos:
         print("    L=%2dmm  行y=%5.1f  概算 %5.0fHz  フット先 x=%.1f" % (it["L"], it["y"], it["freq"], it["x_foot"]))
     print("  笛数=%d 外形=%s watertight=%s -> %s" %
