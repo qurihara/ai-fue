@@ -51,9 +51,11 @@ def _printpose(m):
     return m
 
 
-def half_calib_comb(lengths=None, gap=4.0):
-    """長さ違いの半割り笛を一列に並べた較正コーム（各笛は独立=音響結合なし・平置きサポートフリー）。
-    全笛の吸込口(x=0)を揃え、フットが長いほど +x へ伸びる。幅方向(y)に gap を空けて並べる。"""
+def half_calib_comb(lengths=None, gap=0.0, merge=True, overlap=0.3):
+    """長さ違いの半割り笛を一列に並べた較正コーム。全笛の吸込口(x=0)を揃え、フットが長いほど
+    +x へ伸びる。幅方向(y)に gap を空けて並べる（gap=0 で隙間なく密着）。
+    merge=True: 密着した笛を boolean union で一体のwatertight連結コームにする（各ボアは独立のまま
+    残る＝実績パンフルートと同じ密閉。union を確実にするため密着時は overlap だけ食い込ませる）。"""
     if lengths is None:
         lengths = [36, 40, 44, 48, 52, 56, 60, 64]        # 4mm刻み・アンカー40/60含む・約1.3oct
     base = trimesh.load(BASE_STL)
@@ -66,9 +68,15 @@ def half_calib_comb(lengths=None, gap=4.0):
         fb = f.bounds
         w = fb[1][1] - fb[0][1]
         infos.append(dict(L=L, y=round(y, 1), freq=est_freq(L), x_foot=round(fb[1][0], 1)))
-        y += w + gap
+        step = w + gap
+        if merge and gap == 0.0:
+            step -= overlap                               # 密着時は微小に重ねて union を確実化
+        y += step
         flutes.append(f)
-    comb = trimesh.util.concatenate(flutes)
+    if merge:
+        comb = trimesh.boolean.union(flutes, engine="manifold")
+    else:
+        comb = trimesh.util.concatenate(flutes)
     return comb, infos
 
 
