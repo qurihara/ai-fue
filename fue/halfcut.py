@@ -108,6 +108,9 @@ def half_calib_comb(lengths=None, gap=0.0, merge=True, overlap=0.3):
 
 # --- 実測較正から作るダイアトニック音階コーム＆限界探索コーム ---
 A_MAJOR = ["A6", "B6", "C#7", "D7", "E7", "F#7", "G#7", "A7"]   # 較正範囲(G#6〜A7)に収まる1オクターブ
+# Eb major(D#6→D#7): クリーン域に最も収まるフルオクターブ。8音中7音が明瞭、最低音D#6(82.5mm)だけ弱い。
+# 上端D#7(46.7mm)はオーバーブロー域から離れて安全＝E6-E7より良い置き所（実測音域 F6〜E7 より, 2026/7/17）。
+EB_MAJOR = ["D#6", "F6", "G6", "G#6", "A#6", "C7", "D7", "D#7"]
 # 既知の良音域 A6〜A7(≈36〜62mm)は鳴ると確定済みなので省き、両端に集中して限界を探る。
 # 高音側(短): 22〜34mm=A7より上(B7〜C8域, オーバーブロー限界)。低音側(長): 68〜100mm=G#6より下(E6域へ, 駆動限界)。
 LIMIT_LENGTHS = [22, 26, 30, 34, 68, 76, 84, 92, 100]
@@ -149,11 +152,15 @@ def _render(comb, infos, path):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    mode = "scale" if "--scale" in sys.argv else ("limit" if "--limit" in sys.argv else "calib")
-    if mode == "scale":
-        comb, infos, notes, lengths = scale_comb()
-        stem = "halfcut_scale_Amajor"
-        print("半割り笛 音階コーム（A major オクターブ・実測較正で管長決定・D字/平置き）:")
+    mode = ("scale-eb" if "--scale-eb" in sys.argv else
+            "scale" if "--scale" in sys.argv else
+            "limit" if "--limit" in sys.argv else "calib")
+    if mode in ("scale", "scale-eb"):
+        notes_sel = EB_MAJOR if mode == "scale-eb" else A_MAJOR
+        comb, infos, notes, lengths = scale_comb(notes=notes_sel)
+        stem = "halfcut_scale_Ebmajor" if mode == "scale-eb" else "halfcut_scale_Amajor"
+        print("半割り笛 音階コーム（%s オクターブ・実測較正で管長決定・D字/平置き）:" %
+              ("Eb major(D#6-D#7)" if mode == "scale-eb" else "A major(A6-A7)"))
         for it in infos:
             print("    %-4s L=%4.1fmm  行y=%5.1f  予測 %5.0fHz" % (it["note"], it["L"], it["y"], it["freq"]))
     elif mode == "limit":
