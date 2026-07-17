@@ -114,6 +114,9 @@ EB_MAJOR = ["D#6", "F6", "G6", "G#6", "A#6", "C7", "D7", "D#7"]
 # F major 7音(F6→E7): octaveの高いドを捨てた7音。クリーン域 F6〜E7 に丸ごと収まり全音鳴る
 # （幅=長7度=窓とほぼ同じなので両端F6/E7はクリーン域の縁。中5音は余裕。G majorに上げると最高音F#7が✗）。
 F_MAJOR7 = ["F6", "G6", "A6", "A#6", "C7", "D7", "E7"]
+# クロマチック(半音12音): オクターブに拘らず、クリーンに鳴る下限F6〜上限E7の半音を全部集めた全パレット。
+# 任意の調・半音進行の旋律がこの音域で吹ける。管長は74.7→44.7mmの滑らかな階段。
+CHROMATIC = ["F6", "F#6", "G6", "G#6", "A6", "A#6", "B6", "C7", "C#7", "D7", "D#7", "E7"]
 # 既知の良音域 A6〜A7(≈36〜62mm)は鳴ると確定済みなので省き、両端に集中して限界を探る。
 # 高音側(短): 22〜34mm=A7より上(B7〜C8域, オーバーブロー限界)。低音側(長): 68〜100mm=G#6より下(E6域へ, 駆動限界)。
 LIMIT_LENGTHS = [22, 26, 30, 34, 68, 76, 84, 92, 100]
@@ -157,6 +160,7 @@ def main():
     os.makedirs(OUT, exist_ok=True)
     _scales = {"--scale-eb": ("scale-eb", EB_MAJOR, "halfcut_scale_Ebmajor", "Eb major(D#6-D#7)"),
                "--scale-f": ("scale-f", F_MAJOR7, "halfcut_scale_Fmajor7", "F major 7音(F6-E7)"),
+               "--scale-chrom": ("scale-chrom", CHROMATIC, "halfcut_scale_chromatic", "クロマチック(F6-E7 半音12)"),
                "--scale": ("scale", A_MAJOR, "halfcut_scale_Amajor", "A major(A6-A7)")}
     mode = "limit" if "--limit" in sys.argv else "calib"
     for flag, (mname, notes_sel, stem_, label) in _scales.items():
