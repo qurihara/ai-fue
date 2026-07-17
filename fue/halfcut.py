@@ -111,6 +111,9 @@ A_MAJOR = ["A6", "B6", "C#7", "D7", "E7", "F#7", "G#7", "A7"]   # 較正範囲(G
 # Eb major(D#6→D#7): クリーン域に最も収まるフルオクターブ。8音中7音が明瞭、最低音D#6(82.5mm)だけ弱い。
 # 上端D#7(46.7mm)はオーバーブロー域から離れて安全＝E6-E7より良い置き所（実測音域 F6〜E7 より, 2026/7/17）。
 EB_MAJOR = ["D#6", "F6", "G6", "G#6", "A#6", "C7", "D7", "D#7"]
+# F major 7音(F6→E7): octaveの高いドを捨てた7音。クリーン域 F6〜E7 に丸ごと収まり全音鳴る
+# （幅=長7度=窓とほぼ同じなので両端F6/E7はクリーン域の縁。中5音は余裕。G majorに上げると最高音F#7が✗）。
+F_MAJOR7 = ["F6", "G6", "A6", "A#6", "C7", "D7", "E7"]
 # 既知の良音域 A6〜A7(≈36〜62mm)は鳴ると確定済みなので省き、両端に集中して限界を探る。
 # 高音側(短): 22〜34mm=A7より上(B7〜C8域, オーバーブロー限界)。低音側(長): 68〜100mm=G#6より下(E6域へ, 駆動限界)。
 LIMIT_LENGTHS = [22, 26, 30, 34, 68, 76, 84, 92, 100]
@@ -152,15 +155,17 @@ def _render(comb, infos, path):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    mode = ("scale-eb" if "--scale-eb" in sys.argv else
-            "scale" if "--scale" in sys.argv else
-            "limit" if "--limit" in sys.argv else "calib")
-    if mode in ("scale", "scale-eb"):
-        notes_sel = EB_MAJOR if mode == "scale-eb" else A_MAJOR
+    _scales = {"--scale-eb": ("scale-eb", EB_MAJOR, "halfcut_scale_Ebmajor", "Eb major(D#6-D#7)"),
+               "--scale-f": ("scale-f", F_MAJOR7, "halfcut_scale_Fmajor7", "F major 7音(F6-E7)"),
+               "--scale": ("scale", A_MAJOR, "halfcut_scale_Amajor", "A major(A6-A7)")}
+    mode = "limit" if "--limit" in sys.argv else "calib"
+    for flag, (mname, notes_sel, stem_, label) in _scales.items():
+        if flag in sys.argv:
+            mode = mname; break
+    if mode.startswith("scale"):
         comb, infos, notes, lengths = scale_comb(notes=notes_sel)
-        stem = "halfcut_scale_Ebmajor" if mode == "scale-eb" else "halfcut_scale_Amajor"
-        print("半割り笛 音階コーム（%s オクターブ・実測較正で管長決定・D字/平置き）:" %
-              ("Eb major(D#6-D#7)" if mode == "scale-eb" else "A major(A6-A7)"))
+        stem = stem_
+        print("半割り笛 音階コーム（%s・実測較正で管長決定・D字/平置き）:" % label)
         for it in infos:
             print("    %-4s L=%4.1fmm  行y=%5.1f  予測 %5.0fHz" % (it["note"], it["L"], it["y"], it["freq"]))
     elif mode == "limit":
