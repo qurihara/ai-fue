@@ -108,6 +108,9 @@ def half_calib_comb(lengths=None, gap=0.0, merge=True, overlap=0.3):
 
 # --- 実測較正から作るダイアトニック音階コーム＆限界探索コーム ---
 A_MAJOR = ["A6", "B6", "C#7", "D7", "E7", "F#7", "G#7", "A7"]   # 較正範囲(G#6〜A7)に収まる1オクターブ
+# E major(E6→E7): クリーン域(F6〜E7)の上端E7にぴったり収まるフルオクターブ。7音は実測クリーン確定、
+# 最低音E6(78.5mm)だけが F6(76mm,明瞭)と D6(84mm,辛うじて)の間＝やや弱い見込み。幅53.9mmが名刺の短辺55mmと一致。
+E_MAJOR = ["E6", "F#6", "G#6", "A6", "B6", "C#7", "D#7", "E7"]
 # Eb major(D#6→D#7): クリーン域に最も収まるフルオクターブ。8音中7音が明瞭、最低音D#6(82.5mm)だけ弱い。
 # 上端D#7(46.7mm)はオーバーブロー域から離れて安全＝E6-E7より良い置き所（実測音域 F6〜E7 より, 2026/7/17）。
 EB_MAJOR = ["D#6", "F6", "G6", "G#6", "A#6", "C7", "D7", "D#7"]
@@ -162,7 +165,8 @@ def _render(comb, infos, path):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    _scales = {"--scale-eb": ("scale-eb", EB_MAJOR, "halfcut_scale_Ebmajor", "Eb major(D#6-D#7)"),
+    _scales = {"--scale-e": ("scale-e", E_MAJOR, "halfcut_scale_Emajor", "E major(E6-E7)"),
+               "--scale-eb": ("scale-eb", EB_MAJOR, "halfcut_scale_Ebmajor", "Eb major(D#6-D#7)"),
                "--scale-f": ("scale-f", F_MAJOR7, "halfcut_scale_Fmajor7", "F major 7音(F6-E7)"),
                "--scale-chrom": ("scale-chrom", CHROMATIC, "halfcut_scale_chromatic", "クロマチック(F6-E7 半音12)"),
                "--scale-full": ("scale-full", FULLRANGE, "halfcut_scale_fullrange", "全域探索(F6-A7 半音17)"),
