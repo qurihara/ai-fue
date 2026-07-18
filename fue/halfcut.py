@@ -133,10 +133,15 @@ LOWSHIFT3 = ["D6", "D#6", "E6", "F6", "F#6", "G6", "G#6", "A6", "A#6", "B6", "C7
 LIMIT_LENGTHS = [22, 26, 30, 34, 68, 76, 84, 92, 100]
 
 
-def scale_comb(notes=None, gap=0.0, merge=True):
-    """実測較正 length_for_note で各音の管長を求めたダイアトニック音階コーム。既定=A majorオクターブ。"""
+def scale_comb(notes=None, gap=0.0, merge=True, reverse=True):
+    """実測較正 length_for_note で各音の管長を求めたダイアトニック音階コーム。既定=A majorオクターブ。
+
+    reverse=True（既定）: 音名リストの並びを反転してから並べる。half_calib_comb は先頭の笛を y=0 に置くので、
+    反転すると「並びの座標が大きいほど低い音＝大きい笛」になる（栗原さんの既定方針, 2026/7/19）。
+    オクターブ笛・コード笛とも scale_comb 経由なので一括で反転する。素の並びが欲しければ reverse=False。"""
     if notes is None:
         notes = A_MAJOR
+    notes = list(reversed(notes)) if reverse else list(notes)
     lengths = [round(length_for_note(n), 1) for n in notes]
     comb, infos = half_calib_comb(lengths=lengths, gap=gap, merge=merge)
     for info, n, L in zip(infos, notes, lengths):

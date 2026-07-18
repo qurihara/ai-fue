@@ -87,10 +87,12 @@ def windows(notes):
 
 def build(notes=None):
     """コード笛コーム（7本を一列に融合）。戻り値 (mesh, infos, notes, lengths)。
-    scale_comb は渡した順序をそのまま左→右に並べる（音名リストの並び＝物理配置）。"""
+    scale_comb は既定で並びを反転する（reverse=True, 2026/7/19）。三度連鎖の和音は集合なので
+    物理反転しても各3本の三和音は不変（読む向きが IV·I·V ↔ V·I·IV に入れ替わるだけ）。返す notes/infos は
+    反転後の物理順。和音ラベルの記述は呼び出し側が正準順(canonical)で計算する。"""
     if notes is None:
         notes = CHORD_CMAJOR
-    comb, infos, notes, lengths = halfcut.scale_comb(notes=notes)
+    comb, infos, notes, lengths = halfcut.scale_comb(notes=notes)   # reverse=True 既定
     return comb, infos, notes, lengths
 
 
@@ -107,17 +109,19 @@ def main():
                 root = a[6:]
         notes = CHORD_CMAJOR if root == "C" else chord_chain_notes(root)
         stem = "chordflute_%smajor" % root.replace("#", "s")
-    comb, infos, notes, lengths = build(notes=notes)
+    canon = list(notes)                                        # 正準順（三度連鎖 IV·I·V）＝和音記述はこれで計算
+    comb, infos, notes, lengths = build(notes=notes)           # notes/infos は反転後の物理順
     name = os.path.join(OUT, stem + ".stl")
     comb.export(name)
 
     print("コード笛（IV·I·V 三度連鎖・%s major・隣接3本で和音）:" % root)
+    print("  物理配置（並びは反転済み＝低い音の大きい笛が y 大側。行y順）:")
     for it in infos:
         print("    %-3s L=%4.1fmm  行y=%5.1f  予測 %5.0fHz" % (it["note"], it["L"], it["y"], it["freq"]))
-    print("  和音（左から幅3・1音重ねて滑らせる。★=ピボット笛）:")
-    for lab, w in windows(notes):
+    print("  和音（正準順の三度連鎖。物理では逆から読むと V·I·IV。★=ピボット笛）:")
+    for lab, w in windows(canon):
         print("    %-2s = %s" % (lab, " ".join(w)))
-    print("    ピボット: 3本目 %s（IV↔I）, 5本目 %s（I↔V）" % (notes[2], notes[4]))
+    print("    ピボット: %s（IV↔I）, %s（I↔V）" % (canon[2], canon[4]))
     lo, hi = halfcut.length_for_note("F6"), halfcut.length_for_note("E7")
     inrange = all(hi - 0.6 <= L <= lo + 0.6 for L in lengths)
     print("  クリーン域 F6(%.1f)〜E7(%.1f) 内=%s   外形=%s watertight=%s 体積=%.2fcm3" %
