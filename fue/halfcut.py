@@ -124,6 +124,10 @@ CHROMATIC = ["F6", "F#6", "G6", "G#6", "A6", "A#6", "B6", "C7", "C#7", "D7", "D#
 # オーバーブロー)まで欲張って全部並べる。実機で吹けば本当のクリーン上限が一発で確定する。
 FULLRANGE = ["F6", "F#6", "G6", "G#6", "A6", "A#6", "B6", "C7", "C#7", "D7", "D#7", "E7",
              "F7", "F#7", "G7", "G#7", "A7"]
+# 低音シフト版(2026/7/18): 実機で FULLRANGE は下端F6余裕あり・鳴るのは〜D7(11本目以降=D#7↑は無音)と判明。
+# 全体を3半音下げ、下端をD6まで伸ばして低音側の限界を探る＋鳴る本数を増やす。17本 D6→F#7。
+LOWSHIFT3 = ["D6", "D#6", "E6", "F6", "F#6", "G6", "G#6", "A6", "A#6", "B6", "C7", "C#7", "D7",
+             "D#7", "E7", "F7", "F#7"]
 # 既知の良音域 A6〜A7(≈36〜62mm)は鳴ると確定済みなので省き、両端に集中して限界を探る。
 # 高音側(短): 22〜34mm=A7より上(B7〜C8域, オーバーブロー限界)。低音側(長): 68〜100mm=G#6より下(E6域へ, 駆動限界)。
 LIMIT_LENGTHS = [22, 26, 30, 34, 68, 76, 84, 92, 100]
@@ -170,6 +174,7 @@ def main():
                "--scale-f": ("scale-f", F_MAJOR7, "halfcut_scale_Fmajor7", "F major 7音(F6-E7)"),
                "--scale-chrom": ("scale-chrom", CHROMATIC, "halfcut_scale_chromatic", "クロマチック(F6-E7 半音12)"),
                "--scale-full": ("scale-full", FULLRANGE, "halfcut_scale_fullrange", "全域探索(F6-A7 半音17)"),
+               "--scale-low3": ("scale-low3", LOWSHIFT3, "halfcut_comb17_low3", "低音シフト(D6-F#7 半音17・3半音下げ)"),
                "--scale": ("scale", A_MAJOR, "halfcut_scale_Amajor", "A major(A6-A7)")}
     mode = "limit" if "--limit" in sys.argv else "calib"
     for flag, (mname, notes_sel, stem_, label) in _scales.items():
