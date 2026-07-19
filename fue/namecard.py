@@ -61,13 +61,11 @@ def _corner_prism(cx, cy, r, style, z0, z1):
     return prism
 
 
-def _label_cutter(text, band_x0, band_x1, cy, cz, text_h=5.0,
-                  left_margin=3.5, bridge_w=1.1, rot180=True):
-    """余白帯(band_x0..band_x1)に刻む刻印文字の切り抜きメッシュを作る。板(z=0..cz)を貫通。
+def _label_poly(text, band_x0, band_x1, cy, cz, text_h=5.0,
+                left_margin=3.5, bridge_w=1.1, rot180=True):
+    """余白帯(band_x0..band_x1)に刻む刻印文字の 2D 配置ポリゴンと情報を返す（貫通/エンボスは呼び出し側）。
     文字はカード幅(y)方向に読む縦配置。帯の奥行き(band_x1-band_x0)に text_h が収まるよう自動縮小。
-    rot180=True（既定）: 文字列を z軸180°回転（笛の並び反転に合わせた向き）。
-    左寄せ（2026/7/19）: 文字ブロックの一端を y=left_margin に揃える＝どのカードも同じ位置から書き始める
-    （カードの端から left_margin だけ間隔をあけて左寄せ・全カード統一）。"""
+    rot180=True（既定）: 文字列を z軸180°回転。左寄せ: 文字ブロックの一端を y=left_margin に揃える（全カード統一）。"""
     band_depth = band_x1 - band_x0
     h = min(text_h, band_depth - 1.6)                           # 帯の前後に0.8mmずつ余白
     poly, (w, th) = stencil.text_holes(text, height=h,
@@ -79,17 +77,45 @@ def _label_cutter(text, band_x0, band_x1, cy, cz, text_h=5.0,
         placed = _rotate2d(placed, 180, origin=(cxb, cy / 2.0))
     dy = left_margin - placed.bounds[1]                        # 端(min y)を left_margin に揃える＝左寄せ
     placed = _translate2d(placed, yoff=dy)
-    geoms = placed.geoms if isinstance(placed, MultiPolygon) else [placed]
+    info = dict(text=text, text_h=round(h, 2), text_w=round(w, 1),
+                band=(round(band_x0, 1), round(band_x1, 1)))
+    return placed, info
+
+
+def _text_line(text, x_center, text_h, cy, left_margin=3.5, bridge_w=1.1, rot180=True):
+    """1行のテキストを、帯の奥行き方向で x_center に高さ text_h で置いた 2D ポリゴンを返す。
+    幅(y)方向は左寄せ（y=left_margin から）。刻印帯に複数行（調性名＋ブランド）を積むのに使う。"""
+    poly, (w, th) = stencil.text_holes(text, height=text_h, width_max=cy - 2 * left_margin, bridge_w=bridge_w)
+    x0 = x_center - th / 2.0
+    placed = stencil.place_along_y(poly, (w, th), x0=x0, y_center=cy / 2.0)
+    if rot180:
+        placed = _rotate2d(placed, 180, origin=(x_center, cy / 2.0))
+    dy = left_margin - placed.bounds[1]
+    placed = _translate2d(placed, yoff=dy)
+    return placed, (w, th)
+
+
+def _apply_2d(mesh, poly, cz, emboss=False, emboss_h=0.6):
+    """2Dポリゴン poly を、emboss=False なら板を貫通する穴として差し引き、True なら板上面(z=cz)から
+    emboss_h だけ盛り上げた浮き彫り(凸)として和算する。触知性のためのエンボスに使う。"""
+    geoms = poly.geoms if isinstance(poly, MultiPolygon) else [poly]
     parts = []
     for g in geoms:
         if g.area <= 0:
             continue
-        pr = trimesh.creation.extrude_polygon(g, height=cz + 2.0)   # 板を確実に貫く高さ
-        pr.apply_translation([0, 0, -1.0])
+        if emboss:
+            pr = trimesh.creation.extrude_polygon(g, height=emboss_h)
+            pr.apply_translation([0, 0, cz])                    # z: cz..cz+emboss_h（板上面に凸）
+        else:
+            pr = trimesh.creation.extrude_polygon(g, height=cz + 2.0)
+            pr.apply_translation([0, 0, -1.0])                  # 板を確実に貫く
         parts.append(pr)
-    cutter = trimesh.util.concatenate(parts) if parts else None
-    return cutter, dict(text=text, text_h=round(h, 2), text_w=round(w, 1),
-                        band=(round(band_x0, 1), round(band_x1, 1)))
+    if not parts:
+        return mesh
+    tool = trimesh.util.concatenate(parts)
+    if emboss:
+        return trimesh.boolean.union([mesh, tool], engine="manifold")
+    return trimesh.boolean.difference([mesh, tool], engine="manifold")
 
 
 def _star_cutter(cx0, cy0, r, cz):
@@ -112,7 +138,10 @@ def build(notes=None, card=(CARD_X, CARD_Y, CARD_Z),
           corner_r=CORNER_R, corner_style="round", label=None, band_x0=None,
           star_note=None, star_r=1.5, star_gap=2.0,
           strap=False, strap_d=6.0, strap_edge=3.0,
-          strap_boss=False, boss_d=9.0):
+          strap_boss=False, boss_d=9.0,
+          brim=False, brim_width=4.0, brim_height=0.25,
+          emboss=False, emboss_h=0.6,
+          brand=None, brand_h=2.2):
     """笛つき名刺/カードメッシュを作る。label を与えると余白帯にステンシル文字を貫通穴で刻む。
     band_x0 を与えると刻印帯の開始xを固定する（複数カードで刻印位置をカード端から揃えたいとき。
     None なら従来どおり「そのカードの最長管の先端＋1.5mm」＝カードごとに位置が動く）。
@@ -146,8 +175,8 @@ def build(notes=None, card=(CARD_X, CARD_Y, CARD_Z),
         if row is not None:
             star_cx = row["x_foot"] + star_gap + star_r        # 足の先から star_gap だけ離す
             star_cy = row["y"] + yshift + pitch / 2.0          # その笛の列の中心y
-            card_mesh = trimesh.boolean.difference(
-                [card_mesh, _star_cutter(star_cx, star_cy, star_r, cz)], engine="manifold")
+            star_poly = stencil.asterisk(star_cx, star_cy, star_r)
+            card_mesh = _apply_2d(card_mesh, star_poly, cz, emboss=emboss, emboss_h=emboss_h)
             star_info = dict(note=star_note, x=round(star_cx, 1), y=round(star_cy, 1), r=star_r)
 
     label_info = None
@@ -156,9 +185,26 @@ def build(notes=None, card=(CARD_X, CARD_Y, CARD_Z),
         # とは干渉しない（短いラベルはその行まで届かない）。ゆえに帯を後退させる必要がない＝全カード統一。
         bx0 = flute_x_max + 1.5 if band_x0 is None else max(band_x0, flute_x_max + 1.0)
         band_x1 = cx - max(corner_r, 1.5) - 1.0               # 反対端の角取り/縁を避ける
-        cutter, label_info = _label_cutter(label, bx0, band_x1, cy, cz)
-        if cutter is not None:
-            card_mesh = trimesh.boolean.difference([card_mesh, cutter], engine="manifold")
+        depth = band_x1 - bx0
+        lines = []                                            # (text, x_center, height)
+        if brand:
+            # 帯の奥行きを2行に分ける：ブランド(小)を内側(低x)、調性名(大)を外側(高x)。両方印刷可サイズ。
+            gap = 0.5
+            kh = min(3.8, depth - brand_h - gap - 0.4)
+            m = (depth - kh - brand_h - gap) / 2.0
+            brand_c = bx0 + m + brand_h / 2.0
+            key_c = bx0 + m + brand_h + gap + kh / 2.0
+            lines = [(brand, brand_c, brand_h), (label, key_c, kh)]
+            label_info = dict(text=label, brand=brand, key_h=round(kh, 1), brand_h=brand_h,
+                              band=(round(bx0, 1), round(band_x1, 1)))
+        else:
+            h = min(5.0, depth - 1.6)
+            lines = [(label, bx0 + depth / 2.0, h)]
+            label_info = dict(text=label, text_h=round(h, 1), band=(round(bx0, 1), round(band_x1, 1)))
+        for txt, xc, th_ in lines:
+            pl, _ = _text_line(txt, xc, th_, cy)
+            if pl is not None and not pl.is_empty:
+                card_mesh = _apply_2d(card_mesh, pl, cz, emboss=emboss, emboss_h=emboss_h)
 
     # ストラップ穴：文字を寄せていない側の角（+x/+y 側＝far-x・high-y）に固定位置で開ける。
     # 端から strap_edge だけ内側（=穴の縁が端から strap_edge mm 入る）。全カード同じ座標。
@@ -182,6 +228,19 @@ def build(notes=None, card=(CARD_X, CARD_Y, CARD_Z),
         strap_info = dict(d=strap_d, x=round(scx, 1), y=round(scy, 1), edge=strap_edge,
                           boss=(boss_d if strap_boss else None))
 
+    # 造形ブリム：カード周囲に brim_height(=0.25<カード0.5) の薄いフランジを造形。
+    # カード床(0.5mm)より低いので接合部に段差ができ、そこを切って剥がしやすい（後で切り離しやすい）。
+    # スライサのブリムは第1層だけで高さ制御できないため、幾何で作って高さを差別化する。
+    brim_info = None
+    if brim:
+        r = corner_r if (corner_r and corner_r > 0) else 0.0
+        outline = (sbox(r, r, cx - r, cy - r).buffer(r, join_style=1, resolution=32)
+                   if r > 0 else sbox(0, 0, cx, cy))
+        flange = outline.buffer(brim_width, join_style=1, resolution=32)   # 外周へ brim_width 張り出す
+        fl = trimesh.creation.extrude_polygon(flange, height=brim_height)  # z:0..brim_height
+        card_mesh = trimesh.boolean.union([card_mesh, fl], engine="manifold")
+        brim_info = dict(width=brim_width, height=brim_height)
+
     card_mesh.apply_translation([0, 0, -card_mesh.bounds[0][2]])   # ベッド(z=0)へ
 
     info = dict(notes=notes, lengths=lengths, rows=infos,
@@ -189,9 +248,46 @@ def build(notes=None, card=(CARD_X, CARD_Y, CARD_Z),
                 margin_y=round((cy - cw) / 2.0, 2),
                 card_z=cz, corner_r=corner_r, corner_style=corner_style,
                 card_size=(cx, cy), label=label_info, star=star_info, strap=strap_info,
+                brim=brim_info, emboss=(emboss_h if emboss else None),
                 extents=tuple(np.round(card_mesh.extents, 2)),
                 watertight=card_mesh.is_watertight)
     return card_mesh, info
+
+
+def build_cover(title="Chordika", card=(CREDIT_X, CREDIT_Y, CARD_Z),
+                corner_r=CREDIT_CORNER_R, corner_style="round",
+                emboss=False, emboss_h=0.6, title_margin=4.0,
+                strap=True, strap_d=6.0, strap_edge=3.0):
+    """デッキの表紙カード：笛は無く、大きな title を中央に刻む＋ストラップ穴（デッキと同座標）。
+    既定 emboss=False＝ステンシル（貫通穴）で、板厚は他のカードと同じ card[2]=CARD_Z(0.5mm)。
+    emboss=True にすると凸（総厚 card[2]+emboss_h）。タイトルの向きは調性名と同じ（y方向読み・z軸180°）で中央配置。"""
+    cx, cy, pz = card
+    plate = trimesh.creation.box(extents=[cx, cy, pz])
+    plate.apply_translation([cx / 2.0, cy / 2.0, pz / 2.0])
+    mesh = plate
+    if corner_r and corner_r > 0:
+        keep = _corner_prism(cx, cy, corner_r, corner_style, -1.0, pz + (emboss_h if emboss else 0.0) + 1.0)
+        mesh = trimesh.boolean.intersection([mesh, keep], engine="manifold")
+    # タイトルを中央に（幅方向いっぱいまで自動縮小）・調性名と同じ向きで刻む（貫通 or 凸）
+    poly, (w, th) = stencil.text_holes(title, height=40.0, width_max=cy - 2 * title_margin, bridge_w=1.4)
+    placed = stencil.place_along_y(poly, (w, th), x0=cx / 2.0 - th / 2.0, y_center=cy / 2.0)
+    placed = _rotate2d(placed, 180, origin=(cx / 2.0, cy / 2.0))
+    mesh = _apply_2d(mesh, placed, pz, emboss=emboss, emboss_h=emboss_h)
+    strap_info = None
+    if strap:
+        sr = strap_d / 2.0
+        scx = cx - (sr + strap_edge)
+        scy = cy - (sr + strap_edge)
+        circ = _Point(scx, scy).buffer(sr, resolution=48)
+        pr = trimesh.creation.extrude_polygon(circ, height=pz + 2.0)
+        pr.apply_translation([0, 0, -1.0])
+        mesh = trimesh.boolean.difference([mesh, pr], engine="manifold")
+        strap_info = dict(d=strap_d, x=round(scx, 1), y=round(scy, 1))
+    mesh.apply_translation([0, 0, -mesh.bounds[0][2]])
+    info = dict(title=title, title_h=round(th, 1), title_w=round(w, 1), plate_z=pz,
+                emboss=(emboss_h if emboss else None), strap=strap_info, card_size=(cx, cy),
+                extents=tuple(np.round(mesh.extents, 2)), watertight=mesh.is_watertight)
+    return mesh, info
 
 
 # 名刺/カードにできる音階。(音名リスト, ファイル名幹, 説明, 調性ラベル)。

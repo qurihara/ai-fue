@@ -31,6 +31,10 @@ import namecard
 
 CARDS = os.path.join(HERE, "cards")
 CARDS_BOSS = os.path.join(HERE, "cards_boss")     # ストラップ穴に補強ボスを付けた別バージョン
+CARDS_BRIM = os.path.join(HERE, "cards_brim")     # 造形ブリム(0.25mm段差)付き＝印刷用(剥がしやすい)
+CARDS_EMBOSS = os.path.join(HERE, "cards_emboss") # 刻印をエンボス(浮き彫り)＝触覚でわかる＋ブランドChordica
+
+BRAND = "Chordika"                                 # 調性名の下に入れるブランド刻印（2026/7/19 決定）
 NAMES = chordflute.NAMES
 
 # ダイアトニック・ハーモニカの調は12種（クロマチックの各キー）。実機ハーモニカの慣用表記に合わせ、
@@ -95,26 +99,29 @@ def triads_of(chain):
     return out
 
 
-def build_card(root, label, credit=True, boss=False):
-    """1調のコード笛カードを生成。boss=True でストラップ穴まわりに4mm厚の補強ボスを足す別版。"""
+def build_card(root, label, credit=True, boss=False, brim=False, emboss=False, brand=None):
+    """1調のコード笛カードを生成。boss=補強ボス版／brim=造形ブリム版／
+    emboss=刻印を浮き彫りに(触覚)／brand=調性名の下に入れるブランド刻印(例 Chordica)。"""
     chain = deck_chain(root)
     cx, cy = (namecard.CREDIT_X, namecard.CREDIT_Y) if credit else (namecard.CARD_X, namecard.CARD_Y)
     r = namecard.CREDIT_CORNER_R if credit else namecard.CORNER_R
     m, info = namecard.build(notes=chain, card=(cx, cy, namecard.CARD_Z),
                              corner_r=r, corner_style="round", label=label,
                              band_x0=FIXED_BAND_X0, star_note=tonic_note(root),
-                             strap=True, strap_d=6.0, strap_boss=boss, boss_d=9.0)
+                             strap=True, strap_d=6.0, strap_boss=boss, boss_d=9.0,
+                             brim=brim, emboss=emboss, brand=brand)
     return m, info, chain, triads_of(chain)
 
 
 def main():
     analyze = "--analyze" in sys.argv or "--dry" in sys.argv   # 生成せず解析だけ
     boss = "--boss" in sys.argv                                # ストラップ穴に補強ボスを付けた別版
-    outdir = CARDS_BOSS if boss else CARDS
+    brim = "--brim" in sys.argv                                # 造形ブリム(0.25mm段差)付き＝印刷用
+    outdir = CARDS_BRIM if brim else (CARDS_BOSS if boss else CARDS)
     if not analyze:
         os.makedirs(outdir, exist_ok=True)
-    ver = "補強ボス付き(別版)" if boss else "素の穴"
-    print("=== ハーモニカライク・カード笛デッキ（%d調・ストラップ穴%s）===" % (len(KEYS), ver))
+    ver = ("造形ブリム付き(印刷用)" if brim else ("補強ボス付き(別版)" if boss else "素の穴"))
+    print("=== ハーモニカライク・カード笛デッキ（%d調・%s）===" % (len(KEYS), ver))
     print("各カード=8本(度数 2·4·6·1·3·5·7·2)・クレジットカード85.6×53.98×4.0mm・刻印=調性\n")
     for root, label in KEYS:
         chain = deck_chain(root)
@@ -123,7 +130,7 @@ def main():
         print("     隣接3本の和音: %s" % "  ".join("%s=%s" % ("".join(w), c) for w, c in tris))
         if not analyze:
             safe = label.replace(" ", "").replace("/", "_").replace("#", "s")
-            m, info, _, _ = build_card(root, label, boss=boss)
+            m, info, _, _ = build_card(root, label, boss=boss, brim=brim)
             fn = os.path.join(outdir, "card_%s.stl" % safe)
             m.export(fn)
             print("     -> %s  外形%s watertight=%s" %
