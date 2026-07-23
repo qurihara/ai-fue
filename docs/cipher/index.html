@@ -143,6 +143,9 @@ const cfgOverride = {};
   if(hi && noteRe.test(hi)) cfgOverride.hi_note = hi;
   const step = q.get("step");
   if(step !== null && /^\d+(\.\d+)?$/.test(step)) cfgOverride.step_cents = parseFloat(step);
+  // 基準笛の使用ON/OFF。既定ON(先頭を基準に補正)。?useref=0 で全笛データ＝絶対音程読み
+  const useref = q.get("useref");
+  if(useref === "0" || useref === "false") cfgOverride.use_reference = false;
 })();
 
 fetch("cipher_config.json").then(r=>{

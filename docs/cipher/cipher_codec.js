@@ -232,18 +232,28 @@
       return {payload: new Uint8Array(), payloadHex: "", decisions: [], status: "error: " + e.message, symbols: [], correctedCount: 0, erasureCount: 0};
     }
     const ri = refSlotIndex(cfg);
-    let rp = 0;
-    if (!positionsKnown) {
-      rp = measuredFreqs.reduce((best, f, i) =>
-        Math.abs(1200 * Math.log2(f / table[ri].freq_hz)) < Math.abs(1200 * Math.log2(measuredFreqs[best] / table[ri].freq_hz)) ? i : best, 0);
+    const useRef = cfg.use_reference !== false;   // 既定は基準笛あり
+    let data, resid;
+    if (useRef) {
+      // 先頭(または基準音に最も近い笛)を基準に、周波数比で温度・吹圧を打ち消す
+      let rp = 0;
+      if (!positionsKnown) {
+        rp = measuredFreqs.reduce((best, f, i) =>
+          Math.abs(1200 * Math.log2(f / table[ri].freq_hz)) < Math.abs(1200 * Math.log2(measuredFreqs[best] / table[ri].freq_hz)) ? i : best, 0);
+      }
+      const ref = measuredFreqs[rp];
+      data = measuredFreqs.slice(0, rp).concat(measuredFreqs.slice(rp + 1));
+      const ratios = table.map(s => s.freq_hz / table[ri].freq_hz);
+      resid = f => ratios.map(x => 1200 * Math.log2((f / ref) / x));
+    } else {
+      // 基準笛なし＝全笛データ。絶対音程で丸める(温度・吹圧補正なし)
+      data = measuredFreqs.slice();
+      resid = f => table.map(s => 1200 * Math.log2(f / s.freq_hz));
     }
-    const ref = measuredFreqs[rp];
-    const data = measuredFreqs.slice(0, rp).concat(measuredFreqs.slice(rp + 1));
-    const ratios = table.map(s => s.freq_hz / table[ri].freq_hz);
     const guard = cfg.decision_guard_cents == null ? cfg.step_cents / 2 : cfg.decision_guard_cents;
     const decisions = [], wire = [], erased = new Set();
     data.forEach((f, j) => {
-      const residuals = ratios.map(x => 1200 * Math.log2((f / ref) / x));
+      const residuals = resid(f);
       let index = 0;
       for (let i = 1; i < residuals.length; i++) if (Math.abs(residuals[i]) < Math.abs(residuals[index])) index = i;
       const bad = Math.abs(residuals[index]) > guard;
