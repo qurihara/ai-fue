@@ -119,6 +119,7 @@ let freqData;
 let live = {freq:0, clarity:0, peak:0};
 let cipherConfig = null;
 let cipherFreqs = [];               // 復号に渡す並び（吹いた順・先頭が基準）
+let loFloorHz = 1200;               // これ未満は暗騒音(エアコン等)として無視。設定読込後に音域から決める
 
 // --- GET パラメータ: 照合用SHA-256の自動入力 / 1本あたり時間 / モード・パリティ上書き ---
 const cfgOverride = {};
@@ -137,7 +138,11 @@ const cfgOverride = {};
 fetch("cipher_config.json").then(r=>{
   if(!r.ok) throw new Error("設定を読み込めません ("+r.status+")");
   return r.json();
-}).then(cfg=>{ cipherConfig = Object.assign(cfg, cfgOverride); }).catch(e=>{ el("decodeStatus").textContent=e.message; });
+}).then(cfg=>{
+  cipherConfig = Object.assign(cfg, cfgOverride);
+  // 最低音より約2半音下を下限にして、エアコン等の低周波雑音を無視する
+  try{ loFloorHz = window.CipherCodec.noteToFreq(cipherConfig.lo_note) * Math.pow(2, -2/12); }catch{}
+}).catch(e=>{ el("decodeStatus").textContent=e.message; });
 
 function freqToNote(f){
   if(!f) return null;
@@ -230,7 +235,7 @@ function renderSeq(){
 function loop(){
   analyser.getFloatTimeDomainData(inputBuf);
   const [pitch, clarity] = detector.findPitch(inputBuf, audioCtx.sampleRate);
-  live.freq = clarity>0.9 ? pitch : 0;
+  live.freq = (clarity>0.9 && pitch>=loFloorHz) ? pitch : 0;   // 下限未満(雑音)は捨てる
   live.clarity = clarity;
   const info = live.freq ? freqToNote(live.freq) : null;
   el("hz").textContent = live.freq ? live.freq.toFixed(1) : "–";
@@ -241,7 +246,7 @@ function loop(){
   // FFTの最強ピーク（pitchyが苦手な高音の補完に使う）
   analyser.getFloatFrequencyData(freqData);
   const binHz = audioCtx.sampleRate / analyser.fftSize;
-  const minBin = Math.floor(200 / binHz);
+  const minBin = Math.floor(loFloorHz / binHz);   // 下限未満の暗騒音(エアコン等)を無視
   let pk=-Infinity, pki=-1;
   for(let i=minBin;i<freqData.length;i++){ if(freqData[i]>pk){ pk=freqData[i]; pki=i; } }
   live.peak = (pk > -75 && pki>0) ? pki*binHz : 0;
