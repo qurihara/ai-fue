@@ -303,26 +303,23 @@ function identify(){
   el("capStatus").textContent = "8本を記録しました。";
   const measSlots = seq.map(s => nearestSlot(s.freq));
 
-  // 各カードとスロット列を比べ、一致数が最大のカードを選ぶ
-  let best = -1, bestCount = -1, tie = [];
-  CARDS.forEach((c, ci) => {
+  // 12調は同じ並びの移調なので、位置ごとの一致は正しい調だけ多く、他の調はほぼ0になる。
+  // よって「最も一致した調が明確に一位（次点より2本以上多い）」なら、全8本そろわなくても調が決まる。
+  const counts = CARDS.map(c => {
     let m = 0;
     for(let i=0;i<8;i++) if(c.slots[i] === measSlots[i]) m++;
-    if(m > bestCount){ bestCount = m; best = ci; tie = [ci]; }
-    else if(m === bestCount){ tie.push(ci); }
+    return m;
   });
-  // 同点なら位置4（主音）が測定値と一致する方を優先
-  if(tie.length > 1){
-    const t = tie.filter(ci => CARDS[ci].slots[3] === measSlots[3]);
-    if(t.length){ best = t[0]; }
-  }
-
+  let best = 0;
+  for(let ci=1; ci<counts.length; ci++) if(counts[ci] > counts[best]) best = ci;
+  const bestCount = counts[best];
+  const secondCount = counts.reduce((mx, v, ci) => ci === best ? mx : Math.max(mx, v), 0);
   const pos4Note = seq[3].note ? seq[3].note.name : "—";
 
-  // 一致が少なすぎる／大きくずれているときは判別不能
-  if(bestCount < 5){
+  // 最低3本一致かつ次点より2本以上多い＝明確な一位のときだけ識別成功（全8本一致は不要）。
+  if(bestCount < 3 || bestCount - secondCount < 2){
     el("resultBox").innerHTML = '<div class="fail">判別できませんでした。もう一度</div>'+
-      `<div class="muted" style="margin-top:6px">最も近いカードでも一致は8本中${bestCount}本でした。各笛が高音までしっかり鳴っているか確かめてください。</div>`;
+      `<div class="muted" style="margin-top:6px">最も近い調でも一致 ${bestCount}本（次点 ${secondCount}本）で、はっきり一つに決まりませんでした。各笛が高音までしっかり鳴っているか確かめてください。</div>`;
     return;
   }
 

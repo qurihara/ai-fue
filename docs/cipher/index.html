@@ -103,6 +103,10 @@
     </div>
     <div class="muted big" style="margin-top:8px">秘密 payload (hex): <b id="decodedPayload" style="color:var(--ok);word-break:break-all">–</b></div>
     <div class="muted big" style="margin-top:4px">照合: <b id="verdict">–</b></div>
+    <div id="gotoWrap" style="display:none;margin-top:14px">
+      <a id="gotoBtn" href="#" rel="noopener" style="display:inline-block;background:var(--ok);color:#fff;text-decoration:none;font-weight:700;border-radius:9px;padding:.8em 1.2em">認証成功 — 秘密のページを開く →</a>
+      <div class="muted" style="margin-top:6px">※ このデモではURLがアドレスに見えるため守秘性はありません。</div>
+    </div>
   </div>
 
   <p class="muted">復号ロジックは <a href="cipher_codec.js">cipher_codec.js</a>（Python版 fue/cipher_codec.py と一致）。設定は <a href="cipher_config.json">cipher_config.json</a>。音程検出は <a href="https://github.com/ianprime0509/pitchy" target="_blank">pitchy</a>。測定・較正ツールは <a href="../">こちら</a>。</p>
@@ -123,6 +127,7 @@ let loFloorHz = 1200;               // これ未満は暗騒音(エアコン等)
 
 // --- GET パラメータ: 照合用SHA-256の自動入力 / 1本あたり時間 / モード・パリティ上書き ---
 const cfgOverride = {};
+let gotoUrl = "";   // 認証成功時に開く外部URL（デモ用。GETで見えるので守秘性はない）
 (function initParams(){
   const q = new URLSearchParams(location.search);
   const sha = (q.get("sha256") || q.get("hash") || "").trim();
@@ -146,6 +151,9 @@ const cfgOverride = {};
   // 基準笛の使用ON/OFF。既定ON(先頭を基準に補正)。?useref=0 で全笛データ＝絶対音程読み
   const useref = q.get("useref");
   if(useref === "0" || useref === "false") cfgOverride.use_reference = false;
+  // 認証成功時に開く外部URL。http(s)のみ許可（javascript:等を弾く）。デモ用で守秘性はない
+  const g = q.get("goto");
+  if(g && /^https?:\/\//i.test(g)) gotoUrl = g;
 })();
 
 fetch("cipher_config.json").then(r=>{
@@ -300,16 +308,24 @@ async function doDecode(){
       ? Uint8Array.from(result.symbols||[]) : result.payload;
   const digest = await crypto.subtle.digest("SHA-256", canonical);
   const actual = Array.from(new Uint8Array(digest), x=>x.toString(16).padStart(2,"0")).join("");
-  el("verdict").innerHTML = actual===expected
+  const ok = actual===expected;
+  el("verdict").innerHTML = ok
       ? '<span class="okmark">SHA-256 OK（一致）</span>'
       : '<span class="ngmark">SHA-256 NG（不一致）</span>';
+  // 認証成功かつ ?goto=URL 指定時は、そのURLへ移動するボタンを表示する（デモ用）
+  if(ok && gotoUrl){
+    el("gotoBtn").href = gotoUrl;
+    el("gotoWrap").style.display = "";
+  } else {
+    el("gotoWrap").style.display = "none";
+  }
 }
 
 const ptt = el("pttBtn");
 ptt.addEventListener("pointerdown", e=>{ e.preventDefault(); try{ ptt.setPointerCapture(e.pointerId); }catch{} beginCapture(); });
 ptt.addEventListener("pointerup",   e=>{ e.preventDefault(); endCapture(); });
 ptt.addEventListener("pointercancel", ()=> endCapture());
-el("clearBtn").onclick = ()=>{ cap.seq=[]; cipherFreqs=[]; renderSeq(); el("capStatus").textContent=""; el("decodedPayload").textContent="–"; el("verdict").textContent="–"; el("decodeStatus").textContent=""; };
+el("clearBtn").onclick = ()=>{ cap.seq=[]; cipherFreqs=[]; renderSeq(); el("capStatus").textContent=""; el("decodedPayload").textContent="–"; el("verdict").textContent="–"; el("decodeStatus").textContent=""; el("gotoWrap").style.display="none"; };
 el("decodeBtn").onclick = doDecode;
 el("startBtn").onclick = start;
 renderSeq();
