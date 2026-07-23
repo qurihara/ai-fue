@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI笛作り 音程測定・較正ツール</title>
+<title>CipherFlute 復号</title>
 <style>
   :root{
     --bg:#0f1220; --card:#1a1f36; --fg:#e8ecf5; --muted:#98a2c0;
-    --accent:#5b8cff; --ok:#37c98a; --warn:#ffb454; --line:#2b3255;
+    --accent:#5b8cff; --ok:#37c98a; --warn:#ffb454; --ng:#ff6b6b; --line:#2b3255;
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
@@ -22,101 +22,90 @@
   button.ok{background:var(--ok)}
   button:disabled{opacity:.45;cursor:default}
   .meter{display:flex;align-items:baseline;gap:.5em;justify-content:center;margin:.3em 0}
-  .hz{font-size:2.6rem;font-weight:700;font-variant-numeric:tabular-nums}
-  .note{font-size:2.6rem;font-weight:700;color:var(--accent)}
+  .hz{font-size:2.2rem;font-weight:700;font-variant-numeric:tabular-nums}
+  .note{font-size:2.2rem;font-weight:700;color:var(--accent)}
   .cents{font-size:1rem;color:var(--muted)}
-  .centsbar{height:10px;background:#0c0f1d;border-radius:6px;position:relative;margin:.5em 0}
-  .centsbar .mid{position:absolute;left:50%;top:-3px;width:2px;height:16px;background:#444a76}
-  .centsbar .dot{position:absolute;top:-1px;width:12px;height:12px;border-radius:50%;background:var(--ok);transform:translateX(-50%);transition:left .08s}
-  table{width:100%;border-collapse:collapse;margin-top:.4em}
-  th,td{padding:.5em .4em;border-bottom:1px solid var(--line);text-align:center;font-variant-numeric:tabular-nums}
-  th{color:var(--muted);font-weight:600;font-size:.85rem}
-  td.len{font-weight:700}
-  .rowbtn{padding:.4em .8em;font-size:.9rem}
-  .filled{color:var(--ok);font-weight:700}
-  textarea{width:100%;height:150px;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);
-           border-radius:9px;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:.85rem}
   .muted{color:var(--muted);font-size:.9rem}
   .status{font-size:.9rem;color:var(--warn);min-height:1.4em}
   .clar{height:6px;background:#0c0f1d;border-radius:4px;overflow:hidden;margin-top:6px}
   .clar > i{display:block;height:100%;width:0;background:var(--ok)}
-  input.len{width:70px;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.3em;text-align:center}
   input.wide{width:100%;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.55em;font-family:ui-monospace,Menlo,monospace}
+  select{font:inherit;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.4em}
   a{color:var(--accent)}
+
+  /* push-to-talk */
+  .ptt{width:100%;padding:1.4em 1em;font-size:1.2rem;font-weight:700;background:var(--accent);
+       border-radius:14px;touch-action:none;user-select:none;-webkit-user-select:none}
+  .ptt.rec{background:var(--ng)}
+  .beatwrap{display:flex;align-items:center;gap:16px;justify-content:center;margin:14px 0 6px;min-height:64px}
+  .beatdot{width:54px;height:54px;border-radius:50%;background:#2b335c;transition:transform .05s,background .05s;
+           display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700}
+  .beatdot.on{background:var(--ok);transform:scale(1.18)}
+  .seq{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .chip{background:#0c0f1d;border:1px solid var(--line);border-radius:9px;padding:.4em .7em;font-variant-numeric:tabular-nums;text-align:center;min-width:74px}
+  .chip .idx{font-size:.7rem;color:var(--muted)}
+  .chip .nm{font-size:1.1rem;font-weight:700;color:var(--accent)}
+  .chip .fz{font-size:.75rem;color:var(--muted)}
+  .chip.ref{border-color:var(--accent)}
+  .chip.empty .nm{color:var(--ng)}
+  .big{font-size:1.1rem}
+  .okmark{color:var(--ok);font-weight:700}
+  .ngmark{color:var(--ng);font-weight:700}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>AI笛作り 音程測定・較正ツール</h1>
-  <p class="lead">3Dプリントした笛を吹くと、周波数と音名を測ります。較正コーム（管長を変えた笛）の各音を測って、結果をコピーしてClaudeへ貼り付けてください。</p>
+  <h1>CipherFlute 復号</h1>
+  <p class="lead">3Dプリントした笛の並び（コーム）を、先頭の基準笛から順に1本ずつ吹くと、検出した音から秘密を復号します。マイクだけで動きます。</p>
 
   <div class="card">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button id="startBtn">マイク開始</button>
       <span class="status" id="status">「マイク開始」を押してマイクを許可してください。</span>
     </div>
-    <div class="meter"><span class="hz"><span id="hz">–</span><span style="font-size:1rem;color:var(--muted)"> Hz</span></span></div>
-    <div class="meter"><span class="note" id="noteName">–</span><span class="cents" id="cents"></span></div>
-    <div class="centsbar"><div class="mid"></div><div class="dot" id="centsDot" style="left:50%"></div></div>
+    <div class="meter"><span class="hz"><span id="hz">–</span><span style="font-size:.9rem;color:var(--muted)"> Hz</span></span>
+      <span class="note" id="noteName">–</span><span class="cents" id="cents"></span></div>
     <div class="clar"><i id="clarBar"></i></div>
-    <div class="muted" style="margin-top:8px">スペクトルのピーク（可聴域外もOK）: <b id="peak" style="color:var(--ok);font-size:1.1rem">–</b> Hz　<span id="srate"></span></div>
-    <div class="muted" style="margin-top:4px">上の音名は楽音向けの検出（pitchy）。モスキート音のような高音や可聴域外は、こちらの「スペクトルのピーク」が頼りになります。</div>
+    <div class="muted" style="margin-top:6px">今鳴っている音の目安です。各笛がここにきちんと出るのを確かめてから測ると確実です。</div>
   </div>
 
-  <h2>CipherFlute復号</h2>
-  <p class="lead">基準笛を先頭にした笛群を「和音を測定して記録」で測り、検出した基音から秘密を復号します。</p>
+  <h2>1. 順番に吹いて測る（押しながら吹く）</h2>
   <div class="card">
-    <div class="muted">復号に使う基音（Hz）: <b id="cipherFreqs" style="color:var(--accent)">未測定</b></div>
-    <label class="muted" for="cipherHash">照合用SHA-256（任意、hex）</label>
-    <input class="wide" id="cipherHash" inputmode="text" autocomplete="off" placeholder="64桁のSHA-256 hex">
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+      <label class="muted" for="spf">1本あたりの時間：</label>
+      <select id="spf">
+        <option value="0.7">0.7秒</option>
+        <option value="1.0" selected>1.0秒</option>
+        <option value="1.5">1.5秒</option>
+        <option value="2.0">2.0秒</option>
+      </select>
+      <span class="muted">拍の切り替わりで次の笛へ。</span>
+    </div>
+    <div class="beatwrap">
+      <div class="beatdot" id="beatDot">–</div>
+      <div class="muted" id="beatHint" style="max-width:300px">押した瞬間に先頭（基準）の笛を吹き始め、緑に光るたびに次の笛へ。最後の笛を吹いたら離してください。</div>
+    </div>
+    <button class="ptt" id="pttBtn" disabled>押しながら順に吹く</button>
+    <div class="seq" id="seq"></div>
     <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button id="decodeBtn">秘密を復号</button>
+      <button class="sec" id="clearBtn">やり直す</button>
+      <span class="status" id="capStatus"></span>
+    </div>
+  </div>
+
+  <h2>2. 復号して照合</h2>
+  <div class="card">
+    <label class="muted" for="cipherHash">照合用SHA-256（任意、hex）</label>
+    <input class="wide" id="cipherHash" inputmode="text" autocomplete="off" placeholder="64桁のSHA-256 hex（?sha256=… で自動入力）">
+    <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button id="decodeBtn">この並びで復号</button>
       <span class="status" id="decodeStatus"></span>
     </div>
-    <div class="muted" style="margin-top:8px">payload (hex): <b id="decodedPayload" style="color:var(--ok);word-break:break-all">–</b></div>
+    <div class="muted big" style="margin-top:8px">秘密 payload (hex): <b id="decodedPayload" style="color:var(--ok);word-break:break-all">–</b></div>
+    <div class="muted big" style="margin-top:4px">照合: <b id="verdict">–</b></div>
   </div>
 
-  <h2>複数ピーク（和音）検出</h2>
-  <p class="lead">プレナム笛のように複数の音が同時に鳴ると、FFTのスペクトルに複数の山として現れます。下のグラフの山と、検出したピーク一覧で確認できます。目標③（秘密の和音笛）の要です。</p>
-  <div class="card">
-    <canvas id="spec" style="width:100%;height:170px;background:#0c0f1d;border-radius:8px;display:block"></canvas>
-    <div class="muted" style="margin-top:6px">検出ピーク（強い順・最大6本）: <b id="peaks" style="color:var(--ok)">–</b></div>
-    <div class="muted" style="margin-top:6px">基音（倍音を除外＝鳴っている笛）: <b id="funds" style="color:var(--accent);font-size:1.05rem">–</b></div>
-    <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button id="chordBtn">和音を測定して記録</button>
-      <span class="status" id="chordStatus"></span>
-    </div>
-  </div>
-
-  <h2>測定</h2>
-  <p class="muted">測定対象を選び、各行の「測定」を押して、その笛を1〜2秒吹き続けてください。安定した値を記録します。</p>
-  <div class="card">
-    <div style="margin-bottom:12px">
-      <label class="muted" for="preset">測定対象：</label>
-      <select id="preset" style="font:inherit;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.4em">
-        <option value="probe">高音プローブ（閉管5＋開管3）</option>
-        <option value="both">折り3本＋高音8本パネル</option>
-        <option value="fold">折りパネルのみ（C6 折り0/2/3）</option>
-        <option value="high">高音オクターブのみ（C7〜C8）</option>
-        <option value="comb">較正コーム（40/70/100/130mm）</option>
-      </select>
-    </div>
-    <table id="tbl">
-      <thead><tr><th>対象</th><th>ねらい</th><th>実測 Hz</th><th>音名/ズレ</th><th></th></tr></thead>
-      <tbody id="rows"></tbody>
-    </table>
-  </div>
-
-  <h2>結果を書き出す</h2>
-  <div class="card">
-    <button class="ok" id="buildBtn">結果をまとめる</button>
-    <button class="sec" id="copyBtn">コピー</button>
-    <span class="status" id="copyStatus"></span>
-    <textarea id="out" placeholder="ここに測定結果がまとまります。コピーしてClaudeへ貼り付けてください。"></textarea>
-    <p class="muted">この内容をそのままClaudeに貼り付けると、管長と音程の対応表を作り、任意の曲のコンパクト笛を生成できます。</p>
-  </div>
-
-  <p class="muted">音程検出は <a href="https://github.com/ianprime0509/pitchy" target="_blank">pitchy</a> を使用。関連: <a href="https://github.com/qurihara/ToneDecoder" target="_blank">ToneDecoder</a></p>
+  <p class="muted">復号ロジックは <a href="cipher_codec.js">cipher_codec.js</a>（Python版 fue/cipher_codec.py と一致）。設定は <a href="cipher_config.json">cipher_config.json</a>。音程検出は <a href="https://github.com/ianprime0509/pitchy" target="_blank">pitchy</a>。測定・較正ツールは <a href="../">こちら</a>。</p>
 </div>
 
 <script src="cipher_codec.js"></script>
@@ -124,17 +113,31 @@
 import { PitchDetector } from "https://esm.sh/pitchy@4";
 
 const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-const DEFAULT_LENGTHS = [40,70,100,130];
-
 const el = id => document.getElementById(id);
 let audioCtx, analyser, detector, inputBuf, raf, running=false;
-let freqData;                       // FFTの振幅スペクトル（dB）
-let live = {freq:0, clarity:0, peak:0, peakDb:-Infinity};
-let cipherConfig = null, cipherFreqs = [];
+let freqData;
+let live = {freq:0, clarity:0, peak:0};
+let cipherConfig = null;
+let cipherFreqs = [];               // 復号に渡す並び（吹いた順・先頭が基準）
+
+// --- GET パラメータ: 照合用SHA-256の自動入力 / 1本あたり時間 / モード・パリティ上書き ---
+const cfgOverride = {};
+(function initParams(){
+  const q = new URLSearchParams(location.search);
+  const sha = (q.get("sha256") || q.get("hash") || "").trim();
+  if(sha) el("cipherHash").value = sha;
+  const spf = q.get("spf");
+  if(spf && [...el("spf").options].some(o=>o.value===spf)) el("spf").value = spf;
+  const mode = q.get("mode");
+  if(mode === "symbols" || mode === "sequential") cfgOverride.mode = mode;
+  const parity = q.get("parity");
+  if(parity !== null && /^\d+$/.test(parity)) cfgOverride.ecc_parity = parseInt(parity, 10);
+})();
+
 fetch("cipher_config.json").then(r=>{
   if(!r.ok) throw new Error("設定を読み込めません ("+r.status+")");
   return r.json();
-}).then(cfg=>{ cipherConfig=cfg; }).catch(e=>{ el("decodeStatus").textContent=e.message; });
+}).then(cfg=>{ cipherConfig = Object.assign(cfg, cfgOverride); }).catch(e=>{ el("decodeStatus").textContent=e.message; });
 
 function freqToNote(f){
   if(!f) return null;
@@ -142,76 +145,7 @@ function freqToNote(f){
   const midi = Math.round(midiFloat);
   const cents = Math.round((midiFloat - midi)*100);
   const name = NOTE_NAMES[(midi%12+12)%12] + (Math.floor(midi/12)-1);
-  const hex = midi.toString(16).toUpperCase().padStart(2,"0");
-  return {midi, cents, name, hex};
-}
-
-const SPEC_MAX_HZ = 8000;   // グラフ・ピーク検出の上限（1〜7kHzの笛を見る）
-
-// FFTスペクトル(dB)から上位ピークを検出。局所最大かつ floor超え、最小間隔で間引き。
-function topPeaks(K=6, floorDb=-72, minGapHz=250){
-  if(!freqData) return [];
-  const binHz = audioCtx.sampleRate / analyser.fftSize;
-  const minBin = Math.floor(250 / binHz);
-  const maxBin = Math.min(freqData.length-1, Math.floor(SPEC_MAX_HZ / binHz));
-  const cand = [];
-  for(let i=minBin;i<=maxBin;i++){
-    if(freqData[i] > floorDb && freqData[i] >= freqData[i-1] && freqData[i] >= freqData[i+1])
-      cand.push({hz:i*binHz, db:freqData[i]});
-  }
-  cand.sort((a,b)=>b.db-a.db);
-  const picked = [];
-  for(const c of cand){
-    if(picked.every(p=>Math.abs(p.hz-c.hz)>=minGapHz)){ picked.push(c); if(picked.length>=K) break; }
-  }
-  picked.sort((a,b)=>a.hz-b.hz);
-  return picked;
-}
-
-// 倍音を除外して基音だけ残す。
-// (1) 低い山から順に、整数倍(±5%)の山を倍音として消す。
-// (2) 秘密笛は基音を1オクターブ帯に収める設計なので、最低基音の2倍以上のピークは
-//     倍音/過吹きとして無視する（前回 6401Hz が整数倍判定を逃れて残った問題への対策）。
-function fundamentals(freqs){
-  const f = freqs.slice().sort((a,b)=>a-b);
-  const harm = new Array(f.length).fill(false);
-  for(let i=0;i<f.length;i++){
-    if(harm[i]) continue;
-    for(let j=i+1;j<f.length;j++){
-      if(harm[j]) continue;
-      const r = f[j]/f[i], n = Math.round(r);
-      if(n>=2 && Math.abs(r-n) < 0.05) harm[j] = true;   // 5%以内で整数倍＝倍音
-    }
-  }
-  let funds = f.filter((_,i)=>!harm[i]);
-  if(funds.length){
-    const lo = funds[0];
-    funds = funds.filter(x => x/lo < 1.95);              // 帯域ルール: 最低基音の2倍未満だけ残す
-  }
-  return funds;
-}
-
-function drawSpec(peaks){
-  const c = el("spec"); if(!c.width) return;
-  const ctx = c.getContext("2d"), W=c.width, H=c.height;
-  ctx.clearRect(0,0,W,H);
-  const binHz = audioCtx.sampleRate / analyser.fftSize;
-  const maxBin = Math.min(freqData.length, Math.floor(SPEC_MAX_HZ / binHz));
-  // スペクトルの塗り
-  ctx.beginPath(); ctx.moveTo(0,H);
-  for(let i=0;i<maxBin;i++){
-    const x = i/maxBin*W;
-    const y = H - Math.max(0,Math.min(1,(freqData[i]+100)/80))*H;
-    ctx.lineTo(x,y);
-  }
-  ctx.lineTo(W,H); ctx.closePath();
-  ctx.fillStyle = "rgba(91,140,255,0.45)"; ctx.fill();
-  // 1kHz目盛り
-  ctx.fillStyle = "#3a4270"; ctx.font = "10px sans-serif";
-  for(let f=1000; f<=SPEC_MAX_HZ; f+=1000){ const x=f/SPEC_MAX_HZ*W; ctx.fillRect(x,0,1,H); ctx.fillText((f/1000)+"k", x+2, H-2); }
-  // ピークの縦線＋周波数
-  ctx.fillStyle = "#37c98a"; ctx.font = "11px sans-serif";
-  for(const p of peaks){ const x=p.hz/SPEC_MAX_HZ*W; ctx.fillRect(x-1,0,2,H); ctx.fillText(Math.round(p.hz), x+3, 12); }
+  return {midi, cents, name};
 }
 
 async function start(){
@@ -219,20 +153,78 @@ async function start(){
     const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
     audioCtx = new (window.AudioContext||window.webkitAudioContext)();
     const src = audioCtx.createMediaStreamSource(stream);
-    analyser = new AnalyserNode(audioCtx,{fftSize:8192});   // 8192で高音の分解能を確保
+    analyser = new AnalyserNode(audioCtx,{fftSize:8192});
     src.connect(analyser);
     detector = PitchDetector.forFloat32Array(analyser.fftSize);
     inputBuf = new Float32Array(detector.inputLength);
     freqData = new Float32Array(analyser.frequencyBinCount);
-    const cv = el("spec"); cv.width = cv.clientWidth || 600; cv.height = cv.clientHeight || 170;
     running = true;
     el("startBtn").disabled = true;
-    el("srate").textContent = "サンプルレート " + Math.round(audioCtx.sampleRate) + "Hz（検出上限 " + Math.round(audioCtx.sampleRate/2) + "Hz）";
-    el("status").textContent = "測定中。笛を吹いてください。";
+    el("pttBtn").disabled = false;
+    el("status").textContent = "準備完了。先頭の基準笛から順に吹いてください。";
     loop();
   }catch(e){
     el("status").textContent = "マイクにアクセスできません: " + e.message;
   }
+}
+
+// --- push-to-talk 逐次キャプチャ ---
+const cap = {active:false, t0:0, windowIndex:0, fs:[], ps:[], seq:[]};
+
+function windowFund(){
+  const median = arr => arr.length ? arr.slice().sort((a,b)=>a-b)[Math.floor(arr.length/2)] : null;
+  if(cap.fs.length>=4) return median(cap.fs);   // pitchy（楽音の基音）を優先
+  if(cap.ps.length>=4) return median(cap.ps);   // 苦手な高音はFFTピークで補完
+  return null;
+}
+
+function finalizeWindow(){
+  const f = windowFund();
+  cap.seq.push({freq: f, note: f ? freqToNote(f) : null});
+  cap.fs = []; cap.ps = [];
+  renderSeq();
+  if(navigator.vibrate) navigator.vibrate(25);
+}
+
+function beginCapture(){
+  if(!running){ el("capStatus").textContent="先にマイクを開始してください。"; return; }
+  cap.active=true; cap.t0=performance.now(); cap.windowIndex=0; cap.fs=[]; cap.ps=[]; cap.seq=[];
+  cipherFreqs=[];
+  el("pttBtn").classList.add("rec"); el("pttBtn").textContent="…吹いてください（離すと復号）";
+  el("capStatus").textContent=""; el("verdict").textContent="–"; el("decodedPayload").textContent="–";
+  renderSeq();
+}
+
+function endCapture(){
+  if(!cap.active) return;
+  cap.active=false;
+  // 未確定の最後の窓を、ある程度サンプルがあれば確定する
+  if(cap.fs.length>=3 || cap.ps.length>=3) finalizeWindow();
+  el("pttBtn").classList.remove("rec"); el("pttBtn").textContent="押しながら順に吹く";
+  el("beatDot").classList.remove("on"); el("beatDot").textContent="–";
+  // 末尾の無音窓（吹き終わって離すまでの空白）を落とす
+  while(cap.seq.length && cap.seq[cap.seq.length-1].freq==null) cap.seq.pop();
+  renderSeq();
+  if(!cap.seq.length){ el("capStatus").textContent="音が取れませんでした。もう一度。"; return; }
+  if(cap.seq.some(s=>s.freq==null)){
+    el("capStatus").textContent="途中に無音の拍があります。拍に合わせてやり直してください。";
+    return;
+  }
+  cipherFreqs = cap.seq.map(s=>s.freq);
+  el("capStatus").textContent = cap.seq.length + "本を記録しました。復号します。";
+  doDecode();
+}
+
+function renderSeq(){
+  const box = el("seq"); box.innerHTML="";
+  cap.seq.forEach((s,i)=>{
+    const div = document.createElement("div");
+    div.className = "chip" + (i===0?" ref":"") + (s.freq==null?" empty":"");
+    div.innerHTML = `<div class="idx">${i+1}${i===0?" 基準":""}</div>`+
+      `<div class="nm">${s.note?s.note.name:"—"}</div>`+
+      `<div class="fz">${s.freq?Math.round(s.freq)+"Hz":"無音"}</div>`;
+    box.appendChild(div);
+  });
 }
 
 function loop(){
@@ -244,185 +236,65 @@ function loop(){
   el("hz").textContent = live.freq ? live.freq.toFixed(1) : "–";
   el("noteName").textContent = info ? info.name : "–";
   el("cents").textContent = info ? (info.cents>=0?"+":"")+info.cents+" c" : "";
-  el("centsDot").style.left = info ? (50 + Math.max(-50,Math.min(50,info.cents/2))) + "%" : "50%";
   el("clarBar").style.width = Math.round(clarity*100)+"%";
 
-  // FFTスペクトルの最大ピーク（pitchyが苦手な高音・可聴域外でも動く）
+  // FFTの最強ピーク（pitchyが苦手な高音の補完に使う）
   analyser.getFloatFrequencyData(freqData);
   const binHz = audioCtx.sampleRate / analyser.fftSize;
-  const minBin = Math.floor(200 / binHz);        // 200Hz未満の暗騒音を無視
+  const minBin = Math.floor(200 / binHz);
   let pk=-Infinity, pki=-1;
   for(let i=minBin;i<freqData.length;i++){ if(freqData[i]>pk){ pk=freqData[i]; pki=i; } }
-  live.peakDb = pk;
-  live.peak = (pk > -75 && pki>0) ? pki*binHz : 0;   // -75dBを超える明確なピークのみ
-  el("peak").textContent = live.peak ? Math.round(live.peak) : "–";
+  live.peak = (pk > -75 && pki>0) ? pki*binHz : 0;
 
-  const peaks = topPeaks();
-  live.peaks = peaks;
-  el("peaks").textContent = peaks.length ? peaks.map(p=>Math.round(p.hz)+"Hz").join("  ,  ") : "–";
-  const funds = fundamentals(peaks.map(p=>p.hz));
-  el("funds").textContent = funds.length ? funds.map(Math.round).join(" , ")+"  （"+funds.length+"本）" : "–";
-  drawSpec(peaks);
+  // push-to-talk 中: 窓ごとに基音を確定
+  if(cap.active){
+    const spfMs = parseFloat(el("spf").value)*1000;
+    const t = performance.now() - cap.t0;
+    const idx = Math.floor(t / spfMs);
+    while(cap.windowIndex < idx){ finalizeWindow(); cap.windowIndex++; }
+    const frac = t/spfMs - idx;                 // 窓内の位置 0..1
+    if(frac>0.25 && frac<0.85){                 // 立ち上がり/切替を避け中央だけ拾う
+      if(live.freq && live.clarity>0.9) cap.fs.push(live.freq);
+      if(live.peak) cap.ps.push(live.peak);
+    }
+    const on = frac<0.18;                        // 拍の頭を光らせる
+    el("beatDot").classList.toggle("on", on);
+    el("beatDot").textContent = idx+1;
+  }
   raf = requestAnimationFrame(loop);
 }
 
-// stable capture: median over a window. pitchy(楽音)とFFTピーク(高音・可聴域外)の両方を拾う
-function capture(onDone){
-  if(!running){ el("status").textContent="先にマイクを開始してください。"; return; }
-  const fs = [], ps = [];
-  const t0 = performance.now();
-  const DUR = 1400;
-  el("status").textContent = "測定中… 吹き続けてください";
-  const median = arr => arr.length ? arr.slice().sort((a,b)=>a-b)[Math.floor(arr.length/2)] : null;
-  const tick = () => {
-    if(live.freq && live.clarity>0.92) fs.push(live.freq);
-    if(live.peak) ps.push(live.peak);
-    if(performance.now()-t0 < DUR){ requestAnimationFrame(tick); return; }
-    const f = fs.length>=8 ? median(fs) : null;
-    const p = ps.length>=8 ? median(ps) : null;
-    if(f===null && p===null){ el("status").textContent="うまく拾えませんでした。もう一度、安定して吹いてください。"; onDone(null); return; }
-    el("status").textContent = "測定完了。";
-    onDone({freq:f, peak:p});
-  };
-  tick();
-}
-
-// --- measurement table (preset-driven) ---
-const PRESETS = {
-  probe: {name:"高音プローブ(閉管5+開管3)", rows:[
-    {id:"p_c6",label:"閉管 C6 (対照)",aim:"1046Hz"},
-    {id:"p_g6",label:"閉管 G6",aim:"1568Hz"},
-    {id:"p_c7",label:"閉管 C7",aim:"2093Hz"},
-    {id:"p_g7",label:"閉管 G7",aim:"3136Hz"},
-    {id:"p_c8",label:"閉管 C8",aim:"4186Hz"},
-    {id:"p_o30",label:"開管 30mm",aim:"鳴るか?"},
-    {id:"p_o20",label:"開管 20mm",aim:"鳴るか?"},
-    {id:"p_o12",label:"開管 12mm",aim:"鳴るか?"},
-  ]},
-  fold: {name:"折りパネル(C6 折り0/2/3)", rows:[
-    {id:"c6n0", label:"折り0 (直管・細長)", aim:"C6 ≈1046Hz"},
-    {id:"c6n2", label:"折り2 (2列ブロック)", aim:"C6 ≈1046Hz"},
-    {id:"c6n3", label:"折り3 (3列ブロック)", aim:"C6 ≈1046Hz"},
-  ]},
-  high: {name:"高音オクターブ(C7-C8)", rows:[
-    {id:"c7",label:"C7 (一番背が高い)",aim:"2093Hz"},{id:"d7",label:"D7",aim:"2349Hz"},
-    {id:"e7",label:"E7",aim:"2637Hz"},{id:"f7",label:"F7",aim:"2794Hz"},
-    {id:"g7",label:"G7",aim:"3136Hz"},{id:"a7",label:"A7",aim:"3520Hz"},
-    {id:"b7",label:"B7",aim:"3951Hz"},{id:"c8",label:"C8 (一番背が低い)",aim:"4186Hz"},
-  ]},
-  comb: {name:"較正コーム", rows:[
-    {id:"L40",label:"管長40mm",aim:"—"},{id:"L70",label:"管長70mm",aim:"—"},
-    {id:"L100",label:"管長100mm",aim:"—"},{id:"L130",label:"管長130mm",aim:"—"},
-  ]},
-};
-PRESETS.both = {name:"今回の印刷(折り3本+高音8本)", rows:[...PRESETS.fold.rows, ...PRESETS.high.rows]};
-
-let curPreset = "probe";
-const results = {}; // id -> {freq, note}
-const curRows = () => PRESETS[curPreset].rows;
-
-function renderRows(){
-  const tb = el("rows"); tb.innerHTML="";
-  curRows().forEach(r=>{
-    const res = results[r.id];
-    const shownHz = res ? (res.freq!=null ? res.freq.toFixed(1) : (res.peak!=null ? res.peak.toFixed(0)+" (ピーク)" : "–")) : "–";
-    const noteStr = res && res.note ? res.note.name+" "+(res.note.cents>=0?'+':'')+res.note.cents+"c"
-                    : (res && res.freq==null && res.peak!=null ? "高音（ピーク値）" : "–");
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td class="len">${r.label}</td>
-      <td class="muted">${r.aim}</td>
-      <td>${shownHz}</td>
-      <td class="${res?'filled':''}">${noteStr}</td>
-      <td><button class="rowbtn" data-id="${r.id}">測定</button></td>`;
-    tb.appendChild(tr);
-  });
-  tb.querySelectorAll("button[data-id]").forEach(b=>{
-    b.addEventListener("click",()=>{
-      b.disabled=true; b.textContent="…";
-      capture(res=>{
-        b.disabled=false; b.textContent="測定";
-        if(res){ results[b.dataset.id]={freq:res.freq, peak:res.peak, note: res.freq!=null? freqToNote(res.freq): null}; renderRows(); }
-      });
-    });
-  });
-}
-
-el("preset").addEventListener("change", e=>{ curPreset=e.target.value; renderRows(); });
-
-el("buildBtn").onclick = ()=>{
-  const done = curRows().filter(r=>results[r.id]);
-  const lines = done.map(r=>{
-    const res=results[r.id];
-    if(res.freq!=null){
-      return `${r.label} (ねらい ${r.aim}) : ${res.freq.toFixed(1)} Hz  [${res.note.name} ${res.note.cents>=0?'+':''}${res.note.cents}c, MIDI ${res.note.midi}]`+
-             (res.peak!=null? `  (FFTピーク ${res.peak.toFixed(0)}Hz)`:"");
-    }
-    return `${r.label} (ねらい ${r.aim}) : FFTピーク ${res.peak!=null?res.peak.toFixed(0):"-"} Hz（楽音検出できず＝高音/可聴域外の可能性）`;
-  });
-  const json = JSON.stringify(done.map(r=>{const res=results[r.id];return {id:r.id, label:r.label, freq_hz: res.freq!=null?+res.freq.toFixed(2):null, peak_hz: res.peak!=null?+res.peak.toFixed(1):null, note: res.note?res.note.name:null};}));
-  el("out").value = `# ai-fue 測定結果（${PRESETS[curPreset].name}）\n`+
-    `# 測定日時: ${new Date().toLocaleString('ja-JP')}\n`+
-    (lines.length? lines.join("\n") : "(まだ測定していません)")+
-    `\n\n# 機械可読(JSON):\n`+json+
-    `\n\n# これを ai-fue プロジェクトの Claude に貼り付けてください。`;
-};
-
-el("copyBtn").onclick = async ()=>{
-  const t=el("out").value; if(!t){ el("copyStatus").textContent="先に「結果をまとめる」を押してください"; return; }
-  try{ await navigator.clipboard.writeText(t); el("copyStatus").textContent="コピーしました"; }
-  catch{ el("out").select(); document.execCommand("copy"); el("copyStatus").textContent="コピーしました"; }
-};
-
-el("chordBtn").onclick = ()=>{
-  if(!running){ el("chordStatus").textContent="先にマイクを開始してください"; return; }
-  el("chordStatus").textContent = "測定中… 吹き続けてください";
-  const t0 = performance.now(), DUR = 1500, frames = [];
-  const tick = ()=>{
-    if(live.peaks && live.peaks.length) frames.push(live.peaks.map(p=>p.hz));
-    if(performance.now()-t0 < DUR){ requestAnimationFrame(tick); return; }
-    const all = [].concat(...frames).sort((a,b)=>a-b);
-    const clusters = [];
-    for(const f of all){
-      const c = clusters[clusters.length-1];
-      if(c && f - c[c.length-1] < 250) c.push(f); else clusters.push([f]);
-    }
-    const need = Math.max(2, frames.length*0.4);   // 4割以上のフレームで見えた山だけ採用
-    const keep = clusters.filter(c=>c.length>=need).map(c=>{ const s=c.slice().sort((a,b)=>a-b); return Math.round(s[Math.floor(s.length/2)]); });
-    if(keep.length){
-      const funds = fundamentals(keep);
-      cipherFreqs = funds;
-      el("cipherFreqs").textContent = funds.map(h=>h+"Hz").join(" , ");
-      el("chordStatus").textContent = "基音 " + funds.length + "本: " + funds.map(h=>h+"Hz").join(" , ");
-      const line = `# 和音 ${new Date().toLocaleString('ja-JP')}  基音(${funds.length}本): ` + funds.map(h=>h+"Hz").join(" , ") + `   全ピーク: ` + keep.map(h=>h+"Hz").join(" , ");
-      el("out").value = (el("out").value ? el("out").value+"\n" : "") + line;
-    } else {
-      el("chordStatus").textContent = "うまく拾えませんでした。安定して吹いてもう一度。";
-    }
-  };
-  tick();
-};
-
-el("decodeBtn").onclick = async ()=>{
+async function doDecode(){
   const status = el("decodeStatus");
+  el("verdict").textContent="–";
   if(!cipherConfig){ status.textContent="復号設定を読み込み中です"; return; }
-  if(!cipherFreqs.length){ status.textContent="先に和音を測定してください"; return; }
-  // 基音一覧は周波数順なので、A6基準笛の位置を自動検出する。
-  const result = window.CipherCodec.decode(cipherFreqs, cipherConfig, false);
-  el("decodedPayload").textContent = result.payloadHex || "（空）";
+  if(!cipherFreqs.length){ status.textContent="先に「押しながら順に吹く」で測ってください"; return; }
+  // 吹いた順そのまま・先頭が基準笛（positionsKnown=true）
+  const result = window.CipherCodec.decode(cipherFreqs, cipherConfig, true);
+  el("decodedPayload").textContent = result.payloadHex || (result.symbols&&result.symbols.length? result.symbols.join(",") : "（空）");
   if(result.status.startsWith("error:")){ status.textContent=result.status; return; }
   status.textContent = result.status + `（訂正 ${result.correctedCount}、消失 ${result.erasureCount}）`;
   const expected = el("cipherHash").value.trim().toLowerCase();
-  if(expected){
-    if(!/^[0-9a-f]{64}$/.test(expected)){ status.textContent += " / SHA-256は64桁hexで入力してください"; return; }
-    const digest = await crypto.subtle.digest("SHA-256", result.payload);
-    const actual = Array.from(new Uint8Array(digest), x=>x.toString(16).padStart(2,"0")).join("");
-    status.textContent += actual===expected ? " / SHA-256 OK" : " / SHA-256 NG";
-  }
-};
+  if(!expected){ el("verdict").innerHTML='<span class="muted">照合用SHA-256は未入力</span>'; return; }
+  if(!/^[0-9a-f]{64}$/.test(expected)){ el("verdict").innerHTML='<span class="ngmark">SHA-256は64桁hexで入力してください</span>'; return; }
+  // 記号列モードは symbols を、バイト列モードは payload をハッシュ対象にする（Python版と一致）
+  const canonical = (cipherConfig.mode === "symbols")
+      ? Uint8Array.from(result.symbols||[]) : result.payload;
+  const digest = await crypto.subtle.digest("SHA-256", canonical);
+  const actual = Array.from(new Uint8Array(digest), x=>x.toString(16).padStart(2,"0")).join("");
+  el("verdict").innerHTML = actual===expected
+      ? '<span class="okmark">SHA-256 OK（一致）</span>'
+      : '<span class="ngmark">SHA-256 NG（不一致）</span>';
+}
 
+const ptt = el("pttBtn");
+ptt.addEventListener("pointerdown", e=>{ e.preventDefault(); try{ ptt.setPointerCapture(e.pointerId); }catch{} beginCapture(); });
+ptt.addEventListener("pointerup",   e=>{ e.preventDefault(); endCapture(); });
+ptt.addEventListener("pointercancel", ()=> endCapture());
+el("clearBtn").onclick = ()=>{ cap.seq=[]; cipherFreqs=[]; renderSeq(); el("capStatus").textContent=""; el("decodedPayload").textContent="–"; el("verdict").textContent="–"; el("decodeStatus").textContent=""; };
+el("decodeBtn").onclick = doDecode;
 el("startBtn").onclick = start;
-renderRows();
+renderSeq();
 </script>
 </body>
 </html>
