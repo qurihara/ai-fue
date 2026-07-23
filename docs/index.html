@@ -62,9 +62,20 @@
     <div class="muted" style="margin-top:4px">上の音名は楽音向けの検出（pitchy）。モスキート音のような高音や可聴域外は、こちらの「スペクトルのピーク」が頼りになります。</div>
   </div>
 
-  <h2>複数ピーク（和音）検出</h2>
-  <p class="lead">プレナム笛のように複数の音が同時に鳴ると、FFTのスペクトルに複数の山として現れます。下のグラフの山と、検出したピーク一覧で確認できます。目標③（秘密の和音笛）の要です。</p>
+  <h2>複数ピーク（和音）検出／高周波スペクトル</h2>
+  <p class="lead">複数の音が同時に鳴るとFFTのスペクトルに複数の山として現れます。下のグラフとピーク一覧で確認できます。表示・検出の上限を上げれば、モスキート音や可聴域外（〜ナイキスト＝Fs/2）の山も確認できます。</p>
   <div class="card">
+    <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <label class="muted" for="specMax">表示・検出の上限：</label>
+      <select id="specMax" style="font:inherit;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.35em">
+        <option value="8000" selected>8 kHz（楽音笛）</option>
+        <option value="12000">12 kHz</option>
+        <option value="16000">16 kHz</option>
+        <option value="20000">20 kHz（モスキート帯）</option>
+        <option value="24000">最大（ナイキスト付近まで）</option>
+      </select>
+      <span class="muted" id="nyqNote"></span>
+    </div>
     <canvas id="spec" style="width:100%;height:170px;background:#0c0f1d;border-radius:8px;display:block"></canvas>
     <div class="muted" style="margin-top:6px">検出ピーク（強い順・最大6本）: <b id="peaks" style="color:var(--ok)">–</b></div>
     <div class="muted" style="margin-top:6px">基音（倍音を除外＝鳴っている笛）: <b id="funds" style="color:var(--accent);font-size:1.05rem">–</b></div>
@@ -126,7 +137,7 @@ function freqToNote(f){
   return {midi, cents, name, hex};
 }
 
-const SPEC_MAX_HZ = 8000;   // グラフ・ピーク検出の上限（1〜7kHzの笛を見る）
+let SPEC_MAX_HZ = 8000;   // グラフ・ピーク検出の上限。UIで変更可（最大はナイキスト＝Fs/2まで自動clamp）
 
 // FFTスペクトル(dB)から上位ピークを検出。局所最大かつ floor超え、最小間隔で間引き。
 function topPeaks(K=6, floorDb=-72, minGapHz=250){
@@ -186,9 +197,10 @@ function drawSpec(peaks){
   }
   ctx.lineTo(W,H); ctx.closePath();
   ctx.fillStyle = "rgba(91,140,255,0.45)"; ctx.fill();
-  // 1kHz目盛り
+  // 周波数目盛り（帯域が広いときは2kHz刻み）
   ctx.fillStyle = "#3a4270"; ctx.font = "10px sans-serif";
-  for(let f=1000; f<=SPEC_MAX_HZ; f+=1000){ const x=f/SPEC_MAX_HZ*W; ctx.fillRect(x,0,1,H); ctx.fillText((f/1000)+"k", x+2, H-2); }
+  const gstep = SPEC_MAX_HZ > 10000 ? 2000 : 1000;
+  for(let f=gstep; f<=SPEC_MAX_HZ; f+=gstep){ const x=f/SPEC_MAX_HZ*W; ctx.fillRect(x,0,1,H); ctx.fillText((f/1000)+"k", x+2, H-2); }
   // ピークの縦線＋周波数
   ctx.fillStyle = "#37c98a"; ctx.font = "11px sans-serif";
   for(const p of peaks){ const x=p.hz/SPEC_MAX_HZ*W; ctx.fillRect(x-1,0,2,H); ctx.fillText(Math.round(p.hz), x+3, 12); }
@@ -207,7 +219,14 @@ async function start(){
     const cv = el("spec"); cv.width = cv.clientWidth || 600; cv.height = cv.clientHeight || 170;
     running = true;
     el("startBtn").disabled = true;
-    el("srate").textContent = "サンプルレート " + Math.round(audioCtx.sampleRate) + "Hz（検出上限 " + Math.round(audioCtx.sampleRate/2) + "Hz）";
+    const nyq = Math.round(audioCtx.sampleRate/2);
+    el("srate").textContent = "サンプルレート " + Math.round(audioCtx.sampleRate) + "Hz（検出上限＝ナイキスト " + nyq + "Hz）";
+    el("nyqNote").textContent = "ナイキスト " + nyq + "Hz まで（これ以上は取得不可）";
+    // ナイキストを超える選択肢は無効化し、「最大」は実ナイキストに合わせる
+    for(const o of el("specMax").options){
+      if(o.value==="24000"){ o.textContent = "最大（ナイキスト " + nyq + "Hz 付近）"; }
+      else if(parseInt(o.value,10) > nyq){ o.disabled = true; }
+    }
     el("status").textContent = "測定中。笛を吹いてください。";
     loop();
   }catch(e){
@@ -381,6 +400,9 @@ el("chordBtn").onclick = ()=>{
   tick();
 };
 
+el("specMax").addEventListener("change", e=>{
+  SPEC_MAX_HZ = parseInt(e.target.value,10);   // drawSpec/topPeaksがfreqData長でナイキストに自動clamp
+});
 el("startBtn").onclick = start;
 renderRows();
 </script>
