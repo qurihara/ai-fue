@@ -133,6 +133,16 @@ const cfgOverride = {};
   if(mode === "symbols" || mode === "sequential") cfgOverride.mode = mode;
   const parity = q.get("parity");
   if(parity !== null && /^\d+$/.test(parity)) cfgOverride.ecc_parity = parseInt(parity, 10);
+  // 基準笛と音域の上書き（先頭を基準に使う挙動は既定でON。基準音や音域を変えて別コームに対応）
+  const noteRe = /^[A-Ga-g][#b]?-?\d+$/;
+  const ref = q.get("ref");
+  if(ref && noteRe.test(ref)) cfgOverride.reference_note = ref;
+  const lo = q.get("lo");
+  if(lo && noteRe.test(lo)) cfgOverride.lo_note = lo;
+  const hi = q.get("hi");
+  if(hi && noteRe.test(hi)) cfgOverride.hi_note = hi;
+  const step = q.get("step");
+  if(step !== null && /^\d+(\.\d+)?$/.test(step)) cfgOverride.step_cents = parseFloat(step);
 })();
 
 fetch("cipher_config.json").then(r=>{
