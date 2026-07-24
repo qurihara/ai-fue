@@ -38,12 +38,14 @@ def place_flutes(notes, carve=True, spool_path=SPOOL, start_deg=90.0, rrim=100.0
     spool = _spool_body(spool_path)
     xface = spool.bounds[1][0]          # 外面
     yc, zc = 100.0, 100.0
-    base = trimesh.load(mini10.BASE)
+    L_max = max(mini10.length_for_note(nt) for nt in notes)   # 外見統一の外形長
     n = len(notes)
     placed, infos = [], []
     for i, note in enumerate(notes):
         L = mini10.length_for_note(note)
-        g = mini10.flute(L, base=base)
+        g = mini10.uniform_flute(L, L_max=L_max)   # 外見統一版（長さから音が読めない）
+        if i == 0:
+            g = mini10.reference_tab(g)             # 基準笛の印（吸込口脇のタブ）
         g.apply_transform(M_INNER)
         wz = g.bounds[1][2] - g.bounds[0][2]
         # 床を外面へ→窓は内側(xface-4)。吸込口(y=0)をリムへ。幅をzc中心へ。
@@ -68,12 +70,14 @@ def place_flutes_multiobj(notes, carve=True, spool_path=SPOOL, start_deg=90.0, r
     spool = _spool_body(spool_path)
     xface = spool.bounds[1][0]
     yc, zc = 100.0, 100.0
-    base = trimesh.load(mini10.BASE)
+    L_max = max(mini10.length_for_note(nt) for nt in notes)
     n = len(notes)
     placed, infos = [], []
     for i, note in enumerate(notes):
         L = mini10.length_for_note(note)
-        g = mini10.flute(L, base=base)
+        g = mini10.uniform_flute(L, L_max=L_max)
+        if i == 0:
+            g = mini10.reference_tab(g)
         g.apply_transform(M_INNER)
         wz = g.bounds[1][2] - g.bounds[0][2]
         g.apply_transform(tf.translation_matrix([xface, yc + rrim, zc - wz / 2]))

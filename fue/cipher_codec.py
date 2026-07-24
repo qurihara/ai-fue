@@ -42,8 +42,10 @@ class CodecConfig:
         if hi < lo or not math.isclose(span, round(span), abs_tol=1e-9):
             raise ValueError("音域がスロット間隔で割り切れない")
         q = (ref - lo) / self.step_cents
-        if ref < lo or ref > hi or not math.isclose(q, round(q), abs_tol=1e-9):
-            raise ValueError("reference_noteがスロット格子上かつ音域内ではない")
+        # 基準笛は音域(lo..hi)の外に置いてもよい（比読みの基準としてのみ使い、データ記号セット
+        # には含めない）。従来どおり音域内に置くことも可能。要件はスロット格子上にあることだけ。
+        if not math.isclose(q, round(q), abs_tol=1e-9):
+            raise ValueError("reference_noteがスロット格子上にない")
 
 
 @dataclass(frozen=True)
@@ -268,10 +270,15 @@ def _encode_message(message: list[int], cfg: CodecConfig) -> EncodeResult:
                                    cfg.ecc_parity, p))
     width = _width(m, p)
     wire = [d for x in codeword for d in _to_base(x, m, width)]
-    indices = ([ref_slot_index(cfg)] if cfg.use_reference else []) + wire
-    return EncodeResult([table[i].nearest_note for i in indices],
-                        [freq_to_length(table[i].freq_hz, cfg) for i in indices],
-                        wire, m, p, cfg.ecc_parity, width, message, codeword)
+    # データ笛は音域テーブルのスロット、基準笛は基準音から直接（音域外でもよい）。
+    data_notes = [table[i].nearest_note for i in wire]
+    data_lengths = [freq_to_length(table[i].freq_hz, cfg) for i in wire]
+    if cfg.use_reference:
+        notes = [cfg.reference_note] + data_notes
+        lengths = [freq_to_length(note_to_freq(cfg.reference_note), cfg)] + data_lengths
+    else:
+        notes, lengths = data_notes, data_lengths
+    return EncodeResult(notes, lengths, wire, m, p, cfg.ecc_parity, width, message, codeword)
 
 
 def encode(payload: bytes, cfg: CodecConfig = CodecConfig()) -> EncodeResult:
@@ -304,14 +311,16 @@ def decode(measured_freqs: list[float], cfg: CodecConfig = CodecConfig(),
         return DecodeResult(b"", [], "error: 未対応のmode", [])
     if not measured_freqs or any(f <= 0 for f in measured_freqs):
         return DecodeResult(b"", [], "error: 正の周波数が必要", [])
-    table, ri = slots(cfg), ref_slot_index(cfg)
+    table = slots(cfg)
     if cfg.use_reference:
         # 先頭(または最も基準音に近い笛)を基準に、周波数比で温度・吹圧を打ち消す。
+        # 基準の公称周波数は基準音から直接求める（データ音域の外に置いてもよい）。
+        ref_nominal = note_to_freq(cfg.reference_note)
         rp = 0 if positions_known else min(range(len(measured_freqs)),
-            key=lambda i: abs(1200 * math.log2(measured_freqs[i] / table[ri].freq_hz)))
+            key=lambda i: abs(1200 * math.log2(measured_freqs[i] / ref_nominal)))
         ref = measured_freqs[rp]
         data = measured_freqs[:rp] + measured_freqs[rp + 1:]
-        ratios = [s.freq_hz / table[ri].freq_hz for s in table]
+        ratios = [s.freq_hz / ref_nominal for s in table]
         resid = lambda f: [1200 * math.log2((f / ref) / x) for x in ratios]
     else:
         # 基準笛なし＝全笛データ。絶対音程で各スロットに丸める(温度・吹圧補正なし)。

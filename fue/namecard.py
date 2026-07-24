@@ -141,7 +141,9 @@ def build(notes=None, card=(CARD_X, CARD_Y, CARD_Z),
           strap_boss=False, boss_d=9.0,
           brim=False, brim_width=4.0, brim_height=0.25,
           emboss=False, emboss_h=0.6,
-          brand=None, brand_h=2.2):
+          brand=None, brand_h=2.2,
+          notch=False, notch_index=None, notch_n=12, notch_r=1.6,
+          notch_y=(3.0, 43.0)):
     """笛つき名刺/カードメッシュを作る。label を与えると余白帯にステンシル文字を貫通穴で刻む。
     band_x0 を与えると刻印帯の開始xを固定する（複数カードで刻印位置をカード端から揃えたいとき。
     None なら従来どおり「そのカードの最長管の先端＋1.5mm」＝カードごとに位置が動く）。
@@ -228,6 +230,22 @@ def build(notes=None, card=(CARD_X, CARD_Y, CARD_Z),
         strap_info = dict(d=strap_d, x=round(scx, 1), y=round(scy, 1), edge=strap_edge,
                           boss=(boss_d if strap_boss else None))
 
+    # 調性を触覚で示すエッジの切り欠き：足側の辺（x=cx＝調性名テキストの上の辺）に、調の半音番号
+    # （0=C, 1=C#/Db, …, 11=B）に対応する位置へ半円の凹みを1つ入れる。板は薄い(0.5mm)が、外周の
+    # 輪郭が凹むので指でなぞると位置が分かる。ストラップ穴（高y側の角）を避けるため、切り欠きの並びは
+    # 低y側の角からストラップ手前まで（既定 y=3..43mm）に収める。低yがC、高y側の端がB。ストラップ穴が
+    # B側のランドマークになる。カード1枚につき切り欠きは1個なので隣接キーの間隔は問題にならない。
+    notch_info = None
+    if notch and notch_index is not None:
+        n = max(2, int(notch_n))
+        y_lo, y_hi = notch_y
+        ny = y_lo + (y_hi - y_lo) * (float(notch_index) / (n - 1))
+        cutter = trimesh.creation.cylinder(radius=notch_r, height=cz + 6.0, sections=48)
+        cutter.apply_translation([cx, ny, (cz + 6.0) / 2.0 - 1.0])   # 辺の外へ半分はみ出す＝凹み
+        card_mesh = trimesh.boolean.difference([card_mesh, cutter], engine="manifold")
+        notch_info = dict(index=int(notch_index), n=n, y=round(ny, 1), r=notch_r,
+                          y_range=(y_lo, y_hi))
+
     # 造形ブリム：カード周囲に brim_height(=0.25<カード0.5) の薄いフランジを造形。
     # カード床(0.5mm)より低いので接合部に段差ができ、そこを切って剥がしやすい（後で切り離しやすい）。
     # スライサのブリムは第1層だけで高さ制御できないため、幾何で作って高さを差別化する。
@@ -248,7 +266,7 @@ def build(notes=None, card=(CARD_X, CARD_Y, CARD_Z),
                 margin_y=round((cy - cw) / 2.0, 2),
                 card_z=cz, corner_r=corner_r, corner_style=corner_style,
                 card_size=(cx, cy), label=label_info, star=star_info, strap=strap_info,
-                brim=brim_info, emboss=(emboss_h if emboss else None),
+                notch=notch_info, brim=brim_info, emboss=(emboss_h if emboss else None),
                 extents=tuple(np.round(card_mesh.extents, 2)),
                 watertight=card_mesh.is_watertight)
     return card_mesh, info

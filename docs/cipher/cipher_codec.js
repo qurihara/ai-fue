@@ -32,7 +32,7 @@
     const span = (hi - lo) / cfg.step_cents;
     const q = (ref - lo) / cfg.step_cents;
     if (hi < lo || Math.abs(span - Math.round(span)) > 1e-9) throw new Error("音域がスロット間隔で割り切れない");
-    if (ref < lo || ref > hi || Math.abs(q - Math.round(q)) > 1e-9) throw new Error("reference_noteがスロット格子上かつ音域内ではない");
+    if (Math.abs(q - Math.round(q)) > 1e-9) throw new Error("reference_noteがスロット格子上にない");  // 基準は音域(lo..hi)の外でもよい（比読みの基準としてのみ使う）
     if (cfg.mode !== "sequential" && cfg.mode !== "symbols") throw new Error("未対応のmode");
   }
 
@@ -231,19 +231,19 @@
     try { table = slots(cfg); } catch (e) {
       return {payload: new Uint8Array(), payloadHex: "", decisions: [], status: "error: " + e.message, symbols: [], correctedCount: 0, erasureCount: 0};
     }
-    const ri = refSlotIndex(cfg);
     const useRef = cfg.use_reference !== false;   // 既定は基準笛あり
     let data, resid;
     if (useRef) {
       // 先頭(または基準音に最も近い笛)を基準に、周波数比で温度・吹圧を打ち消す
+      const refNominal = noteToFreq(cfg.reference_note);   // 基準の公称周波数（データ音域の外でもよい）
       let rp = 0;
       if (!positionsKnown) {
         rp = measuredFreqs.reduce((best, f, i) =>
-          Math.abs(1200 * Math.log2(f / table[ri].freq_hz)) < Math.abs(1200 * Math.log2(measuredFreqs[best] / table[ri].freq_hz)) ? i : best, 0);
+          Math.abs(1200 * Math.log2(f / refNominal)) < Math.abs(1200 * Math.log2(measuredFreqs[best] / refNominal)) ? i : best, 0);
       }
       const ref = measuredFreqs[rp];
       data = measuredFreqs.slice(0, rp).concat(measuredFreqs.slice(rp + 1));
-      const ratios = table.map(s => s.freq_hz / table[ri].freq_hz);
+      const ratios = table.map(s => s.freq_hz / refNominal);
       resid = f => ratios.map(x => 1200 * Math.log2((f / ref) / x));
     } else {
       // 基準笛なし＝全笛データ。絶対音程で丸める(温度・吹圧補正なし)

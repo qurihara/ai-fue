@@ -1,0 +1,14 @@
+CipherFlute 往復デモ
+秘密(symbols): 2,0,2,6
+SHA-256 照合子: a9415803d7307e2b936e24cdf169cfa7691d7b4ac6e549c64f1d8becaef4df66
+笛 5本（基準笛C7が先頭）: C7 G#6 F#6 G#6 C7
+
+位置  音    目標周波数[Hz]  役割
+ 1   C7       2093       基準笛
+ 2   G#6      1661       データ
+ 3   F#6      1480       データ
+ 4   G#6      1661       データ
+ 5   C7       2093       データ
+
+往復検証(シミュレーション): 成功（ハッシュ一致）
+印刷用STL: out/cipher_roundtrip_demo.stl 外形=(np.float64(70.4), np.float64(33.8), np.float64(4.0)) watertight=True

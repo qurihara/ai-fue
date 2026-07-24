@@ -41,6 +41,7 @@
   .beatdot{width:54px;height:54px;border-radius:50%;background:#2b335c;transition:transform .05s,background .05s;
            display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700}
   .beatdot.on{background:var(--ok);transform:scale(1.18)}
+  .beatdot.prep{background:var(--warn)}
   .seq{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
   .chip{background:#0c0f1d;border:1px solid var(--line);border-radius:9px;padding:.4em .7em;font-variant-numeric:tabular-nums;text-align:center;min-width:74px}
   .chip .idx{font-size:.7rem;color:var(--muted)}
@@ -51,6 +52,21 @@
   .big{font-size:1.1rem}
   .okmark{color:var(--ok);font-weight:700}
   .ngmark{color:var(--ng);font-weight:700}
+
+  /* 1文字ずつモードの候補表示 */
+  .cand{font-size:2.6rem;font-weight:800;color:var(--ok);text-align:center;min-height:1.2em;margin:.2em 0}
+
+  /* 成功エフェクト（オーバーレイ） */
+  #successOverlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;
+    background:rgba(9,12,24,.86);z-index:50;text-align:center;padding:24px}
+  #successOverlay.show{display:flex;animation:fadeIn .25s ease}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .checkring{width:120px;height:120px;border-radius:50%;background:var(--ok);display:flex;align-items:center;justify-content:center;
+    font-size:64px;color:#fff;animation:pop .5s cubic-bezier(.2,1.4,.4,1)}
+  @keyframes pop{0%{transform:scale(0)}100%{transform:scale(1)}}
+  .checkring::after{content:"✓"}
+  #successOverlay h3{font-size:1.5rem;margin:.6em 0 .2em}
+  #successOverlay .sub{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -60,8 +76,8 @@
 
   <div class="card">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button id="startBtn">マイク開始</button>
-      <span class="status" id="status">「マイク開始」を押してマイクを許可してください。</span>
+      <button id="startBtn" style="display:none">マイク開始</button>
+      <span class="status" id="status">マイクの許可を求めています…（表示が出たら「許可」してください）</span>
     </div>
     <div class="meter"><span class="hz"><span id="hz">–</span><span style="font-size:.9rem;color:var(--muted)"> Hz</span></span>
       <span class="note" id="noteName">–</span><span class="cents" id="cents"></span></div>
@@ -79,13 +95,13 @@
         <option value="1.5">1.5秒</option>
         <option value="2.0">2.0秒</option>
       </select>
-      <span class="muted">拍の切り替わりで次の笛へ。</span>
+      <span class="muted">押すと1秒の準備のあと拍が始まります。</span>
     </div>
     <div class="beatwrap">
       <div class="beatdot" id="beatDot">–</div>
-      <div class="muted" id="beatHint" style="max-width:300px">押した瞬間に先頭（基準）の笛を吹き始め、緑に光るたびに次の笛へ。最後の笛を吹いたら離してください。</div>
+      <div class="muted" id="beatHint" style="max-width:300px">押した瞬間から1秒の準備。その後、緑に光るたびに次の笛へ。最後の笛を吹いたら離してください。</div>
     </div>
-    <button class="ptt" id="pttBtn" disabled>押しながら順に吹く</button>
+    <button class="ptt" id="pttBtn">押しながら順に吹く</button>
     <div class="seq" id="seq"></div>
     <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="sec" id="clearBtn">やり直す</button>
@@ -93,7 +109,21 @@
     </div>
   </div>
 
-  <h2>2. 復号して照合</h2>
+  <h2>2'. 1文字ずつ入力（1本ずつ確定）</h2>
+  <div class="card">
+    <div class="muted">「開始」を押すと1本ぶんの音を受け付けます。いま鳴っている音が下に出ます（新しい音に上書き）。「入力」でその音を1本ぶん確定。全部入れ終えたら「終了して復号」。</div>
+    <div class="cand" id="oneCand">–</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+      <button id="oneStartBtn">開始</button>
+      <button class="ok" id="oneCommitBtn" disabled>入力（この音を確定）</button>
+      <button class="sec" id="oneEndBtn" disabled>終了して復号</button>
+      <button class="sec" id="oneClearBtn">やり直す</button>
+    </div>
+    <div class="seq" id="oneSeq"></div>
+    <span class="status" id="oneStatus"></span>
+  </div>
+
+  <h2>3. 復号して照合</h2>
   <div class="card">
     <label class="muted" for="cipherHash">照合用SHA-256（任意、hex）</label>
     <input class="wide" id="cipherHash" inputmode="text" autocomplete="off" placeholder="64桁のSHA-256 hex（?sha256=… で自動入力）">
@@ -105,11 +135,17 @@
     <div class="muted big" style="margin-top:4px">照合: <b id="verdict">–</b></div>
     <div id="gotoWrap" style="display:none;margin-top:14px">
       <a id="gotoBtn" href="#" rel="noopener" style="display:inline-block;background:var(--ok);color:#fff;text-decoration:none;font-weight:700;border-radius:9px;padding:.8em 1.2em">認証成功 — 秘密のページを開く →</a>
-      <div class="muted" style="margin-top:6px">※ このデモではURLがアドレスに見えるため守秘性はありません。</div>
+      <div class="muted" id="gotoNote" style="margin-top:6px"></div>
     </div>
   </div>
 
   <p class="muted">復号ロジックは <a href="cipher_codec.js">cipher_codec.js</a>（Python版 fue/cipher_codec.py と一致）。設定は <a href="cipher_config.json">cipher_config.json</a>。音程検出は <a href="https://github.com/ianprime0509/pitchy" target="_blank">pitchy</a>。測定・較正ツールは <a href="../">こちら</a>。</p>
+</div>
+
+<div id="successOverlay">
+  <div class="checkring"></div>
+  <h3>認証成功</h3>
+  <div class="sub" id="successSub">秘密のページへ移動します…</div>
 </div>
 
 <script src="cipher_codec.js"></script>
@@ -125,9 +161,11 @@ let cipherConfig = null;
 let cipherFreqs = [];               // 復号に渡す並び（吹いた順・先頭が基準）
 let loFloorHz = 1200;               // これ未満は暗騒音(エアコン等)として無視。設定読込後に音域から決める
 
-// --- GET パラメータ: 照合用SHA-256の自動入力 / 1本あたり時間 / モード・パリティ上書き ---
+// --- GET パラメータ ---
 const cfgOverride = {};
-let gotoUrl = "";   // 認証成功時に開く外部URL（デモ用。GETで見えるので守秘性はない）
+let gotoUrl = "";     // 平文の遷移先（?goto=）。GETで見えるので守秘性はない
+let gotoEnc = "";     // 秘密で暗号化された遷移先（?goto_enc=）。秘密を復元しないと開けない
+let autoNav = true;   // 認証成功で自動遷移（?autonav=0 で無効化しボタン方式に）
 (function initParams(){
   const q = new URLSearchParams(location.search);
   const sha = (q.get("sha256") || q.get("hash") || "").trim();
@@ -138,7 +176,6 @@ let gotoUrl = "";   // 認証成功時に開く外部URL（デモ用。GETで見
   if(mode === "symbols" || mode === "sequential") cfgOverride.mode = mode;
   const parity = q.get("parity");
   if(parity !== null && /^\d+$/.test(parity)) cfgOverride.ecc_parity = parseInt(parity, 10);
-  // 基準笛と音域の上書き（先頭を基準に使う挙動は既定でON。基準音や音域を変えて別コームに対応）
   const noteRe = /^[A-Ga-g][#b]?-?\d+$/;
   const ref = q.get("ref");
   if(ref && noteRe.test(ref)) cfgOverride.reference_note = ref;
@@ -148,12 +185,13 @@ let gotoUrl = "";   // 認証成功時に開く外部URL（デモ用。GETで見
   if(hi && noteRe.test(hi)) cfgOverride.hi_note = hi;
   const step = q.get("step");
   if(step !== null && /^\d+(\.\d+)?$/.test(step)) cfgOverride.step_cents = parseFloat(step);
-  // 基準笛の使用ON/OFF。既定ON(先頭を基準に補正)。?useref=0 で全笛データ＝絶対音程読み
   const useref = q.get("useref");
   if(useref === "0" || useref === "false") cfgOverride.use_reference = false;
-  // 認証成功時に開く外部URL。http(s)のみ許可（javascript:等を弾く）。デモ用で守秘性はない
   const g = q.get("goto");
   if(g && /^https?:\/\//i.test(g)) gotoUrl = g;
+  const ge = q.get("goto_enc");
+  if(ge) gotoEnc = ge.trim();
+  if(q.get("autonav") === "0") autoNav = false;
 })();
 
 fetch("cipher_config.json").then(r=>{
@@ -161,7 +199,6 @@ fetch("cipher_config.json").then(r=>{
   return r.json();
 }).then(cfg=>{
   cipherConfig = Object.assign(cfg, cfgOverride);
-  // 最低音より約2半音下を下限にして、エアコン等の低周波雑音を無視する
   try{ loFloorHz = window.CipherCodec.noteToFreq(cipherConfig.lo_note) * Math.pow(2, -2/12); }catch{}
 }).catch(e=>{ el("decodeStatus").textContent=e.message; });
 
@@ -175,6 +212,7 @@ function freqToNote(f){
 }
 
 async function start(){
+  if(running) return true;
   try{
     const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
     audioCtx = new (window.AudioContext||window.webkitAudioContext)();
@@ -185,25 +223,30 @@ async function start(){
     inputBuf = new Float32Array(detector.inputLength);
     freqData = new Float32Array(analyser.frequencyBinCount);
     running = true;
-    el("startBtn").disabled = true;
-    el("pttBtn").disabled = false;
+    el("startBtn").style.display = "none";
     el("status").textContent = "準備完了。先頭の基準笛から順に吹いてください。";
     loop();
+    return true;
   }catch(e){
-    el("status").textContent = "マイクにアクセスできません: " + e.message;
+    // 自動起動がブラウザに拒否された場合は、操作ボタンで再度促す
+    el("startBtn").style.display = "";
+    el("status").textContent = "マイクを使うには許可が必要です。下のボタン操作でマイクを開始します（初回は許可を押してください）。";
+    return false;
   }
 }
+// ボタン操作の直前に必ずマイクを確保する（ユーザー操作の文脈で許可を取る）
+async function ensureMic(){ return running ? true : await start(); }
 
-// --- push-to-talk 逐次キャプチャ ---
-const cap = {active:false, t0:0, windowIndex:0, fs:[], ps:[], seq:[]};
+// --- push-to-talk 逐次キャプチャ（1秒の準備プリロールつき） ---
+const PREROLL_MS = 1000;
+const cap = {active:false, preroll:false, t0:0, windowIndex:0, fs:[], ps:[], seq:[]};
 
 function windowFund(){
   const median = arr => arr.length ? arr.slice().sort((a,b)=>a-b)[Math.floor(arr.length/2)] : null;
-  if(cap.fs.length>=4) return median(cap.fs);   // pitchy（楽音の基音）を優先
-  if(cap.ps.length>=4) return median(cap.ps);   // 苦手な高音はFFTピークで補完
+  if(cap.fs.length>=4) return median(cap.fs);
+  if(cap.ps.length>=4) return median(cap.ps);
   return null;
 }
-
 function finalizeWindow(){
   const f = windowFund();
   cap.seq.push({freq: f, note: f ? freqToNote(f) : null});
@@ -211,24 +254,22 @@ function finalizeWindow(){
   renderSeq();
   if(navigator.vibrate) navigator.vibrate(25);
 }
-
-function beginCapture(){
-  if(!running){ el("capStatus").textContent="先にマイクを開始してください。"; return; }
-  cap.active=true; cap.t0=performance.now(); cap.windowIndex=0; cap.fs=[]; cap.ps=[]; cap.seq=[];
+async function beginCapture(){
+  if(!await ensureMic()){ el("capStatus").textContent="マイクを開始できませんでした。"; return; }
+  cap.active=true; cap.preroll=true; cap.t0=performance.now(); cap.windowIndex=0; cap.fs=[]; cap.ps=[]; cap.seq=[];
   cipherFreqs=[];
-  el("pttBtn").classList.add("rec"); el("pttBtn").textContent="…吹いてください（離すと復号）";
+  el("pttBtn").classList.add("rec"); el("pttBtn").textContent="…準備中（離すと復号）";
   el("capStatus").textContent=""; el("verdict").textContent="–"; el("decodedPayload").textContent="–";
+  el("beatDot").classList.add("prep"); el("beatDot").textContent="用意";
   renderSeq();
 }
-
 function endCapture(){
   if(!cap.active) return;
   cap.active=false;
-  // 未確定の最後の窓を、ある程度サンプルがあれば確定する
-  if(cap.fs.length>=3 || cap.ps.length>=3) finalizeWindow();
+  if(!cap.preroll && (cap.fs.length>=3 || cap.ps.length>=3)) finalizeWindow();
+  cap.preroll=false;
   el("pttBtn").classList.remove("rec"); el("pttBtn").textContent="押しながら順に吹く";
-  el("beatDot").classList.remove("on"); el("beatDot").textContent="–";
-  // 末尾の無音窓（吹き終わって離すまでの空白）を落とす
+  el("beatDot").classList.remove("on","prep"); el("beatDot").textContent="–";
   while(cap.seq.length && cap.seq[cap.seq.length-1].freq==null) cap.seq.pop();
   renderSeq();
   if(!cap.seq.length){ el("capStatus").textContent="音が取れませんでした。もう一度。"; return; }
@@ -240,7 +281,6 @@ function endCapture(){
   el("capStatus").textContent = cap.seq.length + "本を記録しました。復号します。";
   doDecode();
 }
-
 function renderSeq(){
   const box = el("seq"); box.innerHTML="";
   cap.seq.forEach((s,i)=>{
@@ -253,10 +293,54 @@ function renderSeq(){
   });
 }
 
+// --- 1文字ずつモード ---
+const one = {active:false, cand:null, seq:[]};
+function renderOneSeq(){
+  const box = el("oneSeq"); box.innerHTML="";
+  one.seq.forEach((s,i)=>{
+    const div=document.createElement("div");
+    div.className="chip"+(i===0?" ref":"");
+    div.innerHTML=`<div class="idx">${i+1}${i===0?" 基準":""}</div>`+
+      `<div class="nm">${s.note?s.note.name:"—"}</div>`+
+      `<div class="fz">${s.freq?Math.round(s.freq)+"Hz":""}</div>`;
+    box.appendChild(div);
+  });
+}
+async function oneStart(){
+  if(!await ensureMic()){ el("oneStatus").textContent="マイクを開始できませんでした。"; return; }
+  one.active=true; one.cand=null;
+  el("oneCommitBtn").disabled=false; el("oneEndBtn").disabled=one.seq.length===0;
+  el("oneStatus").textContent="いま鳴っている音を受け付けています。良い音になったら「入力」。";
+  el("oneCand").textContent="…";
+}
+function oneCommit(){
+  if(!one.cand){ el("oneStatus").textContent="まだ音が取れていません。"; return; }
+  one.seq.push(one.cand); one.cand=null;
+  renderOneSeq();
+  el("oneEndBtn").disabled=false;
+  el("oneStatus").textContent=one.seq.length+"本目まで確定。続けて次の音を吹いて「入力」、終わりなら「終了して復号」。";
+  el("oneCand").textContent="…";
+  if(navigator.vibrate) navigator.vibrate(25);
+}
+function oneEnd(){
+  one.active=false;
+  el("oneCommitBtn").disabled=true; el("oneEndBtn").disabled=true;
+  el("oneCand").textContent="–";
+  if(!one.seq.length){ el("oneStatus").textContent="1本も入っていません。"; return; }
+  cipherFreqs = one.seq.map(s=>s.freq);
+  el("oneStatus").textContent=one.seq.length+"本で復号します。";
+  doDecode();
+}
+function oneClear(){
+  one.active=false; one.cand=null; one.seq=[];
+  el("oneCommitBtn").disabled=true; el("oneEndBtn").disabled=true;
+  el("oneCand").textContent="–"; el("oneStatus").textContent=""; renderOneSeq();
+}
+
 function loop(){
   analyser.getFloatTimeDomainData(inputBuf);
   const [pitch, clarity] = detector.findPitch(inputBuf, audioCtx.sampleRate);
-  live.freq = (clarity>0.9 && pitch>=loFloorHz) ? pitch : 0;   // 下限未満(雑音)は捨てる
+  live.freq = (clarity>0.9 && pitch>=loFloorHz) ? pitch : 0;
   live.clarity = clarity;
   const info = live.freq ? freqToNote(live.freq) : null;
   el("hz").textContent = live.freq ? live.freq.toFixed(1) : "–";
@@ -264,71 +348,125 @@ function loop(){
   el("cents").textContent = info ? (info.cents>=0?"+":"")+info.cents+" c" : "";
   el("clarBar").style.width = Math.round(clarity*100)+"%";
 
-  // FFTの最強ピーク（pitchyが苦手な高音の補完に使う）
   analyser.getFloatFrequencyData(freqData);
   const binHz = audioCtx.sampleRate / analyser.fftSize;
-  const minBin = Math.floor(loFloorHz / binHz);   // 下限未満の暗騒音(エアコン等)を無視
+  const minBin = Math.floor(loFloorHz / binHz);
   let pk=-Infinity, pki=-1;
   for(let i=minBin;i<freqData.length;i++){ if(freqData[i]>pk){ pk=freqData[i]; pki=i; } }
   live.peak = (pk > -75 && pki>0) ? pki*binHz : 0;
 
-  // push-to-talk 中: 窓ごとに基音を確定
+  // 1文字モード: 最新の安定音を候補として上書き
+  if(one.active){
+    const f = live.freq || live.peak;
+    if(f){ one.cand = {freq:f, note:freqToNote(f)}; el("oneCand").textContent = one.cand.note.name; }
+  }
+
+  // push-to-talk 中
   if(cap.active){
-    const spfMs = parseFloat(el("spf").value)*1000;
     const t = performance.now() - cap.t0;
-    const idx = Math.floor(t / spfMs);
-    while(cap.windowIndex < idx){ finalizeWindow(); cap.windowIndex++; }
-    const frac = t/spfMs - idx;                 // 窓内の位置 0..1
-    if(frac>0.25 && frac<0.85){                 // 立ち上がり/切替を避け中央だけ拾う
-      if(live.freq && live.clarity>0.9) cap.fs.push(live.freq);
-      if(live.peak) cap.ps.push(live.peak);
+    if(cap.preroll){
+      // 1秒の準備。カウントダウンを表示し、まだ測定しない
+      const left = Math.ceil((PREROLL_MS - t)/1000);
+      el("beatDot").textContent = left>0 ? String(left) : "用意";
+      if(t >= PREROLL_MS){ cap.preroll=false; cap.t0=performance.now();
+        el("beatDot").classList.remove("prep"); el("pttBtn").textContent="…吹いてください（離すと復号）"; }
+    } else {
+      const spfMs = parseFloat(el("spf").value)*1000;
+      const t2 = performance.now() - cap.t0;
+      const idx = Math.floor(t2 / spfMs);
+      while(cap.windowIndex < idx){ finalizeWindow(); cap.windowIndex++; }
+      const frac = t2/spfMs - idx;
+      if(frac>0.25 && frac<0.85){
+        if(live.freq && live.clarity>0.9) cap.fs.push(live.freq);
+        if(live.peak) cap.ps.push(live.peak);
+      }
+      el("beatDot").classList.toggle("on", frac<0.18);
+      el("beatDot").textContent = idx+1;
     }
-    const on = frac<0.18;                        // 拍の頭を光らせる
-    el("beatDot").classList.toggle("on", on);
-    el("beatDot").textContent = idx+1;
   }
   raf = requestAnimationFrame(loop);
 }
 
+// --- base64url ---
+function b64urlToBytes(s){
+  s = s.replace(/-/g,"+").replace(/_/g,"/"); while(s.length%4) s+="=";
+  const bin = atob(s); const out = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
+  return out;
+}
+// 秘密(canonical)を鍵に、?goto_enc を AES-GCM 復号して URL を得る（失敗=秘密が違う）
+async function decryptGoto(canonical){
+  try{
+    const keyRaw = await crypto.subtle.digest("SHA-256", canonical);
+    const key = await crypto.subtle.importKey("raw", keyRaw, "AES-GCM", false, ["decrypt"]);
+    const blob = b64urlToBytes(gotoEnc);
+    const iv = blob.slice(0,12), ct = blob.slice(12);
+    const pt = await crypto.subtle.decrypt({name:"AES-GCM", iv}, key, ct);
+    const url = new TextDecoder().decode(pt);
+    return /^https?:\/\//i.test(url) ? url : "";
+  }catch{ return ""; }
+}
+function showSuccess(url){
+  el("gotoBtn").href = url; el("gotoWrap").style.display = "";
+  if(autoNav){
+    el("gotoNote").textContent = "数秒後に自動で移動します。";
+    el("successSub").textContent = "秘密のページへ移動します…";
+    el("successOverlay").classList.add("show");
+    setTimeout(()=>{ location.href = url; }, 3000);
+  }else{
+    el("gotoNote").textContent = "ボタンを押すと移動します。";
+  }
+}
+
 async function doDecode(){
   const status = el("decodeStatus");
-  el("verdict").textContent="–";
+  el("verdict").textContent="–"; el("gotoWrap").style.display="none";
   if(!cipherConfig){ status.textContent="復号設定を読み込み中です"; return; }
-  if(!cipherFreqs.length){ status.textContent="先に「押しながら順に吹く」で測ってください"; return; }
-  // 吹いた順そのまま・先頭が基準笛（positionsKnown=true）
+  if(!cipherFreqs.length){ status.textContent="先に測ってください"; return; }
   const result = window.CipherCodec.decode(cipherFreqs, cipherConfig, true);
   el("decodedPayload").textContent = result.payloadHex || (result.symbols&&result.symbols.length? result.symbols.join(",") : "（空）");
   if(result.status.startsWith("error:")){ status.textContent=result.status; return; }
   status.textContent = result.status + `（訂正 ${result.correctedCount}、消失 ${result.erasureCount}）`;
+  const canonical = (cipherConfig.mode === "symbols")
+      ? Uint8Array.from(result.symbols||[]) : result.payload;
+
+  // (A) ?goto_enc: 秘密で暗号化された遷移先。復号できれば「認証成功」＝自動遷移
+  if(gotoEnc){
+    const url = await decryptGoto(canonical);
+    if(url){ el("verdict").innerHTML='<span class="okmark">認証成功（秘密で遷移先を復号）</span>'; showSuccess(url); }
+    else   { el("verdict").innerHTML='<span class="ngmark">遷移先を復号できません（秘密が違います）</span>'; }
+    return;
+  }
+
+  // (B) 従来: ?sha256 で照合 → ?goto=平文URL へ
   const expected = el("cipherHash").value.trim().toLowerCase();
   if(!expected){ el("verdict").innerHTML='<span class="muted">照合用SHA-256は未入力</span>'; return; }
   if(!/^[0-9a-f]{64}$/.test(expected)){ el("verdict").innerHTML='<span class="ngmark">SHA-256は64桁hexで入力してください</span>'; return; }
-  // 記号列モードは symbols を、バイト列モードは payload をハッシュ対象にする（Python版と一致）
-  const canonical = (cipherConfig.mode === "symbols")
-      ? Uint8Array.from(result.symbols||[]) : result.payload;
   const digest = await crypto.subtle.digest("SHA-256", canonical);
   const actual = Array.from(new Uint8Array(digest), x=>x.toString(16).padStart(2,"0")).join("");
   const ok = actual===expected;
   el("verdict").innerHTML = ok
       ? '<span class="okmark">SHA-256 OK（一致）</span>'
       : '<span class="ngmark">SHA-256 NG（不一致）</span>';
-  // 認証成功かつ ?goto=URL 指定時は、そのURLへ移動するボタンを表示する（デモ用）
-  if(ok && gotoUrl){
-    el("gotoBtn").href = gotoUrl;
-    el("gotoWrap").style.display = "";
-  } else {
-    el("gotoWrap").style.display = "none";
-  }
+  if(ok && gotoUrl){ showSuccess(gotoUrl); }
 }
 
+// --- イベント ---
 const ptt = el("pttBtn");
 ptt.addEventListener("pointerdown", e=>{ e.preventDefault(); try{ ptt.setPointerCapture(e.pointerId); }catch{} beginCapture(); });
 ptt.addEventListener("pointerup",   e=>{ e.preventDefault(); endCapture(); });
 ptt.addEventListener("pointercancel", ()=> endCapture());
 el("clearBtn").onclick = ()=>{ cap.seq=[]; cipherFreqs=[]; renderSeq(); el("capStatus").textContent=""; el("decodedPayload").textContent="–"; el("verdict").textContent="–"; el("decodeStatus").textContent=""; el("gotoWrap").style.display="none"; };
+el("oneStartBtn").onclick = oneStart;
+el("oneCommitBtn").onclick = oneCommit;
+el("oneEndBtn").onclick = oneEnd;
+el("oneClearBtn").onclick = oneClear;
 el("decodeBtn").onclick = doDecode;
 el("startBtn").onclick = start;
-renderSeq();
+renderSeq(); renderOneSeq();
+
+// (4) ページを開いたら自動でマイク開始を試みる（ブラウザが拒否したらボタン操作で開始）
+start();
 </script>
 </body>
 </html>

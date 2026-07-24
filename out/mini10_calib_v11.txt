@@ -1,0 +1,3 @@
+A=85695.9151
+e=-12.5701
+# C/Am both cards 2026-07-23, 8-length avg, RMS=17.8 cent

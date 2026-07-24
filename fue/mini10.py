@@ -150,8 +150,21 @@ def build_uniform_calib_comb(notes, correction_mm=0.0, gap=0.0, merge=True, over
     return comb, infos
 
 
+def reference_tab(mesh, length=4.0, out=2.5, height=1.5):
+    """基準笛だと分かる印を付ける。吸込口(x=0)の脇(-y側)に小さなタブ(突起)を union する。
+    ボア・窓・吸込口を侵さない外形外の位置なので発音に影響しない。どの向きに配置しても
+    吸込口の脇に付いて回るので、外見統一版でも基準笛だけ触って・見て分かる。native向き前提。"""
+    b = mesh.bounds
+    tab = trimesh.creation.box(extents=[length, out, height])
+    tab.apply_translation([length / 2.0, b[0][1] - out / 2.0, height / 2.0])
+    return trimesh.boolean.union([mesh, tab], engine="manifold")
+
+
 # 素数13スロットの較正コーム: F#6..F#7（安定帯 F#6〜G#7 の下側13音・GF(13)で1記号=1本）。
 CALIB13 = ["F#6", "G6", "G#6", "A6", "A#6", "B6", "C7", "C#7", "D7", "D#7", "E7", "F7", "F#7"]
+# 素数11スロットの体系: G#6..F#7（13音から低音2音 F#6,G6 を除く）。低音ほど管が長く造形誤差が
+# 出やすく詰まりやすいので、それを避けた安定志向の体系。11も素数なので GF(11) でそのままRSが動く。
+CALIB11 = CALIB13[2:]
 
 
 if __name__ == "__main__":

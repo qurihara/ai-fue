@@ -68,6 +68,53 @@ def half_flute(L, base=None):
     return m
 
 
+# 内部壁式(uniform_body_flute)の較正定数。
+# 壁の奥の密閉空洞がコンプライアント(たわむ)終端になり音が系統的に下がる。
+# 2026-07-23 実測(j014較正コーム・各笛8回の中央値)で、空洞長 cav[mm] に対する
+# 下がり量[cent] が offset(cav)=WALL_FLAT_MAX*(1-exp(-cav/WALL_FLAT_TAU)) でよく合った
+# (F#6=-39,G6=-44,中間〜D#7=-55〜-66・短い音=空洞大ほど深い)。この分だけ壁を頭側へ
+# 寄せて管長を短くし、下がりを先取り補償する。次の刷り直しで残差を再確認して更新する。
+WALL_FLAT_MAX = 60.0     # 空洞が十分大きいときの下がりのプラトー[cent]
+WALL_FLAT_TAU = 4.0      # 空洞長に対する立ち上がりの時定数[mm]
+_CENTS_PER_LN = 1200.0 / np.log(2.0)   # ≈1731。df/f=-dL/(L+e) の変換係数
+
+
+def _wall_flat_correction(L, L_max):
+    """内部壁の音下がりを先取り補償するための管長短縮量 Δ[mm]。
+    空洞長 cav=L_max-L から下がり量[cent]を出し、Δ=offset*(L+e)/1731 を返す。"""
+    cav = max(0.0, L_max - L)
+    offset_cents = WALL_FLAT_MAX * (1.0 - np.exp(-cav / WALL_FLAT_TAU))
+    return offset_cents * (L + _E) / _CENTS_PER_LN
+
+
+def uniform_body_flute(L, L_max=None, wall_thickness=1.3):
+    """外形を最長管 L_max に揃え、内部の仕切り壁で音の管長を決めた半割り笛。
+
+    壁より末端側のボアは埋めず、密閉された空洞のまま残す(重さをほぼ一定に保つ)。
+    壁は _wall_flat_correction の分だけ頭側へ寄せて置き、空洞のたわみで下がる音を
+    先取り補償する(較正後は狙いの音 est_freq(L) に鳴る想定)。戻り値の向きは
+    half_flute と同じ native 向き。L_max を省略した場合と L >= L_max では壁を入れない。
+    """
+    if L_max is None or L >= L_max:
+        return half_flute(L)
+
+    shell = half_flute(L_max)
+    bounds = shell.bounds
+    wall_x = (L - _wall_flat_correction(L, L_max)) - 4.0
+    extents = [wall_thickness,
+               bounds[1][1] - bounds[0][1] + 1.0,
+               bounds[1][2] - bounds[0][2] + 1.0]
+    center = [wall_x + wall_thickness / 2.0,
+              (bounds[0][1] + bounds[1][1]) / 2.0,
+              (bounds[0][2] + bounds[1][2]) / 2.0]
+    wall_box = trimesh.creation.box(extents=extents,
+                                     transform=trimesh.transformations.translation_matrix(center))
+
+    # 余裕を持たせた直方体の外側は外形に出さず、ボアを含む外形断面だけを壁にする。
+    wall = trimesh.boolean.intersection([wall_box, shell.convex_hull], engine="manifold")
+    return trimesh.boolean.union([shell, wall], engine="manifold")
+
+
 def _printpose(m):
     """印刷姿勢: 平坦面(窓, y最小)を下・丸い背(y最大)を上にした平置き＝サポートフリー。
     実績単体印刷と同じく厚み4mmを垂直(z)にする。x軸まわり+90°で y→z。"""

@@ -99,17 +99,21 @@ def triads_of(chain):
     return out
 
 
-def build_card(root, label, credit=True, boss=False, brim=False, emboss=False, brand=None):
+def build_card(root, label, credit=True, boss=False, brim=False, emboss=False, brand=None,
+               notch=True):
     """1調のコード笛カードを生成。boss=補強ボス版／brim=造形ブリム版／
-    emboss=刻印を浮き彫りに(触覚)／brand=調性名の下に入れるブランド刻印(例 Chordica)。"""
+    emboss=刻印を浮き彫りに(触覚)／brand=調性名の下に入れるブランド刻印(例 Chordica)／
+    notch=足側の辺に調性を触覚で示す切り欠きを入れる（既定オン。半音番号 C=0..B=11 で位置決め）。"""
     chain = deck_chain(root)
     cx, cy = (namecard.CREDIT_X, namecard.CREDIT_Y) if credit else (namecard.CARD_X, namecard.CARD_Y)
     r = namecard.CREDIT_CORNER_R if credit else namecard.CORNER_R
+    pc = NAMES.index(root)                                   # 調の半音番号（C=0, C#=1, …, B=11）
     m, info = namecard.build(notes=chain, card=(cx, cy, namecard.CARD_Z),
                              corner_r=r, corner_style="round", label=label,
                              band_x0=FIXED_BAND_X0, star_note=tonic_note(root),
                              strap=True, strap_d=6.0, strap_boss=boss, boss_d=9.0,
-                             brim=brim, emboss=emboss, brand=brand)
+                             brim=brim, emboss=emboss, brand=brand,
+                             notch=notch, notch_index=pc, notch_n=12)
     return m, info, chain, triads_of(chain)
 
 
