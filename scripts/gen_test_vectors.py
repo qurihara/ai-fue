@@ -27,7 +27,7 @@ CASES = [
 
 
 def main() -> int:
-    config_path = ROOT / "docs" / "cipher_config.json"
+    config_path = ROOT / "docs" / "cipher" / "cipher_config.json"
     with config_path.open(encoding="utf-8") as src:
         base = json.load(src)
     vectors = []
@@ -57,7 +57,7 @@ def main() -> int:
             vector["expected_payload_hex"] = case["payload_hex"]
         vectors.append(vector)
     output = {"config": "cipher_config.json", "vectors": vectors}
-    with (ROOT / "docs" / "cipher_test_vectors.json").open("w", encoding="utf-8") as dst:
+    with (ROOT / "docs" / "cipher" / "cipher_test_vectors.json").open("w", encoding="utf-8") as dst:
         json.dump(output, dst, ensure_ascii=False, indent=2)
         dst.write("\n")
     print(f"generated {len(vectors)} vectors")

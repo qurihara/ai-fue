@@ -109,6 +109,25 @@
     </div>
   </div>
 
+  <h2>2. 続けて吹く（無音で自動送り）</h2>
+  <div class="card">
+    <div class="muted">「開始」を押したら、笛を順に吹いていきます。1本吹くたびに一瞬（0.2秒ほど）息を切って無音をつくると、そこが区切りとして検出され、次の桁へ自動で進みます。拍に合わせる必要も、ボタンを押す必要もありません。吹き終えて1.5秒ほど無音が続くと、そのまま復号します。</div>
+    <div class="beatwrap">
+      <div class="beatdot" id="autoDot">–</div>
+      <div style="flex:1;max-width:320px">
+        <div class="clar"><i id="autoLevel" style="width:0%"></i></div>
+        <div class="muted" id="autoHint" style="margin-top:6px">開始すると、まず部屋の静けさを0.4秒ほど測り、そこを基準に区切りを判定します。</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button id="autoStartBtn">開始</button>
+      <button class="sec" id="autoEndBtn" disabled>終了して復号</button>
+      <button class="sec" id="autoClearBtn">やり直す</button>
+    </div>
+    <div class="seq" id="autoSeq"></div>
+    <span class="status" id="autoStatus"></span>
+  </div>
+
   <h2>2'. 1文字ずつ入力（1本ずつ確定）</h2>
   <div class="card">
     <div class="muted">「開始」を押すと1本ぶんの音を受け付けます。いま鳴っている音が下に出ます（新しい音に上書き）。「入力」でその音を1本ぶん確定。全部入れ終えたら「終了して復号」。</div>
@@ -149,6 +168,7 @@
 </div>
 
 <script src="cipher_codec.js"></script>
+<script src="silence_segmenter.js"></script>
 <script type="module">
 import { PitchDetector } from "https://esm.sh/pitchy@4";
 
@@ -166,8 +186,17 @@ const cfgOverride = {};
 let gotoUrl = "";     // 平文の遷移先（?goto=）。GETで見えるので守秘性はない
 let gotoEnc = "";     // 秘密で暗号化された遷移先（?goto_enc=）。秘密を復元しないと開けない
 let autoNav = true;   // 認証成功で自動遷移（?autonav=0 で無効化しボタン方式に）
+const segOptions = {};  // 無音区切りの調整（?gap= ?endms= ?onmargin=）
 (function initParams(){
   const q = new URLSearchParams(location.search);
+  const num = (name, key) => {
+    const v = q.get(name);
+    if(v !== null && /^\d+(\.\d+)?$/.test(v)) segOptions[key] = parseFloat(v);
+  };
+  num("gap", "gapMs");            // 区切りとみなす無音の長さ[ms]
+  num("endms", "endMs");          // 入力の終わりとみなす無音の長さ[ms]
+  num("onmargin", "onMarginDb");  // 暗騒音から何dB上を「鳴っている」とするか
+  num("minnote", "minNoteMs");    // これより短い音は雑音として捨てる[ms]
   const sha = (q.get("sha256") || q.get("hash") || "").trim();
   if(sha) el("cipherHash").value = sha;
   const spf = q.get("spf");
@@ -293,6 +322,55 @@ function renderSeq(){
   });
 }
 
+// --- 無音区切りで自動送りするモード ---
+// 笛と笛の間に短い無音を置くだけで次の桁へ進む。拍にもボタン操作にも縛られない。
+const auto = {active:false, seg:null, seq:[], t0:0};
+
+function renderAutoSeq(){
+  const box = el("autoSeq"); box.innerHTML="";
+  auto.seq.forEach((s,i)=>{
+    const div=document.createElement("div");
+    div.className="chip"+(i===0?" ref":"");
+    div.innerHTML=`<div class="idx">${i+1}${i===0?" 基準":""}</div>`+
+      `<div class="nm">${s.note?s.note.name:"—"}</div>`+
+      `<div class="fz">${Math.round(s.freq)}Hz</div>`;
+    box.appendChild(div);
+  });
+}
+async function autoStart(){
+  if(!await ensureMic()){ el("autoStatus").textContent="マイクを開始できませんでした。"; return; }
+  if(cap.active || one.active){ el("autoStatus").textContent="ほかの入力方式が動いています。先にそちらを終えてください。"; return; }
+  auto.seg = window.SilenceSegmenter.create(segOptions);
+  auto.active=true; auto.seq=[]; auto.t0=performance.now();
+  cipherFreqs=[];
+  el("autoStartBtn").disabled=true; el("autoEndBtn").disabled=true;
+  el("autoStatus").textContent=""; el("verdict").textContent="–"; el("decodedPayload").textContent="–";
+  el("autoDot").classList.add("prep"); el("autoDot").textContent="測定";
+  el("autoHint").textContent="部屋の静けさを測っています。少しだけ静かにしてください。";
+  renderAutoSeq();
+}
+function autoStop(){
+  auto.active=false;
+  el("autoStartBtn").disabled=false;
+  el("autoDot").classList.remove("on","prep"); el("autoDot").textContent="–";
+  el("autoLevel").style.width="0%";
+}
+function autoEnd(){
+  if(!auto.seq.length){ autoStop(); el("autoStatus").textContent="1本も入っていません。"; return; }
+  autoStop();
+  el("autoEndBtn").disabled=true;
+  cipherFreqs = auto.seq.map(s=>s.freq);
+  el("autoStatus").textContent = auto.seq.length+"本を記録しました。復号します。";
+  doDecode();
+}
+function autoClear(){
+  autoStop();
+  auto.seq=[]; auto.seg=null;
+  el("autoEndBtn").disabled=true; el("autoStatus").textContent="";
+  el("autoHint").textContent="開始すると、まず部屋の静けさを0.4秒ほど測り、そこを基準に区切りを判定します。";
+  renderAutoSeq();
+}
+
 // --- 1文字ずつモード ---
 const one = {active:false, cand:null, seq:[]};
 function renderOneSeq(){
@@ -354,11 +432,52 @@ function loop(){
   let pk=-Infinity, pki=-1;
   for(let i=minBin;i<freqData.length;i++){ if(freqData[i]>pk){ pk=freqData[i]; pki=i; } }
   live.peak = (pk > -75 && pki>0) ? pki*binHz : 0;
+  // 笛の音域だけの帯域レベル。低い周波数を見ないので話し声や空調に反応しにくい。
+  live.bandDb = (pki>0 && isFinite(pk)) ? pk : -120;
 
   // 1文字モード: 最新の安定音を候補として上書き
   if(one.active){
     const f = live.freq || live.peak;
     if(f){ one.cand = {freq:f, note:freqToNote(f)}; el("oneCand").textContent = one.cand.note.name; }
+  }
+
+  // 無音区切りの自動送り中
+  if(auto.active){
+    const t = performance.now() - auto.t0;
+    const f = live.freq || live.peak;
+    const ev = auto.seg.feed(t, live.bandDb, f);
+    // レベル表示（-100dBで0%、-30dBで100%）
+    el("autoLevel").style.width = Math.max(0, Math.min(100, (live.bandDb + 100) / 0.7)) + "%";
+    if(ev.type === "calibrating"){
+      el("autoDot").textContent = "測定";
+    } else if(ev.type === "onset"){
+      el("autoDot").classList.remove("prep"); el("autoDot").classList.add("on");
+      el("autoDot").textContent = String(auto.seq.length + 1);
+    } else if(ev.type === "sounding"){
+      el("autoDot").classList.add("on");
+    } else if(ev.type === "note"){
+      el("autoDot").classList.remove("on");
+      auto.seq.push({freq: ev.freq, note: freqToNote(ev.freq)});
+      renderAutoSeq();
+      el("autoEndBtn").disabled = false;
+      el("autoDot").textContent = String(auto.seq.length);
+      el("autoHint").textContent = auto.seq.length + "本目まで確定しました。続けて次の笛を吹いてください。";
+      if(navigator.vibrate) navigator.vibrate(25);
+    } else if(ev.type === "reject"){
+      el("autoDot").classList.remove("on");
+      el("autoHint").textContent = "短すぎる音は雑音として捨てました。もう少し長めに吹いてください。";
+    } else if(ev.type === "end"){
+      el("autoStatus").textContent = "無音が続いたので入力を終わります。";
+      autoEnd();
+    } else if(ev.type === "idle"){
+      el("autoDot").classList.remove("prep","on");
+      if(auto.seq.length === 0){
+        el("autoDot").textContent = "待機";
+        const th = auto.seg.thresholds();
+        el("autoHint").textContent = "準備できました。1本目を吹いてください（区切りの基準は "
+          + Math.round(th.onDb) + " dB）。";
+      }
+    }
   }
 
   // push-to-talk 中
@@ -457,6 +576,9 @@ ptt.addEventListener("pointerdown", e=>{ e.preventDefault(); try{ ptt.setPointer
 ptt.addEventListener("pointerup",   e=>{ e.preventDefault(); endCapture(); });
 ptt.addEventListener("pointercancel", ()=> endCapture());
 el("clearBtn").onclick = ()=>{ cap.seq=[]; cipherFreqs=[]; renderSeq(); el("capStatus").textContent=""; el("decodedPayload").textContent="–"; el("verdict").textContent="–"; el("decodeStatus").textContent=""; el("gotoWrap").style.display="none"; };
+el("autoStartBtn").onclick = autoStart;
+el("autoEndBtn").onclick = autoEnd;
+el("autoClearBtn").onclick = autoClear;
 el("oneStartBtn").onclick = oneStart;
 el("oneCommitBtn").onclick = oneCommit;
 el("oneEndBtn").onclick = oneEnd;
