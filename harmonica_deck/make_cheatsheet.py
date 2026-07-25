@@ -5,13 +5,29 @@
 C/Am を具体例に使う（他調は動きが同一で鳴る音だけ移調）。
 """
 import os
+import sys
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib import font_manager as fm
 from matplotlib.patches import FancyBboxPatch, Rectangle
 
-HERE = os.path.dirname(__file__)
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import make_chordika_mini10 as CK   # 音域と管長は生成器から取り、カードと必ず一致させる
+
+
+def window_text(lang):
+    """カードの音域（窓）と管長域の一文。生成器の LOW_MIDI・較正から作る。"""
+    CK.calib_from_file()
+    lo, hi = CK.LOW_MIDI, CK.LOW_MIDI + 11
+    name = lambda m: "%s%d" % (CK.NAMES[m % 12], m // 12 - 1)
+    # 波ダッシュ（〜）は Hiragino Sans GB に無いので en dash を使う
+    if lang == "ja":
+        return "音域 %s–%s（管長は約%.0fmmから%.0fmm）。全12枚が同じ音域に収まる。" % (
+            name(lo), name(hi), CK._len_of(hi), CK._len_of(lo))
+    return "Range %s–%s (pipe length approx. %.0f–%.0f mm). All 12 cards share this range." % (
+        name(lo), name(hi), CK._len_of(hi), CK._len_of(lo))
 
 # 日本語対応フォント（macOS）。英語版でも同じで問題なく出る。
 JP_FONT = "/System/Library/Fonts/Hiragino Sans GB.ttc"
@@ -103,7 +119,8 @@ def render(lang, out_path):
 
     # タイトル
     text(50, 134, t["title"], 20, bold=True, ha="center")
-    text(50, 129, t["sub"], 12, ha="center", color="#555")
+    text(50, 130.4, t["sub"], 12, ha="center", color="#555")
+    text(50, 127.4, window_text(lang), 10.5, ha="center", color="#777")
 
     # --- 6和音の並び（横帯） ---
     y0 = 116; bw = 13.5; gap = 1.4; x_start = 8.5
