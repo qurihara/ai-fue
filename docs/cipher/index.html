@@ -32,6 +32,11 @@
   input.wide{width:100%;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.55em;font-family:ui-monospace,Menlo,monospace}
   select{font:inherit;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.4em}
   a{color:var(--accent)}
+  .notice{background:#2a2033;border:1px solid var(--warn);border-left-width:5px;border-radius:10px;
+          padding:14px 16px;margin:14px 0;font-size:.92rem;line-height:1.75}
+  .notice b{color:var(--warn)}
+  .notice ul{margin:.5em 0 0;padding-left:1.3em}
+  .notice li{margin:.25em 0}
 
   /* push-to-talk */
   .ptt{width:100%;padding:1.4em 1em;font-size:1.2rem;font-weight:700;background:var(--accent);
@@ -73,6 +78,18 @@
 <div class="wrap">
   <h1>CipherFlute 復号</h1>
   <p class="lead">3Dプリントした笛の並び（コーム）を、先頭の基準笛から順に1本ずつ吹くと、検出した音から秘密を復号します。マイクだけで動きます。</p>
+
+  <div class="notice">
+    <b>このページはCipherFluteのデモンストレーション用です。本物の秘密情報には使わないでください。</b>
+    仕組みを実際に試して見ていただくことを目的に作ってあり、秘密情報の扱いには次のような弱点が残っています。
+    <ul>
+      <li>照合用の値や遷移先といった設定を、URLに載せて渡しています。そのため<b>URLを手に入れた人は、笛を持っていなくても、手元で秘密の候補を片端から試せます</b>。暗証番号のような小さい秘密であれば、これだけで破られます。</li>
+      <li>復号した秘密は画面に表示されます。周りから見えますし、画面の記録にも残ります。</li>
+      <li>吹いた音は聞こえるので、その場にいる人や録音した人には秘密が伝わります。</li>
+    </ul>
+    実際に秘密を守る用途では、これらの情報をURLに載せず別の適切な手段で受け渡し、復号も管理された場で行う必要があります。
+    なお、笛という物体そのものに秘密を守る力はありません。保管場所を知られた場合は、吹かなくても計測や透過撮影で読み取れます。
+  </div>
 
   <div class="card">
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
