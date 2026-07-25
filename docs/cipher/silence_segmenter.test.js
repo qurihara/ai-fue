@@ -109,12 +109,21 @@ const gap = (ms) => ({ms: ms || 300, db: -95});
   console.log("  7) 26本の通し: 本数", r.notes.length, " 所要", totalSec, "秒");
 }
 
-// 8) 無音のまま何も吹かなければ、何も確定しない
+// 8) 復号ページは endMs を無効化して使う（終わりは利用者がボタンで決める）
+{
+  const r = run([QUIET, note(1046), gap(), note(1318), gap(10000)],
+                {endMs: Number.MAX_SAFE_INTEGER});
+  assert.strictEqual(r.notes.length, 2, "2本は切り分かれる");
+  assert.strictEqual(r.ended, false, "10秒放置しても自動終了しない");
+  console.log("  8) 終了判定を無効化: 本数", r.notes.length, " 自動終了", r.ended);
+}
+
+// 9) 無音のまま何も吹かなければ、何も確定しない
 {
   const r = run([QUIET, gap(3000)]);
   assert.strictEqual(r.notes.length, 0);
   assert.strictEqual(r.ended, false, "1本も無いなら終わり判定も出ない");
-  console.log("  8) 無音のみ: 本数", r.notes.length, " 終了検出", r.ended);
+  console.log("  9) 無音のみ: 本数", r.notes.length, " 終了検出", r.ended);
 }
 
-console.log("silence_segmenter: 全8件パス");
+console.log("silence_segmenter: 全9件パス");

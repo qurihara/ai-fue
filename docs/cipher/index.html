@@ -111,8 +111,8 @@
 
   <h2>2. 続けて吹く（無音で自動送り）</h2>
   <div class="card">
-    <div class="muted">「開始」を押したら、笛を順に吹いていきます。1本吹くたびに一瞬（0.2秒ほど）息を切って無音をつくると、そこが区切りとして検出され、次の桁へ自動で進みます。拍に合わせる必要も、ボタンを押す必要もありません。<br>
-      入力の終わりは、次のどれかで決まります。<b>本数を下の欄に入れてあればその本数に達したとき</b>、<b>照合用のSHA-256（または <code>?goto_enc</code>）があれば照合が成立したとき</b>、どちらも無ければ<b>2.5秒の無音が続いたとき</b>です。最後の場合は残り時間を表示するので、続けたければ次を吹いてください。「終了して復号」でいつでも終えられます。</div>
+    <div class="muted">「開始」を押したら、笛を順に吹いていきます。1本吹くたびに一瞬（0.2秒ほど）息を切って無音をつくると、そこが区切りとして検出され、次の桁へ自動で進みます。拍に合わせる必要はありません。<br>
+      吹き終えたら<b>もう一度ボタンを押して「終了し復号」</b>します。終わりを決めるのは利用者であり、システムは秘密が何本あるかを知りません。途中で間が空いても勝手に確定しないので、急かされずに吹けます。余計な音が1本入ってしまったときは「1本取り消す」で戻せます。</div>
     <div class="beatwrap">
       <div class="beatdot" id="autoDot">–</div>
       <div style="flex:1;max-width:320px">
@@ -120,15 +120,9 @@
         <div class="muted" id="autoHint" style="margin-top:6px">開始すると、まず部屋の静けさを0.4秒ほど測り、そこを基準に区切りを判定します。</div>
       </div>
     </div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-      <label class="muted" for="autoN">吹く本数（基準笛を含む。分かっていれば）：</label>
-      <input id="autoN" type="number" min="0" step="1" inputmode="numeric" placeholder="未指定"
-             style="width:6em;padding:.5em;border-radius:8px;border:1px solid #2b335c;background:#0f1430;color:inherit">
-      <span class="muted">ここに入れておくと、その本数で確定します。URLに書かずに済みます。</span>
-    </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button id="autoStartBtn">開始</button>
-      <button class="sec" id="autoEndBtn" disabled>終了して復号</button>
+      <button class="sec" id="autoUndoBtn" disabled>1本取り消す</button>
       <button class="sec" id="autoClearBtn">やり直す</button>
     </div>
     <div class="seq" id="autoSeq"></div>
@@ -193,8 +187,7 @@ const cfgOverride = {};
 let gotoUrl = "";     // 平文の遷移先（?goto=）。GETで見えるので守秘性はない
 let gotoEnc = "";     // 秘密で暗号化された遷移先（?goto_enc=）。秘密を復元しないと開けない
 let autoNav = true;   // 認証成功で自動遷移（?autonav=0 で無効化しボタン方式に）
-const segOptions = {};  // 無音区切りの調整（?gap= ?endms= ?onmargin=）
-let expectedN = 0;      // 吹く本数（基準笛を含めた総本数）。開始時に入力欄から読む
+const segOptions = {};  // 無音区切りの調整（?gap= ?onmargin= ?minnote=）
 (function initParams(){
   const q = new URLSearchParams(location.search);
   const num = (name, key) => {
@@ -202,13 +195,8 @@ let expectedN = 0;      // 吹く本数（基準笛を含めた総本数）。�
     if(v !== null && /^\d+(\.\d+)?$/.test(v)) segOptions[key] = parseFloat(v);
   };
   num("gap", "gapMs");            // 区切りとみなす無音の長さ[ms]
-  num("endms", "endMs");          // 入力の終わりとみなす無音の長さ[ms]
   num("onmargin", "onMarginDb");  // 暗騒音から何dB上を「鳴っている」とするか
   num("minnote", "minNoteMs");    // これより短い音は雑音として捨てる[ms]
-  // 吹く本数。URLに載せると桁数が漏れるので、画面の入力欄が本筋である。
-  // ?n= は控えとして受け付け、入力欄に初期値として入れるだけにする。
-  const n = q.get("n");
-  if(n !== null && /^\d+$/.test(n)) el("autoN").value = n;
   const sha = (q.get("sha256") || q.get("hash") || "").trim();
   if(sha) el("cipherHash").value = sha;
   const spf = q.get("spf");
@@ -336,43 +324,10 @@ function renderSeq(){
 
 // --- 無音区切りで自動送りするモード ---
 // 笛と笛の間に短い無音を置くだけで次の桁へ進む。拍にもボタン操作にも縛られない。
-const auto = {active:false, seg:null, seq:[], t0:0, lastNoteAt:0, checking:false};
-
-/* 照合値（?sha256= か ?goto_enc=）があるなら、1本増えるたびに黙って照合を試す。
- * 一致した時点が「入力の終わり」になるので、利用者が合図を送らなくてよい。
- * 画面には何も出さず、失敗しても素通りする。 */
-async function secretVerifies(freqs){
-  if(!cipherConfig || !freqs.length) return false;
-  let result;
-  try{ result = window.CipherCodec.decode(freqs, cipherConfig, true); }catch{ return false; }
-  if(result.status.startsWith("error:")) return false;
-  const canonical = (cipherConfig.mode === "symbols")
-      ? Uint8Array.from(result.symbols||[]) : result.payload;
-  if(gotoEnc) return !!(await decryptGoto(canonical));
-  const expected = el("cipherHash").value.trim().toLowerCase();
-  if(!/^[0-9a-f]{64}$/.test(expected)) return false;
-  const digest = await crypto.subtle.digest("SHA-256", canonical);
-  const actual = Array.from(new Uint8Array(digest), x=>x.toString(16).padStart(2,"0")).join("");
-  return actual === expected;
-}
-// 1本増えるごとに呼ぶ。本数が分かっていればそれで、無ければ照合の成立で終える。
-function autoAfterNote(){
-  if(expectedN && auto.seq.length >= expectedN){
-    el("autoStatus").textContent = expectedN + "本そろいました。復号します。";
-    autoEnd();
-    return;
-  }
-  if(auto.checking) return;
-  auto.checking = true;
-  const snapshot = auto.seq.map(s=>s.freq);
-  secretVerifies(snapshot).then(ok=>{
-    auto.checking = false;
-    if(ok && auto.active && auto.seq.length === snapshot.length){
-      el("autoStatus").textContent = "照合が成立しました。復号します。";
-      autoEnd();
-    }
-  }).catch(()=>{ auto.checking = false; });
-}
+/* 入力の終わりは利用者が決める。システムは秘密の本数を知らないし、知ろうと
+ * もしない。桁数に達したら自動で確定する、照合が通ったら止まる、といった
+ * つくりは、利用者に桁数を暗黙に教えてしまうため採らない。 */
+const auto = {active:false, seg:null, seq:[], t0:0};
 
 function renderAutoSeq(){
   const box = el("autoSeq"); box.innerHTML="";
@@ -385,44 +340,59 @@ function renderAutoSeq(){
     box.appendChild(div);
   });
 }
+// 開始と終了は同じボタンで兼ねる。押すたびにラベルと色が入れ替わる。
+function autoSetButton(){
+  const b = el("autoStartBtn");
+  b.textContent = auto.active ? "終了し復号" : "開始";
+  b.classList.toggle("ok", auto.active);
+  el("autoUndoBtn").disabled = !(auto.active && auto.seq.length);
+}
 async function autoStart(){
   if(!await ensureMic()){ el("autoStatus").textContent="マイクを開始できませんでした。"; return; }
   if(cap.active || one.active){ el("autoStatus").textContent="ほかの入力方式が動いています。先にそちらを終えてください。"; return; }
-  // 本数は開始のたびに入力欄から読む（URLに書かなくてよい）。
-  const nRaw = parseInt(el("autoN").value, 10);
-  expectedN = (Number.isFinite(nRaw) && nRaw > 0) ? nRaw : 0;
-  // 本数が分かっているときは、無音による終了判定を止める。途中で少し考えて
-  // 間が空いても勝手に終わらないようにするためである。
-  const opts = Object.assign({}, segOptions);
-  if(expectedN && segOptions.endMs === undefined) opts.endMs = Number.MAX_SAFE_INTEGER;
+  // 無音による自動終了は使わない（利用者を急かさないため）。終わりはボタンで決める。
+  const opts = Object.assign({}, segOptions, {endMs: Number.MAX_SAFE_INTEGER});
   auto.seg = window.SilenceSegmenter.create(opts);
-  auto.active=true; auto.seq=[]; auto.t0=performance.now(); auto.lastNoteAt=0; auto.checking=false;
+  auto.active=true; auto.seq=[]; auto.t0=performance.now();
   cipherFreqs=[];
-  el("autoStartBtn").disabled=true; el("autoEndBtn").disabled=true;
   el("autoStatus").textContent=""; el("verdict").textContent="–"; el("decodedPayload").textContent="–";
   el("autoDot").classList.add("prep"); el("autoDot").textContent="測定";
   el("autoHint").textContent="部屋の静けさを測っています。少しだけ静かにしてください。";
+  autoSetButton();
   renderAutoSeq();
 }
 function autoStop(){
   auto.active=false;
-  el("autoStartBtn").disabled=false;
   el("autoDot").classList.remove("on","prep"); el("autoDot").textContent="–";
   el("autoLevel").style.width="0%";
+  autoSetButton();
 }
 function autoEnd(){
-  if(!auto.seq.length){ autoStop(); el("autoStatus").textContent="1本も入っていません。"; return; }
   autoStop();
-  el("autoEndBtn").disabled=true;
+  if(!auto.seq.length){ el("autoStatus").textContent="1本も入っていません。"; return; }
   cipherFreqs = auto.seq.map(s=>s.freq);
   el("autoStatus").textContent = auto.seq.length+"本を記録しました。復号します。";
   doDecode();
 }
+function autoToggle(){ auto.active ? autoEnd() : autoStart(); }
+// 直前の1本を取り消す。咳や物音が1本として入ってしまったときに使う。
+function autoUndo(){
+  if(!auto.seq.length) return;
+  auto.seq.pop();
+  renderAutoSeq();
+  autoSetButton();
+  el("autoDot").textContent = auto.seq.length ? String(auto.seq.length) : "待機";
+  el("autoHint").textContent = auto.seq.length
+    ? "直前の1本を取り消しました。いまは"+auto.seq.length+"本です。"
+    : "すべて取り消しました。1本目から吹いてください。";
+  if(navigator.vibrate) navigator.vibrate(15);
+}
 function autoClear(){
   autoStop();
   auto.seq=[]; auto.seg=null;
-  el("autoEndBtn").disabled=true; el("autoStatus").textContent="";
+  el("autoStatus").textContent="";
   el("autoHint").textContent="開始すると、まず部屋の静けさを0.4秒ほど測り、そこを基準に区切りを判定します。";
+  autoSetButton();
   renderAutoSeq();
 }
 
@@ -513,38 +483,22 @@ function loop(){
     } else if(ev.type === "note"){
       el("autoDot").classList.remove("on");
       auto.seq.push({freq: ev.freq, note: freqToNote(ev.freq)});
-      auto.lastNoteAt = performance.now();
       renderAutoSeq();
-      el("autoEndBtn").disabled = false;
+      autoSetButton();
       el("autoDot").textContent = String(auto.seq.length);
-      el("autoHint").textContent = expectedN
-        ? auto.seq.length + " / " + expectedN + "本。続けて次の笛を吹いてください。"
-        : auto.seq.length + "本目まで確定しました。続けて次の笛を吹いてください。";
+      el("autoHint").textContent = auto.seq.length
+        + "本目まで入りました。続けて次の笛を吹き、終わったらボタンを押してください。";
       if(navigator.vibrate) navigator.vibrate(25);
-      autoAfterNote();
     } else if(ev.type === "reject"){
       el("autoDot").classList.remove("on");
       el("autoHint").textContent = "短すぎる音は雑音として捨てました。もう少し長めに吹いてください。";
-    } else if(ev.type === "end"){
-      el("autoStatus").textContent = "無音が続いたので入力を終わります。";
-      autoEnd();
     } else if(ev.type === "idle"){
       el("autoDot").classList.remove("prep","on");
       if(auto.seq.length === 0){
         el("autoDot").textContent = "待機";
         const th = auto.seg.thresholds();
         el("autoHint").textContent = "準備できました。1本目を吹いてください（区切りの基準は "
-          + Math.round(th.onDb) + " dB）。"
-          + (expectedN ? "全部で" + expectedN + "本です。" : "");
-      } else if(!expectedN && auto.lastNoteAt){
-        // 本数が分からないときは、無音で終わるまでの残り時間をはっきり見せる。
-        // 黙って確定してしまわないよう、利用者が気づいて吹き足せるようにする。
-        const endMs = auto.seg.options.endMs;
-        const left = endMs - (performance.now() - auto.lastNoteAt);
-        if(left > 0 && left < endMs){
-          el("autoHint").textContent = auto.seq.length + "本目まで確定。あと "
-            + (left/1000).toFixed(1) + " 秒で入力を終わります（続けるなら次を吹いてください）。";
-        }
+          + Math.round(th.onDb) + " dB）。";
       }
     }
   }
@@ -645,8 +599,8 @@ ptt.addEventListener("pointerdown", e=>{ e.preventDefault(); try{ ptt.setPointer
 ptt.addEventListener("pointerup",   e=>{ e.preventDefault(); endCapture(); });
 ptt.addEventListener("pointercancel", ()=> endCapture());
 el("clearBtn").onclick = ()=>{ cap.seq=[]; cipherFreqs=[]; renderSeq(); el("capStatus").textContent=""; el("decodedPayload").textContent="–"; el("verdict").textContent="–"; el("decodeStatus").textContent=""; el("gotoWrap").style.display="none"; };
-el("autoStartBtn").onclick = autoStart;
-el("autoEndBtn").onclick = autoEnd;
+el("autoStartBtn").onclick = autoToggle;
+el("autoUndoBtn").onclick = autoUndo;
 el("autoClearBtn").onclick = autoClear;
 el("oneStartBtn").onclick = oneStart;
 el("oneCommitBtn").onclick = oneCommit;
