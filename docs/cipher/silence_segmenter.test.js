@@ -41,7 +41,7 @@ const gap = (ms) => ({ms: ms || 300, db: -95});
 // 1) 基本：5本を無音で区切って吹く
 {
   const r = run([QUIET, note(1046), gap(), note(1318), gap(), note(1567), gap(),
-                 note(1975), gap(), note(2093), gap(2000)]);
+                 note(1975), gap(), note(2093), gap(3000)]);
   assert.strictEqual(r.notes.length, 5, "5本に切り分かれる");
   const hz = r.notes.map(n => Math.round(n.freq));
   assert.deepStrictEqual(hz, [1046, 1318, 1567, 1975, 2093], "各本の周波数が取れる");
@@ -52,7 +52,7 @@ const gap = (ms) => ({ms: ms || 300, db: -95});
 // 2) 速い演奏：音200ms・無音200msでも切り分かれる
 {
   const r = run([QUIET, note(1046, 200), gap(200), note(1318, 200), gap(200),
-                 note(1567, 200), gap(2000)]);
+                 note(1567, 200), gap(3000)]);
   assert.strictEqual(r.notes.length, 3, "短い音でも3本に切り分かれる");
   console.log("  2) 速い演奏(音200ms/無音200ms):", r.notes.map(n => Math.round(n.freq)).join(","));
 }
@@ -60,7 +60,7 @@ const gap = (ms) => ({ms: ms || 300, db: -95});
 // 3) 短すぎる雑音は捨てる（60msのパチッという音）
 {
   const r = run([QUIET, {ms: 60, db: -45, hz: 1500}, gap(),
-                 note(1046), gap(2000)]);
+                 note(1046), gap(3000)]);
   assert.strictEqual(r.notes.length, 1, "雑音を除いて1本だけ");
   assert.strictEqual(Math.round(r.notes[0].freq), 1046);
   console.log("  3) 短い雑音を捨てる: 本数", r.notes.length);
@@ -68,7 +68,7 @@ const gap = (ms) => ({ms: ms || 300, db: -95});
 
 // 4) 音の中の一瞬のふらつき（100ms）では切れない
 {
-  const r = run([QUIET, note(1046, 300), {ms: 100, db: -95}, note(1046, 300), gap(2000)]);
+  const r = run([QUIET, note(1046, 300), {ms: 100, db: -95}, note(1046, 300), gap(3000)]);
   assert.strictEqual(r.notes.length, 1, "gapMs未満のふらつきでは切れない");
   console.log("  4) 一瞬のふらつき(100ms)で切れない: 本数", r.notes.length);
 }
@@ -77,7 +77,7 @@ const gap = (ms) => ({ms: ms || 300, db: -95});
 {
   const loudRoom = {ms: 600, db: -70};
   const r = run([loudRoom, {ms: 400, db: -40, hz: 1046}, {ms: 300, db: -70},
-                 {ms: 400, db: -40, hz: 1318}, {ms: 2000, db: -70}]);
+                 {ms: 400, db: -40, hz: 1318}, {ms: 3000, db: -70}]);
   assert.strictEqual(r.notes.length, 2, "暗騒音が高くても2本に切り分かれる");
   console.log("  5) うるさい部屋(暗騒音-70dB): 本数", r.notes.length,
               " しきい値", JSON.stringify(r.thresholds));
@@ -85,7 +85,7 @@ const gap = (ms) => ({ms: ms || 300, db: -95});
 
 // 6) 立ち上がりの音程の揺れは測定から外れる（最初の50msだけ外れた値）
 {
-  const r = run([QUIET, {ms: 48, db: -45, hz: 800}, {ms: 400, db: -45, hz: 1046}, gap(2000)]);
+  const r = run([QUIET, {ms: 48, db: -45, hz: 800}, {ms: 400, db: -45, hz: 1046}, gap(3000)]);
   assert.strictEqual(r.notes.length, 1);
   assert.strictEqual(Math.round(r.notes[0].freq), 1046, "立ち上がりの揺れに引きずられない");
   console.log("  6) 立ち上がりの揺れを除く:", Math.round(r.notes[0].freq), "Hz");
@@ -101,7 +101,7 @@ const gap = (ms) => ({ms: ms || 300, db: -95});
     script.push(note(hz, 250));
     script.push(gap(250));
   }
-  script.push(gap(2000));
+  script.push(gap(3000));
   const r = run(script);
   assert.strictEqual(r.notes.length, 26, "26本すべて切り分かれる");
   assert.deepStrictEqual(r.notes.map(n => Math.round(n.freq)), want);
