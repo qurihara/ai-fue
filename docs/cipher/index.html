@@ -182,14 +182,19 @@ let cipherConfig = null;
 let cipherFreqs = [];               // 復号に渡す並び（吹いた順・先頭が基準）
 let loFloorHz = 1200;               // これ未満は暗騒音(エアコン等)として無視。設定読込後に音域から決める
 
-// --- GET パラメータ ---
+// --- URLパラメータ（? のクエリと # のフラグメントの両方を読む） ---
+// フラグメント(#以降)はサーバへ送られないので、アクセスログにも参照元情報にも
+// 残らない。設定はこちらに置くのが望ましく、同じ名前ならフラグメントを優先する。
 const cfgOverride = {};
-let gotoUrl = "";     // 平文の遷移先（?goto=）。GETで見えるので守秘性はない
-let gotoEnc = "";     // 秘密で暗号化された遷移先（?goto_enc=）。秘密を復元しないと開けない
-let autoNav = true;   // 認証成功で自動遷移（?autonav=0 で無効化しボタン方式に）
-const segOptions = {};  // 無音区切りの調整（?gap= ?onmargin= ?minnote=）
+let gotoUrl = "";     // 平文の遷移先（goto=）。URLに見えるので守秘性はない
+let gotoEnc = "";     // 秘密で暗号化された遷移先（goto_enc=）。秘密を復元しないと開けない
+let packEnc = "";     // 設定一式を秘密で包んだもの（c=）。復号できること自体が認証になる
+let autoNav = true;   // 認証成功で自動遷移（autonav=0 で無効化しボタン方式に）
+const segOptions = {};  // 無音区切りの調整（gap= onmargin= minnote=）
 (function initParams(){
-  const q = new URLSearchParams(location.search);
+  const search = new URLSearchParams(location.search);
+  const frag = new URLSearchParams(location.hash.replace(/^#/, ""));
+  const q = {get: name => frag.has(name) ? frag.get(name) : search.get(name)};
   const num = (name, key) => {
     const v = q.get(name);
     if(v !== null && /^\d+(\.\d+)?$/.test(v)) segOptions[key] = parseFloat(v);
@@ -220,6 +225,8 @@ const segOptions = {};  // 無音区切りの調整（?gap= ?onmargin= ?minnote=
   if(g && /^https?:\/\//i.test(g)) gotoUrl = g;
   const ge = q.get("goto_enc");
   if(ge) gotoEnc = ge.trim();
+  const pk = q.get("c");
+  if(pk) packEnc = pk.trim();
   if(q.get("autonav") === "0") autoNav = false;
 })();
 
@@ -537,6 +544,22 @@ function b64urlToBytes(s){
   return out;
 }
 // 秘密(canonical)を鍵に、?goto_enc を AES-GCM 復号して URL を得る（失敗=秘密が違う）
+/* c= の中身を、笛の秘密を鍵にして取り出す。中身はJSONで、遷移先URLや
+ * 成功時に見せる言葉を入れておける。AES-GCMは改ざんも検出するので、
+ * 取り出せたこと自体が「正しい秘密を吹いた」証拠になる。別に照合値を
+ * URLへ載せる必要がない。 */
+async function decryptPack(canonical){
+  try{
+    const keyRaw = await crypto.subtle.digest("SHA-256", canonical);
+    const key = await crypto.subtle.importKey("raw", keyRaw, "AES-GCM", false, ["decrypt"]);
+    const blob = b64urlToBytes(packEnc);
+    const iv = blob.slice(0,12), ct = blob.slice(12);
+    const pt = await crypto.subtle.decrypt({name:"AES-GCM", iv}, key, ct);
+    const obj = JSON.parse(new TextDecoder().decode(pt));
+    if(obj && typeof obj === "object") return obj;
+    return null;
+  }catch{ return null; }
+}
 async function decryptGoto(canonical){
   try{
     const keyRaw = await crypto.subtle.digest("SHA-256", canonical);
@@ -571,6 +594,26 @@ async function doDecode(){
   status.textContent = result.status + `（訂正 ${result.correctedCount}、消失 ${result.erasureCount}）`;
   const canonical = (cipherConfig.mode === "symbols")
       ? Uint8Array.from(result.symbols||[]) : result.payload;
+
+  // (0) c=: 設定一式を秘密で包んだもの。取り出せたこと自体が認証成功である。
+  if(packEnc){
+    const pack = await decryptPack(canonical);
+    if(!pack){
+      el("verdict").innerHTML='<span class="ngmark">中身を取り出せません（秘密が違います）</span>';
+      return;
+    }
+    const msg = (typeof pack.msg === "string") ? pack.msg : "";
+    el("verdict").innerHTML='<span class="okmark">認証成功（秘密で設定を取り出しました）</span>'
+      + (msg ? ' <span class="muted">'+msg.replace(/[<>&]/g, c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]))+'</span>' : "");
+    if(typeof pack.goto === "string" && /^https?:\/\//i.test(pack.goto)){
+      showSuccess(pack.goto);
+    }else if(msg){
+      el("successSub").textContent = msg;
+      el("successOverlay").classList.add("show");
+      setTimeout(()=>{ el("successOverlay").classList.remove("show"); }, 4000);
+    }
+    return;
+  }
 
   // (A) ?goto_enc: 秘密で暗号化された遷移先。復号できれば「認証成功」＝自動遷移
   if(gotoEnc){
