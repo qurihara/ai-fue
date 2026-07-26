@@ -152,9 +152,11 @@
     <div class="muted" style="margin:0 0 10px">息継ぎをせず、唇を当てたまま次の笛へ滑らせて読めます。<b>隣り合う笛が同じ音だと1本に融合してしまう</b>ので、同じ音が隣り合わない並びのときだけ使ってください（印刷済みのスプールとカードはどちらも条件を満たしています）。</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button id="autoStartBtn">開始</button>
+      <button class="sec" id="autoSkipBtn" disabled>この笛は飛ばす</button>
       <button class="sec" id="autoUndoBtn" disabled>1本取り消す</button>
       <button class="sec" id="autoClearBtn">やり直す</button>
     </div>
+    <div class="muted" style="margin-top:8px">鳴らない笛があったら「この笛は飛ばす」を押してください。その位置を空けたまま次へ進めるので、並びがずれません。空けた分は誤り訂正で埋められます（検査用の笛が足りていれば復元できます）。</div>
     <div class="seq" id="autoSeq"></div>
     <span class="status" id="autoStatus"></span>
   </div>
@@ -264,6 +266,8 @@ const segOptions = {};  // 無音区切りの調整（gap= onmargin= minnote=）
   if(step !== null && /^\d+(\.\d+)?$/.test(step)) cfgOverride.step_cents = parseFloat(step);
   const useref = q.get("useref");
   if(useref === "0" || useref === "false") cfgOverride.use_reference = false;
+  const norepeat = q.get("norepeat");   // 隣り合う笛が同じ音にならない符号化で読む
+  if(norepeat === "1" || norepeat === "true") cfgOverride.no_repeat = true;
   const g = q.get("goto");
   if(g && /^https?:\/\//i.test(g)) gotoUrl = g;
   const ge = q.get("goto_enc");
@@ -383,10 +387,10 @@ function renderAutoSeq(){
   const box = el("autoSeq"); box.innerHTML="";
   auto.seq.forEach((s,i)=>{
     const div=document.createElement("div");
-    div.className="chip"+(i===0?" ref":"");
+    div.className="chip"+(i===0?" ref":"")+(s.skipped?" empty":"");
     div.innerHTML=`<div class="idx">${i+1}${i===0?" 基準":""}</div>`+
-      `<div class="nm">${s.note?s.note.name:"—"}</div>`+
-      `<div class="fz">${Math.round(s.freq)}Hz</div>`;
+      `<div class="nm">${s.skipped?"飛":(s.note?s.note.name:"—")}</div>`+
+      `<div class="fz">${s.skipped?"鳴らず":Math.round(s.freq)+"Hz"}</div>`;
     box.appendChild(div);
   });
 }
@@ -396,6 +400,26 @@ function autoSetButton(){
   b.textContent = auto.active ? "終了し復号" : "開始";
   b.classList.toggle("ok", auto.active);
   el("autoUndoBtn").disabled = !(auto.active && auto.seq.length);
+  el("autoSkipBtn").disabled = !auto.active;
+}
+/* 鳴らない笛を「飛ばす」。その位置に、どのスロットにも当てはまらない周波数を
+ * 置いておくと、復号器がそこを消失として扱う。並びが1本短くなる「欠落」は
+ * 誤り訂正では直せないが、位置を保った「消失」なら検査用の笛で埋められる。
+ * 音域の1オクターブ下を使うので、どの設定でも必ず範囲外になる。 */
+function skipPlaceholderFreq(){
+  try{
+    const lo = (cipherConfig && cipherConfig.lo_note) || "G#6";
+    return window.CipherCodec.noteToFreq(lo) / 2;
+  }catch{ return 100; }
+}
+function autoSkip(){
+  if(!auto.active) return;
+  auto.seq.push({freq: null, note: null, skipped: true});
+  renderAutoSeq();
+  autoSetButton();
+  el("autoDot").textContent = String(auto.seq.length);
+  el("autoHint").textContent = auto.seq.length + "本目を「鳴らない」として空けました。次の笛へ進んでください。";
+  if(navigator.vibrate) navigator.vibrate([15,40,15]);
 }
 async function autoStart(){
   if(!await ensureMic()){ el("autoStatus").textContent="マイクを開始できませんでした。"; return; }
@@ -425,8 +449,11 @@ function autoStop(){
 function autoEnd(){
   autoStop();
   if(!auto.seq.length){ el("autoStatus").textContent="1本も入っていません。"; return; }
-  cipherFreqs = auto.seq.map(s=>s.freq);
-  el("autoStatus").textContent = auto.seq.length+"本を記録しました。復号します。";
+  const ph = skipPlaceholderFreq();
+  const skipped = auto.seq.filter(s=>s.skipped).length;
+  cipherFreqs = auto.seq.map(s => s.skipped ? ph : s.freq);
+  el("autoStatus").textContent = auto.seq.length + "本を記録しました"
+    + (skipped ? "（うち" + skipped + "本は鳴らないものとして空けました）" : "") + "。復号します。";
   doDecode();
 }
 function autoToggle(){ auto.active ? autoEnd() : autoStart(); }
@@ -700,6 +727,7 @@ ptt.addEventListener("pointerup",   e=>{ e.preventDefault(); endCapture(); });
 ptt.addEventListener("pointercancel", ()=> endCapture());
 el("clearBtn").onclick = ()=>{ cap.seq=[]; cipherFreqs=[]; renderSeq(); el("capStatus").textContent=""; el("decodedPayload").textContent="–"; el("verdict").textContent="–"; el("decodeStatus").textContent=""; el("gotoWrap").style.display="none"; };
 el("autoStartBtn").onclick = autoToggle;
+el("autoSkipBtn").onclick = autoSkip;
 el("autoUndoBtn").onclick = autoUndo;
 el("autoClearBtn").onclick = autoClear;
 el("successClose").onclick = ()=>{ el("successOverlay").classList.remove("show"); };

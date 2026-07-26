@@ -2,10 +2,15 @@
 
 基準笛との周波数比を使い、全笛共通の周波数変化を打ち消す。
 ECCは素数体 GF(p) 上の短縮 Reed--Solomon 符号である。
+
+CodecConfig.no_repeat=Trueにすると、隣り合う笛が必ず違う音になるよう符号化する
+(差分写像+インターリーブ)。音が変わること自体が区切りの合図になるので、無音を
+置かずに続けて吹いて読める。既定はFalseで従来どおりの符号化。
 """
 from __future__ import annotations
 import argparse
 from dataclasses import dataclass
+import functools
 import itertools
 import math
 import os
@@ -32,10 +37,14 @@ class CodecConfig:
     mode: str = "sequential"
     use_reference: bool = True   # 先頭の基準笛で温度・吹圧を打ち消す。Falseなら全笛データ＝絶対音程で読む
     decision_guard_cents: Optional[float] = None
+    no_repeat: bool = False      # 隣り合う笛が同じ音にならない符号化。無音区切り無しで連続して吹ける
 
     def __post_init__(self):
         if self.step_cents <= 0 or self.ecc_parity < 0:
             raise ValueError("ステップは正、パリティは0以上が必要")
+        if self.no_repeat and not self.use_reference:
+            # 差分写像は直前の音を起点にする。1本目の起点は基準笛しかない。
+            raise ValueError("no_repeatには基準笛(use_reference=True)が必要")
         lo, hi, ref = (note_to_midi(x) * 100.0 for x in
                        (self.lo_note, self.hi_note, self.reference_note))
         span = (hi - lo) / self.step_cents
@@ -110,7 +119,7 @@ def ref_slot_index(cfg: CodecConfig) -> int:
 
 def symbol_bits(cfg: CodecConfig) -> float:
     """一本のデータ笛が持つ情報量[bit]。"""
-    return math.log2(len(slots(cfg)))
+    return math.log2(_wire_params(cfg)[1])
 
 
 def freq_to_length(f: float, cfg: CodecConfig) -> float:
@@ -124,6 +133,15 @@ def _prime(n):
     """n以上の最小素数を返す。"""
     while n < 2 or any(n % d == 0 for d in range(2, int(math.sqrt(n)) + 1)):
         n += 1
+    return n
+
+
+def _prime_below(n):
+    """n以下の最大素数を返す。"""
+    while n >= 2 and any(n % d == 0 for d in range(2, int(math.sqrt(n)) + 1)):
+        n -= 1
+    if n < 2:
+        raise ValueError("素数体が取れない(スロットが少なすぎる)")
     return n
 
 
@@ -153,11 +171,24 @@ def _from_base(digits, base):
     return value
 
 
+@functools.lru_cache(maxsize=None)
+def _root(p):
+    """GF(p)の原始元(最小の原始根)を返す。
+
+    位数がp-1でないとRSの誤り位置が一意に定まらない。p=11,13では2なので
+    従来の符号語は変わらず、2が原始根でないp(例えば7)でも符号が成立する。
+    """
+    for g in range(2, p):
+        if len({pow(g, k, p) for k in range(1, p)}) == p - 1:
+            return g
+    return 1
+
+
 def _generator(nsym, p):
     """RS生成多項式を高次側先頭で作る。"""
     g = [1]
     for r in range(1, nsym + 1):
-        a, nxt = pow(2, r, p), [0] * (len(g) + 1)
+        a, nxt = pow(_root(p), r, p), [0] * (len(g) + 1)
         for i, c in enumerate(g):
             nxt[i] = (nxt[i] + c) % p
             nxt[i + 1] = (nxt[i + 1] - c * a) % p
@@ -182,7 +213,7 @@ def _rs_encode(message, nsym, p):
 def _syndromes(word, nsym, p):
     """RSシンドロームを返す。"""
     n = len(word)
-    return [sum(v * pow(pow(2, r, p), n - 1 - i, p) for i, v in enumerate(word)) % p
+    return [sum(v * pow(pow(_root(p), r, p), n - 1 - i, p) for i, v in enumerate(word)) % p
             for r in range(1, nsym + 1)]
 
 
@@ -216,7 +247,7 @@ def _rs_decode(received, nsym, p, erasures=None):
             pos = sorted(erased | set(extra))
             if not pos:
                 continue
-            a = [[pow(pow(2, r, p), len(received) - 1 - i, p) for i in pos]
+            a = [[pow(pow(_root(p), r, p), len(received) - 1 - i, p) for i in pos]
                  for r in range(1, len(pos) + 1)]
             mag = _solve(a, [(-x) % p for x in syn[:len(pos)]], p)
             if mag is None:
@@ -257,19 +288,109 @@ def _width_to_bytes(width, m):
     return nbytes
 
 
+def _wire_params(cfg: CodecConfig):
+    """(スロット数m, 記号の底mb, 笛の底wb, 素数体p, 1記号あたりの笛本数w)を返す。
+
+    既定(no_repeat=False)は従来どおり底mでp=m以上の最小素数。
+    no_repeat=Trueでは差分値が0..m-2のm-1通りしかないので、笛1本=記号1個を保つ
+    ためにpをm-1以下の最大素数に取る(m=11ならp=7)。m-1が素数でない分だけ
+    1本あたりの情報量はlog2(m-1)より落ちるが、笛1本=RS記号1個という
+    対応が保たれるのでインターリーブがそのまま効く。
+    """
+    m = len(slots(cfg))
+    if not cfg.no_repeat:
+        p = _prime(m)
+        return m, m, m, p, _width(m, p)
+    p = _prime_below(m - 1)
+    return m, p, m - 1, p, 1
+
+
+def _diff_encode(values, m, start):
+    """差分値の列を、隣り合う値が決して等しくならないスロット列にする。"""
+    out, prev = [], start % m
+    for d in values:
+        if not 0 <= d <= m - 2:
+            raise ValueError("差分値が範囲外")
+        prev = (prev + 1 + d) % m
+        out.append(prev)
+    return out
+
+
+def _diff_decode(seq, m, start):
+    """スロット列を差分値の列へ戻す(_diff_encodeの逆)。"""
+    out, prev = [], start % m
+    for s in seq:
+        out.append((s - prev - 1) % m)
+        prev = s
+    return out
+
+
+def _balanced_sizes(total, cap):
+    """totalをcap以下のブロックへ、大きさの差が1以下になるよう分ける。
+
+    均等割りにするのはインターリーブのため。片方のブロックだけ長く残ると、
+    末尾で同じブロックの記号が隣り合ってしまう。
+    """
+    if total <= 0:
+        return []
+    k = -(-total // cap)
+    return [total // k + (1 if j < total % k else 0) for j in range(k)]
+
+
+def _interleave_order(sizes):
+    """送出順t → ブロック連結順の位置、の対応を返す。
+
+    列ごとに各ブロックから1記号ずつ拾う。ブロックが2個以上あれば隣り合う
+    送出位置は必ず別ブロックになるので、1本の読み違いが各ブロック1記号ずつに
+    分かれる。ブロックが1個しかない短い秘密では混ぜようがなく素通りする。
+    """
+    offsets, at = [], 0
+    for size in sizes:
+        offsets.append(at)
+        at += size
+    order = []
+    for i in range(max(sizes, default=0)):
+        order.extend(offsets[b] + i for b, size in enumerate(sizes) if i < size)
+    return order
+
+
+def _block_layout(total, parity, block_data):
+    """受信記号数から各RSブロックの符号語長を復元する。"""
+    if total <= 0:
+        return []
+    for k in range(1, total + 1):
+        data = total - k * parity
+        if data < k:
+            break
+        if -(-data // block_data) == k:
+            return [data // k + parity + (1 if j < data % k else 0) for j in range(k)]
+    raise ValueError("ブロック構成が不正")
+
+
 def _encode_message(message: list[int], cfg: CodecConfig) -> EncodeResult:
     """記号列にRSパリティを付け、基準笛先頭の笛列へ変換する。"""
     table = slots(cfg)
-    m, p = len(table), _prime(len(table))
+    m, mb, wb, p, width = _wire_params(cfg)
     block_data = (p - 1) - cfg.ecc_parity
     if block_data < 1:
         raise ValueError("パリティがRSブロックに収まらない")
-    codeword = []
-    for start in range(0, len(message), block_data):
-        codeword.extend(_rs_encode(message[start:start + block_data],
-                                   cfg.ecc_parity, p))
-    width = _width(m, p)
-    wire = [d for x in codeword for d in _to_base(x, m, width)]
+    if cfg.no_repeat:
+        sizes, codeword, at = _balanced_sizes(len(message), block_data), [], 0
+        for size in sizes:
+            codeword.extend(_rs_encode(message[at:at + size], cfg.ecc_parity, p))
+            at += size
+        block_lengths = [s + cfg.ecc_parity for s in sizes]
+        sent = [codeword[g] for g in _interleave_order(block_lengths)]
+    else:
+        codeword = []
+        for start in range(0, len(message), block_data):
+            codeword.extend(_rs_encode(message[start:start + block_data],
+                                       cfg.ecc_parity, p))
+        sent = codeword
+    wire = [d for x in sent for d in _to_base(x, wb, width)]
+    if cfg.no_repeat:
+        # 差分写像。基準笛のスロットを起点に、必ず1以上進むので隣が同じにならない。
+        wire = _diff_encode(wire, m, ref_slot_index(cfg))
     # データ笛は音域テーブルのスロット、基準笛は基準音から直接（音域外でもよい）。
     data_notes = [table[i].nearest_note for i in wire]
     data_lengths = [freq_to_length(table[i].freq_hz, cfg) for i in wire]
@@ -289,17 +410,21 @@ def encode(payload: bytes, cfg: CodecConfig = CodecConfig()) -> EncodeResult:
     """
     if cfg.mode != "sequential":
         raise ValueError("未対応のmode")
-    m = len(slots(cfg))
-    width = _payload_width(len(payload), m)
-    message = _to_base(int.from_bytes(payload, "big"), m, width) if payload else []
+    mb = _wire_params(cfg)[1]
+    width = _payload_width(len(payload), mb)
+    message = _to_base(int.from_bytes(payload, "big"), mb, width) if payload else []
     return _encode_message(message, cfg)
 
 
 def encode_symbols(symbols: list[int], cfg: CodecConfig = CodecConfig()) -> EncodeResult:
-    """0..m-1の記号列そのものを暗号笛列へ符号化する(symbolsモード)。"""
-    m = len(slots(cfg))
+    """0..mb-1の記号列そのものを暗号笛列へ符号化する(symbolsモード)。
+
+    記号の上限mbは既定でスロット数m、no_repeat=Trueでは差分値の上限m-2以下に
+    取った素数体の大きさ(m=11ならp=7)になる。
+    """
+    mb = _wire_params(cfg)[1]
     message = [int(s) for s in symbols]
-    if any(not 0 <= s < m for s in message):
+    if any(not 0 <= s < mb for s in message):
         raise ValueError("記号が範囲外")
     return _encode_message(message, cfg)
 
@@ -336,40 +461,61 @@ def decode(measured_freqs: list[float], cfg: CodecConfig = CodecConfig(),
         wire.append(i)
         if bad:
             erased.add(j)
-    m, p = len(table), _prime(len(table))
-    w = _width(m, p)
+    m, mb, wb, p, w = _wire_params(cfg)
     try:
-        if len(wire) % w:
+        digits, suspect = wire, erased
+        if cfg.no_repeat:
+            # 差分の逆写像。起点は基準笛の公称スロット。
+            digits = _diff_decode(wire, m, ref_slot_index(cfg))
+            # 1本の読み違いは差分2個を汚すので、消失は次の記号へも波及させる。
+            suspect = erased | {j + 1 for j in erased if j + 1 < len(digits)}
+        if len(digits) % w:
             raise ValueError("記号数が不正")
         received, erasures = [], set()
-        for start in range(0, len(wire), w):
-            value = _from_base(wire[start:start + w], m)
+        for start in range(0, len(digits), w):
+            chunk = digits[start:start + w]
             pos = start // w
-            if value >= p or any(x in erased for x in range(start, start + w)):
+            # 差分がm-1(=隣と同じ音)は符号化では起こり得ない。読み違いの印として消失にする。
+            invalid = any(d >= wb for d in chunk)
+            value = 0 if invalid else _from_base(chunk, wb)
+            if invalid or value >= p or any(x in suspect for x in range(start, start + w)):
                 erasures.add(pos)
                 value %= p
             received.append(value)
-        block_size = p - 1
-        corrected, changed, msg = [], set(), []
-        for start in range(0, len(received), block_size):
-            block = received[start:start + block_size]
+        if cfg.no_repeat:
+            sizes = _block_layout(len(received), cfg.ecc_parity,
+                                  (p - 1) - cfg.ecc_parity)
+            order = _interleave_order(sizes)
+        else:
+            sizes = [min(p - 1, len(received) - s)
+                     for s in range(0, len(received), p - 1)]
+            order = list(range(len(received)))
+        # 送出順(=笛の並び)をブロック連結順へ戻す。
+        block_major, block_erasures = [0] * len(received), set()
+        for t, g in enumerate(order):
+            block_major[g] = received[t]
+            if t in erasures:
+                block_erasures.add(g)
+        changed, msg, at = set(), [], 0
+        for size in sizes:
+            block = block_major[at:at + size]
             if len(block) < cfg.ecc_parity + 1:
                 raise ValueError("RSブロック長が不正")
-            block_erasures = {pos - start for pos in erasures
-                              if start <= pos < start + len(block)}
             decoded, block_changed = _rs_decode(
-                block, cfg.ecc_parity, p, block_erasures)
-            corrected.extend(decoded)
-            changed.update(start + pos for pos in block_changed)
-            data_size = len(block) - cfg.ecc_parity
-            msg.extend(decoded[:data_size])
+                block, cfg.ecc_parity, p,
+                {pos - at for pos in block_erasures if at <= pos < at + size})
+            changed.update(at + pos for pos in block_changed)
+            msg.extend(decoded[:size - cfg.ecc_parity])
+            at += size
         if cfg.mode == "symbols":
             payload, out_symbols = b"", msg
         else:
-            size = _width_to_bytes(len(msg), m)
-            payload, out_symbols = _from_base(msg, m).to_bytes(size, "big"), wire
+            nbytes = _width_to_bytes(len(msg), mb)
+            payload, out_symbols = _from_base(msg, mb).to_bytes(nbytes, "big"), wire
+        inverse = {g: t for t, g in enumerate(order)}
         for pos in changed:
-            for j in range(pos * w, min((pos + 1) * w, len(decisions))):
+            t = inverse[pos]
+            for j in range(t * w, min((t + 1) * w, len(decisions))):
                 decisions[j].corrected = True
         return DecodeResult(payload, decisions, "corrected" if changed else "ok",
                             out_symbols, len(changed), len(erasures))
@@ -426,6 +572,7 @@ def _parser():
     p.add_argument("--lo", default="F#6"); p.add_argument("--hi", default="F#7")
     p.add_argument("--step-cents", type=float, default=100.0); p.add_argument("--ref", default="C7")
     p.add_argument("--parity", type=int, default=2); p.add_argument("--mode", default="sequential")
+    p.add_argument("--no-repeat", action="store_true", help="隣り合う笛が同じ音にならない符号化")
     sub = p.add_subparsers(dest="command", required=True)
     e = sub.add_parser("encode")
     g = e.add_mutually_exclusive_group(required=True)
@@ -440,11 +587,13 @@ def _parser():
 def main(argv=None):
     """CLIを実行する。"""
     a = _parser().parse_args(argv)
-    cfg = CodecConfig(a.lo, a.hi, a.step_cents, a.ref, ecc_parity=a.parity, mode=a.mode)
+    cfg = CodecConfig(a.lo, a.hi, a.step_cents, a.ref, ecc_parity=a.parity, mode=a.mode,
+                      no_repeat=a.no_repeat)
     if a.command == "encode":
         if a.symbols is not None:
             cfg = CodecConfig(a.lo, a.hi, a.step_cents, a.ref,
-                              ecc_parity=a.parity, mode="symbols")
+                              ecc_parity=a.parity, mode="symbols",
+                              no_repeat=a.no_repeat)
             result = encode_symbols([int(x) for x in a.symbols.split(",")], cfg)
         else:
             result = encode(bytes.fromhex(a.payload_hex), cfg)

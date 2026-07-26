@@ -34,6 +34,8 @@
     if (hi < lo || Math.abs(span - Math.round(span)) > 1e-9) throw new Error("音域がスロット間隔で割り切れない");
     if (Math.abs(q - Math.round(q)) > 1e-9) throw new Error("reference_noteがスロット格子上にない");  // 基準は音域(lo..hi)の外でもよい（比読みの基準としてのみ使う）
     if (cfg.mode !== "sequential" && cfg.mode !== "symbols") throw new Error("未対応のmode");
+    // 差分写像は直前の音を起点にする。1本目の起点は基準笛しかない。
+    if (cfg.no_repeat && cfg.use_reference === false) throw new Error("no_repeatには基準笛(use_reference=True)が必要");
   }
 
   function slots(cfg) {
@@ -62,6 +64,60 @@
   function _prime(n) {
     while (n < 2 || Array.from({length: Math.max(0, Math.floor(Math.sqrt(n)) - 1)}, (_, i) => i + 2).some(d => n % d === 0)) n++;
     return n;
+  }
+
+  function _primeBelow(n) {
+    /* n以下の最大素数を返す。 */
+    const composite = k => Array.from({length: Math.max(0, Math.floor(Math.sqrt(k)) - 1)}, (_, i) => i + 2).some(d => k % d === 0);
+    while (n >= 2 && composite(n)) n--;
+    if (n < 2) throw new Error("素数体が取れない(スロットが少なすぎる)");
+    return n;
+  }
+
+  function _wireParams(cfg, m) {
+    /* {m, mb, wb, p, w} を返す。Python版の_wire_paramsと同じ規則。
+       no_repeat=Trueでは差分値が0..m-2のm-1通りしかないので、笛1本=記号1個を
+       保つためpをm-1以下の最大素数に取る(m=11ならp=7)。 */
+    if (!cfg.no_repeat) {
+      const p = _prime(m);
+      return {m: m, mb: m, wb: m, p: p, w: _width(m, p)};
+    }
+    const p = _primeBelow(m - 1);
+    return {m: m, mb: p, wb: m - 1, p: p, w: 1};
+  }
+
+  function _diffDecode(seq, m, start) {
+    /* スロット列を差分値の列へ戻す。s_i = (s_{i-1} + 1 + d_i) mod m の逆。 */
+    const out = [];
+    let prev = mod(start, m);
+    for (const s of seq) { out.push(mod(s - prev - 1, m)); prev = s; }
+    return out;
+  }
+
+  function _interleaveOrder(sizes) {
+    /* 送出順t → ブロック連結順の位置。列ごとに各ブロックから1記号ずつ拾う。
+       ブロックが1個しかない短い秘密では混ぜようがなく素通りする。 */
+    const offsets = [];
+    let at = 0;
+    for (const size of sizes) { offsets.push(at); at += size; }
+    const order = [], maxSize = sizes.length ? Math.max(...sizes) : 0;
+    for (let i = 0; i < maxSize; i++) {
+      sizes.forEach((size, b) => { if (i < size) order.push(offsets[b] + i); });
+    }
+    return order;
+  }
+
+  function _blockLayout(total, parity, blockData) {
+    /* 受信記号数から各RSブロックの符号語長を復元する。 */
+    if (total <= 0) return [];
+    for (let k = 1; k <= total; k++) {
+      const data = total - k * parity;
+      if (data < k) break;
+      if (Math.ceil(data / blockData) === k) {
+        return Array.from({length: k}, (_, j) => Math.floor(data / k) + parity + (j < data % k ? 1 : 0));
+      }
+    }
+    throw new Error("ブロック構成が不正");
   }
 
   function _toBase(value, base, width) {
@@ -102,10 +158,25 @@
     return out;
   }
 
+  function _root(p) {
+    /* GF(p)の原始元(最小の原始根)。位数がp-1でないとRSの誤り位置が一意に定まらない。
+       p=11,13では2なので従来の符号語は変わらない。 */
+    if (_root.cache.has(p)) return _root.cache.get(p);
+    let out = 1;
+    for (let g = 2; g < p; g++) {
+      const seen = new Set();
+      for (let k = 1; k < p; k++) seen.add(modPow(g, k, p));
+      if (seen.size === p - 1) { out = g; break; }
+    }
+    _root.cache.set(p, out);
+    return out;
+  }
+  _root.cache = new Map();
+
   function _generator(nsym, p) {
     let g = [1];
     for (let r = 1; r <= nsym; r++) {
-      const a = modPow(2, r, p), next = Array(g.length + 1).fill(0);
+      const a = modPow(_root(p), r, p), next = Array(g.length + 1).fill(0);
       g.forEach((c, i) => {
         next[i] = mod(next[i] + c, p);
         next[i + 1] = mod(next[i + 1] - c * a, p);
@@ -128,7 +199,7 @@
 
   function _syndromes(word, nsym, p) {
     return Array.from({length: nsym}, (_, k) => {
-      const r = k + 1, a = modPow(2, r, p), n = word.length;
+      const r = k + 1, a = modPow(_root(p), r, p), n = word.length;
       return mod(word.reduce((sum, v, i) => sum + v * modPow(a, n - 1 - i, p), 0), p);
     });
   }
@@ -174,7 +245,7 @@
         const pos = Array.from(new Set([...erased, ...extra])).sort((a, b) => a - b);
         if (!pos.length) continue;
         const a = pos.map((_, row) => {
-          const r = row + 1, alpha = modPow(2, r, p);
+          const r = row + 1, alpha = modPow(_root(p), r, p);
           return pos.map(i => modPow(alpha, received.length - 1 - i, p));
         });
         const mag = _solve(a, syn.slice(0, pos.length).map(x => mod(-x, p)), p);
@@ -261,37 +332,65 @@
       wire.push(index);
       if (bad) erased.add(j);
     });
-    const m = table.length, p = _prime(m), w = _width(m, p);
+    const {m, mb, wb, p, w} = _wireParams(cfg, table.length);
     try {
-      if (wire.length % w) throw new Error("記号数が不正");
+      let digits = wire, suspect = erased;
+      if (cfg.no_repeat) {
+        // 差分の逆写像。起点は基準笛の公称スロット。
+        digits = _diffDecode(wire, m, refSlotIndex(cfg));
+        // 1本の読み違いは差分2個を汚すので、消失は次の記号へも波及させる。
+        suspect = new Set(erased);
+        erased.forEach(j => { if (j + 1 < digits.length) suspect.add(j + 1); });
+      }
+      if (digits.length % w) throw new Error("記号数が不正");
       const received = [], erasures = new Set();
-      for (let start = 0; start < wire.length; start += w) {
-        let value = Number(_fromBase(wire.slice(start, start + w), m));
+      for (let start = 0; start < digits.length; start += w) {
+        const chunk = digits.slice(start, start + w);
         const pos = start / w;
-        if (value >= p || Array.from({length: w}, (_, i) => start + i).some(i => erased.has(i))) {
+        // 差分がm-1(=隣と同じ音)は符号化では起こり得ない。読み違いの印として消失にする。
+        const invalid = chunk.some(d => d >= wb);
+        let value = invalid ? 0 : Number(_fromBase(chunk, wb));
+        if (invalid || value >= p || Array.from({length: w}, (_, i) => start + i).some(i => suspect.has(i))) {
           erasures.add(pos); value %= p;
         }
         received.push(value);
       }
-      const blockSize = p - 1, changed = new Set(), msg = [];
-      for (let start = 0; start < received.length; start += blockSize) {
-        const block = received.slice(start, start + blockSize);
+      let sizes, order;
+      if (cfg.no_repeat) {
+        sizes = _blockLayout(received.length, cfg.ecc_parity, (p - 1) - cfg.ecc_parity);
+        order = _interleaveOrder(sizes);
+      } else {
+        sizes = [];
+        for (let s = 0; s < received.length; s += p - 1) sizes.push(Math.min(p - 1, received.length - s));
+        order = received.map((_, i) => i);
+      }
+      // 送出順(=笛の並び)をブロック連結順へ戻す。
+      const blockMajor = new Array(received.length).fill(0), blockErased = new Set();
+      order.forEach((g, t) => { blockMajor[g] = received[t]; if (erasures.has(t)) blockErased.add(g); });
+      const changed = new Set(), msg = [];
+      let at = 0;
+      for (const size of sizes) {
+        const block = blockMajor.slice(at, at + size);
         if (block.length < cfg.ecc_parity + 1) throw new Error("RSブロック長が不正");
-        const blockErasures = new Set(Array.from(erasures).filter(pos => start <= pos && pos < start + block.length).map(pos => pos - start));
+        const start = at;
+        const blockErasures = new Set(Array.from(blockErased).filter(pos => start <= pos && pos < start + size).map(pos => pos - start));
         const [decoded, blockChanged] = _rsDecode(block, cfg.ecc_parity, p, blockErasures);
         blockChanged.forEach(pos => changed.add(start + pos));
-        msg.push(...decoded.slice(0, block.length - cfg.ecc_parity));
+        msg.push(...decoded.slice(0, size - cfg.ecc_parity));
+        at += size;
       }
       let payload, outSymbols;
       if (cfg.mode === "symbols") {
         payload = new Uint8Array(); outSymbols = msg;
       } else {
-        const size = _widthToBytes(msg.length, m);
-        payload = bigintToBytes(_fromBase(msg, m), size);
+        const size = _widthToBytes(msg.length, mb);
+        payload = bigintToBytes(_fromBase(msg, mb), size);
         outSymbols = wire;
       }
+      const inverse = new Map(order.map((g, t) => [g, t]));
       changed.forEach(pos => {
-        for (let j = pos * w; j < Math.min((pos + 1) * w, decisions.length); j++) decisions[j].corrected = true;
+        const t = inverse.get(pos);
+        for (let j = t * w; j < Math.min((t + 1) * w, decisions.length); j++) decisions[j].corrected = true;
       });
       return {payload, payloadHex: bytesToHex(payload), decisions, status: changed.size ? "corrected" : "ok", symbols: outSymbols, correctedCount: changed.size, erasureCount: erasures.size};
     } catch (e) {
@@ -301,5 +400,6 @@
 
   return {noteToMidi, midiToNote, noteToFreq, slots, decode, bytesToHex,
     _generator, _rsEncode, _rsDecode, _syndromes, _solve, _toBase, _fromBase,
-    _prime, _width, _payloadWidth, _widthToBytes};
+    _prime, _width, _payloadWidth, _widthToBytes,
+    _primeBelow, _wireParams, _diffDecode, _interleaveOrder, _blockLayout, _root};
 });
