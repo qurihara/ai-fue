@@ -128,7 +128,7 @@
 
   <h2>2. 続けて吹く（無音で自動送り）</h2>
   <div class="card">
-    <div class="muted">「開始」を押したら、笛を順に吹いていきます。1本吹くたびに一瞬（0.2秒ほど）息を切って無音をつくると、そこが区切りとして検出され、次の桁へ自動で進みます。拍に合わせる必要はありません。<br>
+    <div class="muted">「開始」を押したら、笛を順に吹いていきます。1本吹くたびに一瞬（0.1秒ほど）息を切って無音をつくると、そこが区切りとして検出され、次の桁へ自動で進みます。拍に合わせる必要はありません。<br>
       吹き終えたら<b>もう一度ボタンを押して「終了し復号」</b>します。終わりを決めるのは利用者であり、システムは秘密が何本あるかを知りません。途中で間が空いても勝手に確定しないので、急かされずに吹けます。余計な音が1本入ってしまったときは「1本取り消す」で戻せます。</div>
     <div class="beatwrap">
       <div class="beatdot" id="autoDot">–</div>
@@ -137,6 +137,12 @@
         <div class="muted" id="autoHint" style="margin-top:6px">開始すると、まず部屋の静けさを0.4秒ほど測り、そこを基準に区切りを判定します。</div>
       </div>
     </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <label class="muted" for="gapRange">区切りとみなす無音の長さ：</label>
+      <input type="range" id="gapRange" min="60" max="400" step="10" value="100" style="flex:1;min-width:160px">
+      <span class="muted" id="gapVal" style="font-variant-numeric:tabular-nums">100 ms</span>
+    </div>
+    <div class="muted" style="margin:-4px 0 10px">短くすると速く吹けます。1本のつもりが2本に切れるときは長くしてください。吹いている途中でも変えられます。</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button id="autoStartBtn">開始</button>
       <button class="sec" id="autoUndoBtn" disabled>1本取り消す</button>
@@ -179,10 +185,16 @@
   <p class="muted">復号ロジックは <a href="cipher_codec.js">cipher_codec.js</a>（Python版 fue/cipher_codec.py と一致）。設定は <a href="cipher_config.json">cipher_config.json</a>。音程検出は <a href="https://github.com/ianprime0509/pitchy" target="_blank">pitchy</a>。測定・較正ツールは <a href="../">こちら</a>。</p>
 </div>
 
+
+<!-- 成功の表示は画面全体を覆うので、遷移先へ進む手段をこの中にも置く。
+     自動遷移が働かない場合でも行き止まりにならないようにするためである。 -->
 <div id="successOverlay">
   <div class="checkring"></div>
   <h3>認証成功</h3>
   <div class="sub" id="successSub">秘密のページへ移動します…</div>
+  <a id="successGo" href="#" rel="noopener" style="display:none;margin-top:18px;background:var(--ok);color:#fff;
+     text-decoration:none;font-weight:700;border-radius:9px;padding:.8em 1.4em">秘密のページを開く →</a>
+  <button class="sec" id="successClose" style="margin-top:12px">閉じる</button>
 </div>
 
 <script src="cipher_codec.js"></script>
@@ -216,7 +228,11 @@ const segOptions = {};  // 無音区切りの調整（gap= onmargin= minnote=）
     const v = q.get(name);
     if(v !== null && /^\d+(\.\d+)?$/.test(v)) segOptions[key] = parseFloat(v);
   };
-  num("gap", "gapMs");            // 区切りとみなす無音の長さ[ms]
+  num("gap", "gapMs");            // 区切りとみなす無音の長さ[ms]。つまみの初期値になる
+  if(segOptions.gapMs){
+    el("gapRange").value = String(Math.max(60, Math.min(400, segOptions.gapMs)));
+  }
+  el("gapVal").textContent = el("gapRange").value + " ms";
   num("onmargin", "onMarginDb");  // 暗騒音から何dB上を「鳴っている」とするか
   num("minnote", "minNoteMs");    // これより短い音は雑音として捨てる[ms]
   const sha = (q.get("sha256") || q.get("hash") || "").trim();
@@ -375,7 +391,10 @@ async function autoStart(){
   if(!await ensureMic()){ el("autoStatus").textContent="マイクを開始できませんでした。"; return; }
   if(cap.active || one.active){ el("autoStatus").textContent="ほかの入力方式が動いています。先にそちらを終えてください。"; return; }
   // 無音による自動終了は使わない（利用者を急かさないため）。終わりはボタンで決める。
-  const opts = Object.assign({}, segOptions, {endMs: Number.MAX_SAFE_INTEGER});
+  // 区切りの長さは画面のつまみから読む（吹いている最中の変更も効く）。
+  const opts = Object.assign({}, segOptions, {
+    gapMs: parseInt(el("gapRange").value, 10),
+    endMs: Number.MAX_SAFE_INTEGER});
   auto.seg = window.SilenceSegmenter.create(opts);
   auto.active=true; auto.seq=[]; auto.t0=performance.now();
   cipherFreqs=[];
@@ -590,13 +609,21 @@ async function decryptGoto(canonical){
 }
 function showSuccess(url){
   el("gotoBtn").href = url; el("gotoWrap").style.display = "";
+  // 成功の表示は画面全体を覆うため、その中にも進む手段を出しておく。
+  // 自動遷移がブラウザの都合で働かなくても、押せば進める。
+  el("successGo").href = url; el("successGo").style.display = "";
   if(autoNav){
-    el("gotoNote").textContent = "数秒後に自動で移動します。";
+    el("gotoNote").textContent = "数秒後に自動で移動します。移動しないときは上のボタンを押してください。";
     el("successSub").textContent = "秘密のページへ移動します…";
     el("successOverlay").classList.add("show");
-    setTimeout(()=>{ location.href = url; }, 3000);
+    setTimeout(()=>{
+      // すでに利用者が閉じた、または自分で移動したなら何もしない
+      if(el("successOverlay").classList.contains("show")) location.assign(url);
+    }, 3000);
   }else{
     el("gotoNote").textContent = "ボタンを押すと移動します。";
+    el("successSub").textContent = "下のボタンで秘密のページへ進めます。";
+    el("successOverlay").classList.add("show");
   }
 }
 
@@ -625,9 +652,10 @@ async function doDecode(){
     if(typeof pack.goto === "string" && /^https?:\/\//i.test(pack.goto)){
       showSuccess(pack.goto);
     }else if(msg){
+      // 遷移先が無い場合は言葉だけを見せる。閉じるのは利用者に任せる。
       el("successSub").textContent = msg;
+      el("successGo").style.display = "none";
       el("successOverlay").classList.add("show");
-      setTimeout(()=>{ el("successOverlay").classList.remove("show"); }, 4000);
     }
     return;
   }
@@ -662,6 +690,13 @@ el("clearBtn").onclick = ()=>{ cap.seq=[]; cipherFreqs=[]; renderSeq(); el("capS
 el("autoStartBtn").onclick = autoToggle;
 el("autoUndoBtn").onclick = autoUndo;
 el("autoClearBtn").onclick = autoClear;
+el("successClose").onclick = ()=>{ el("successOverlay").classList.remove("show"); };
+// 区切りの長さのつまみ。吹いている最中でも効くように、動かしたその場で反映する。
+el("gapRange").oninput = ()=>{
+  const v = parseInt(el("gapRange").value, 10);
+  el("gapVal").textContent = v + " ms";
+  if(auto.seg) auto.seg.options.gapMs = v;
+};
 el("oneStartBtn").onclick = oneStart;
 el("oneCommitBtn").onclick = oneCommit;
 el("oneEndBtn").onclick = oneEnd;

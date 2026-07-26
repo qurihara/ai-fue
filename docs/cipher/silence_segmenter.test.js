@@ -66,11 +66,18 @@ const gap = (ms) => ({ms: ms || 300, db: -95});
   console.log("  3) 短い雑音を捨てる: 本数", r.notes.length);
 }
 
-// 4) 音の中の一瞬のふらつき（100ms）では切れない
+// 4) 音の中の一瞬のふらつき（既定の gapMs=100 より短い 60ms）では切れない
 {
-  const r = run([QUIET, note(1046, 300), {ms: 100, db: -95}, note(1046, 300), gap(3000)]);
+  const r = run([QUIET, note(1046, 300), {ms: 60, db: -95}, note(1046, 300), gap(3000)]);
   assert.strictEqual(r.notes.length, 1, "gapMs未満のふらつきでは切れない");
-  console.log("  4) 一瞬のふらつき(100ms)で切れない: 本数", r.notes.length);
+  console.log("  4) 一瞬のふらつき(60ms)で切れない: 本数", r.notes.length);
+}
+
+// 4') 逆に、gapMs 以上の無音（150ms）ならきちんと切れる
+{
+  const r = run([QUIET, note(1046, 300), {ms: 150, db: -95}, note(1318, 300), gap(3000)]);
+  assert.strictEqual(r.notes.length, 2, "gapMs以上の無音では切れる");
+  console.log("  4') 150msの無音で切れる: 本数", r.notes.length);
 }
 
 // 5) うるさい部屋：暗騒音が高くても相対しきい値で動く
@@ -126,4 +133,4 @@ const gap = (ms) => ({ms: ms || 300, db: -95});
   console.log("  9) 無音のみ: 本数", r.notes.length, " 終了検出", r.ended);
 }
 
-console.log("silence_segmenter: 全9件パス");
+console.log("silence_segmenter: 全10件パス");
