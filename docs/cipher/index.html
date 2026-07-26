@@ -128,7 +128,7 @@
 
   <h2>2. 続けて吹く（無音で自動送り）</h2>
   <div class="card">
-    <div class="muted">「開始」を押したら、笛を順に吹いていきます。1本吹くたびに一瞬（0.1秒ほど）息を切って無音をつくると、そこが区切りとして検出され、次の桁へ自動で進みます。拍に合わせる必要はありません。<br>
+    <div class="muted">「開始」を押したら、笛を順に吹いていきます。1本吹くたびに一瞬（0.1秒ほど）息を切って無音をつくると、そこが区切りとして検出され、次の桁へ自動で進みます。拍に合わせる必要はありません。下の設定を入れると、息を切らずに続けて吹き、<b>音が変わったところ</b>で区切ることもできます。<br>
       吹き終えたら<b>もう一度ボタンを押して「終了し復号」</b>します。終わりを決めるのは利用者であり、システムは秘密が何本あるかを知りません。途中で間が空いても勝手に確定しないので、急かされずに吹けます。余計な音が1本入ってしまったときは「1本取り消す」で戻せます。</div>
     <div class="beatwrap">
       <div class="beatdot" id="autoDot">–</div>
@@ -143,6 +143,13 @@
       <span class="muted" id="gapVal" style="font-variant-numeric:tabular-nums">100 ms</span>
     </div>
     <div class="muted" style="margin:-4px 0 10px">短くすると速く吹けます。1本のつもりが2本に切れるときは長くしてください。吹いている途中でも変えられます。</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+      <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+        <input type="checkbox" id="pitchSplit" style="width:18px;height:18px">
+        <span>音が変わったところでも区切る（息を切らずに続けて吹く）</span>
+      </label>
+    </div>
+    <div class="muted" style="margin:0 0 10px">息継ぎをせず、唇を当てたまま次の笛へ滑らせて読めます。<b>隣り合う笛が同じ音だと1本に融合してしまう</b>ので、同じ音が隣り合わない並びのときだけ使ってください（印刷済みのスプールとカードはどちらも条件を満たしています）。</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button id="autoStartBtn">開始</button>
       <button class="sec" id="autoUndoBtn" disabled>1本取り消す</button>
@@ -235,6 +242,9 @@ const segOptions = {};  // 無音区切りの調整（gap= onmargin= minnote=）
   el("gapVal").textContent = el("gapRange").value + " ms";
   num("onmargin", "onMarginDb");  // 暗騒音から何dB上を「鳴っている」とするか
   num("minnote", "minNoteMs");    // これより短い音は雑音として捨てる[ms]
+  num("splitcents", "pitchSplitCents");  // 音の変わり目とみなす隔たり[セント]
+  num("stablems", "pitchStableMs");      // 離れた音がこの時間続いたら区切る[ms]
+  if(q.get("pitchsplit") === "1") el("pitchSplit").checked = true;
   const sha = (q.get("sha256") || q.get("hash") || "").trim();
   if(sha) el("cipherHash").value = sha;
   const spf = q.get("spf");
@@ -394,6 +404,8 @@ async function autoStart(){
   // 区切りの長さは画面のつまみから読む（吹いている最中の変更も効く）。
   const opts = Object.assign({}, segOptions, {
     gapMs: parseInt(el("gapRange").value, 10),
+    // 音の変わり目でも区切るかは、開始のたびにチェックの状態から読む
+    pitchSplitCents: el("pitchSplit").checked ? (segOptions.pitchSplitCents || 50) : 0,
     endMs: Number.MAX_SAFE_INTEGER});
   auto.seg = window.SilenceSegmenter.create(opts);
   auto.active=true; auto.seq=[]; auto.t0=performance.now();

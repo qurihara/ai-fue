@@ -133,4 +133,80 @@ const gap = (ms) => ({ms: ms || 300, db: -95});
   console.log("  9) 無音のみ: 本数", r.notes.length, " 終了検出", r.ended);
 }
 
-console.log("silence_segmenter: 全10件パス");
+// --- ここから、音の変わり目でも区切る方式（息を切らずに続けて吹く読み方）---
+const SPLIT = {pitchSplitCents: 50, pitchStableMs: 70};
+const cent = (hz, c) => hz * Math.pow(2, c / 1200);
+
+// 10) 無音を一切置かず、音を変えるだけで切り分かれる
+{
+  const script = [QUIET];
+  const want = [1046, 1318, 1567, 1975];
+  want.forEach(hz => script.push({ms: 300, db: -45, hz: hz}));   // 続けて鳴らす
+  script.push(gap(500));
+  const r = run(script, SPLIT);
+  assert.strictEqual(r.notes.length, 4, "無音なしでも4本に切り分かれる");
+  assert.deepStrictEqual(r.notes.map(n => Math.round(n.freq)), want);
+  console.log(" 10) 無音なしで音の変わり目のみ:", r.notes.map(n => Math.round(n.freq)).join(","));
+}
+
+// 11) 1本の中の音のふらつき（±25セント）では切れない
+{
+  const script = [QUIET];
+  for (let i = 0; i < 12; i++) {
+    script.push({ms: 40, db: -45, hz: cent(1046, i % 2 ? 25 : -25)});
+  }
+  script.push(gap(500));
+  const r = run(script, SPLIT);
+  assert.strictEqual(r.notes.length, 1, "しきい値未満のふらつきでは切れない");
+  console.log(" 11) ±25セントのふらつきで切れない: 本数", r.notes.length);
+}
+
+// 12) 隣り合うスロット（100セント差）でもきちんと切れる
+{
+  const r = run([QUIET, {ms: 300, db: -45, hz: 1046},
+                        {ms: 300, db: -45, hz: cent(1046, 100)}, gap(500)], SPLIT);
+  assert.strictEqual(r.notes.length, 2, "100セント差でも切れる");
+  const d = Math.round(1200 * Math.log2(r.notes[1].freq / r.notes[0].freq));
+  assert.ok(Math.abs(d - 100) < 15, "測った音程差が100セント付近");
+  console.log(" 12) 100セント差で切れる: 本数", r.notes.length, " 測った差", d, "セント");
+}
+
+// 13) 無音と音の変わり目が混ざっていても両方で切れる
+{
+  const r = run([QUIET, {ms: 300, db: -45, hz: 1046},
+                        {ms: 300, db: -45, hz: 1318},   // 息を切らずに変える
+                        gap(250),                        // ここは息を切る
+                        {ms: 300, db: -45, hz: 1567},
+                        gap(500)], SPLIT);
+  assert.strictEqual(r.notes.length, 3, "無音でも変わり目でも切れる");
+  console.log(" 13) 無音と変わり目の混在: 本数", r.notes.length);
+}
+
+// 14) 短すぎる音は、続けて吹いていても捨てる（滑らせた途中で一瞬鳴る音）
+{
+  const r = run([QUIET, {ms: 300, db: -45, hz: 1046},
+                        {ms: 80,  db: -45, hz: 1200},   // 通りすがりの短い音
+                        {ms: 300, db: -45, hz: 1567}, gap(500)], SPLIT);
+  assert.strictEqual(r.notes.length, 2, "短すぎる音は捨てる");
+  console.log(" 14) 通りすがりの短い音を捨てる: 本数", r.notes.length,
+              " →", r.notes.map(n => Math.round(n.freq)).join(","));
+}
+
+// 15) 印刷済みスプール pass_#26 の実際の音列を、無音なしで通しで読む
+{
+  const HZ = {"G#6":1661.22,"A6":1760.00,"A#6":1864.66,"B6":1975.53,"C7":2093.00,
+              "C#7":2217.46,"D7":2349.32,"D#7":2489.02,"E7":2637.02,"F7":2793.83,"F#7":2959.96};
+  const seq = ["C7","A6","C#7","G#6","A#6","D7","A#6","E7","B6","C7","C#7","B6","A#6",
+               "D#7","F#7","A#6","D7","A#6","A6","G#6","F7","A6","F7","E7","F7","C#7"];
+  const script = [QUIET];
+  seq.forEach(n => script.push({ms: 250, db: -45, hz: HZ[n]}));   // 息継ぎなし
+  script.push(gap(500));
+  const r = run(script, SPLIT);
+  assert.strictEqual(r.notes.length, 26, "26本すべて切り分かれる");
+  const got = r.notes.map(n => Math.round(n.freq));
+  assert.deepStrictEqual(got, seq.map(n => Math.round(HZ[n])));
+  console.log(" 15) スプール26本を無音なしで通し: 本数", r.notes.length,
+              " 所要", (26 * 0.25 + 0.6).toFixed(1), "秒");
+}
+
+console.log("silence_segmenter: 全15件パス");
