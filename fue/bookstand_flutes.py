@@ -120,7 +120,7 @@ def place(note, R, window_plane, l_max, mouth_y=MOUTH_Y, ref_tab=False):
     return fl, w
 
 
-def engrave_star(host, fl, R, r=2.4, depth=0.8, gap=3.5):
+def engrave_star(host, fl, R, r=None, depth=0.8, gap=None, margin=0.5):
     """1本目（基準笛）の[* 足のすぐ先]に、＊を浅く彫り込む。
 
     Chordika のトニック笛と同じ目印である。突起や隆起した帯は目立ちすぎるので、
@@ -133,6 +133,16 @@ def engrave_star(host, fl, R, r=2.4, depth=0.8, gap=3.5):
         v /= np.linalg.norm(v)
     v = fl.vertices
     foot = float(v.dot(axis).max())
+    # ＊は笛の足の先の帯に彫る。帯の幅は本立ての奥行きで決まるので、そこから大きさを決める。
+    # 奥行きを縮めた版（v2）では帯が4mmほどしかないので、＊も小さくする。
+    strip = float(host.vertices.dot(axis).max()) - foot
+    if r is None:
+        r = min(2.4, (strip - 2 * margin) / 2.0)
+    if gap is None:
+        # 帯が広いときは足のすぐ先（3.5mm）に置き、狭いときは帯の中央に寄せる
+        gap = max(margin, min(3.5, (strip - 2 * r) / 2.0))
+    if r < 1.0:
+        raise ValueError("笛の足の先に残る帯が %.1fmm しかなく、＊を彫れない" % strip)
     center_u = np.array([0.0, 0.0, 0.0])
     width = R[:3, :3] @ np.array([0.0, 1.0, 0.0])
     width = width / np.linalg.norm(width)
@@ -225,8 +235,10 @@ def carve_tool(fl, R, ahead=0.6, out=0.4):
     return trimesh.Trimesh(vertices=pts).convex_hull
 
 
-def build(notes, carve=True, engine="manifold"):
+def build(notes, carve=True, engine="manifold", scale_y=1.0):
     host = trimesh.load(HOST, force="mesh")
+    if scale_y != 1.0:
+        host.apply_scale([1.0, scale_y, 1.0])     # 奥行きだけを縮める
     host.apply_translation(-host.bounds[0])
     geom = measure_host(host)
     placed, infos = layout(notes, host, geom)
@@ -256,6 +268,8 @@ def main(argv=None):
     ap.add_argument("--payload", default=None, help="秘密（既定は pass_#26）")
     ap.add_argument("--parity", type=int, default=4, help="RSブロックあたりのパリティ記号数")
     ap.add_argument("--no-carve", action="store_true")
+    ap.add_argument("--scale-y", type=float, default=1.0,
+                    help="本立ての奥行きの倍率（v2は0.7＝30%%縮小）")
     ap.add_argument("--out", default=os.path.join(OUT, "bookstand_pass26.3mf"))
     args = ap.parse_args(argv)
 
@@ -271,7 +285,7 @@ def main(argv=None):
     print("符号化: 12スロット・隣接同音禁止・パリティ%d記号/ブロック → 笛%d本"
           % (args.parity, len(notes)))
 
-    sc, infos, geom = build(notes, carve=not args.no_carve)
+    sc, infos, geom = build(notes, carve=not args.no_carve, scale_y=args.scale_y)
     os.makedirs(OUT, exist_ok=True)
     sc.export(args.out)
     n = {}
