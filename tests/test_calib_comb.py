@@ -74,6 +74,39 @@ def test_blow_and_forming_are_separated():
     assert res["forming_sd_corrected"] <= res["forming_sd_cents"] + 1e-9
 
 
+def test_forming_correction_handles_uneven_pass_counts():
+    """本によって吹鳴の回数が違っても、造形のばらつきの補正が壊れないこと。
+
+    以前は「いちばん少ない回数」で補正していたため、1回しか吹いていない本が
+    1つでもあると差し引きが過大になり、造形のばらつきが0と出てしまった。
+    """
+    passes = _synth(offset_cents=0.0, forming_sd=14.0, blow_sd=6.0, n_passes=3, seed=11)
+    for row in passes[1:]:                       # 一部の本は1回しか吹いていない
+        for i in range(0, 36, 3):
+            row[i] = None
+    res = cc.analyze(passes)
+    assert res["forming_sd_corrected"] > 5.0, res["forming_sd_corrected"]
+    assert res["forming_sd_corrected"] <= res["forming_sd_cents"]
+
+
+def test_fit_can_use_measured_lengths():
+    """実測した管長を渡すと、そちらで当てはめること。
+
+    外見統一のコームでは、いちばん低い音の空洞が外形の長さに頭打ちされて設計より
+    短くなる。実測値で当てはめれば、その本だけ高く鳴るのは造形の問題だと分かり、
+    較正の式そのものを疑わずに済む。
+    """
+    short = 1.6                                   # G#6 だけ管長が足りない
+    lengths = {n: cc.length_for_note(n) for n in cc.NOTES12}
+    lengths["G#6"] -= short
+    passes = [[cc.CALIB_A / (lengths[n] + cc.CALIB_E) for n in cc.LAYOUT]]
+    naive = cc.analyze(passes)["fit"]
+    aware = cc.analyze(passes, lengths=lengths)["fit"]
+    assert aware["rms_cents"] < 0.5               # 実測値なら現行の定数がそのまま出る
+    assert abs(aware["A"] - cc.CALIB_A) / cc.CALIB_A < 1e-3
+    assert naive["rms_cents"] > aware["rms_cents"] * 5
+
+
 def test_g7_judgement():
     """G7が3本とも狙いに近ければ合格、1本でも欠ければ不合格になること。"""
     ok = cc.analyze(_synth(offset_cents=0.0, forming_sd=5.0, blow_sd=3.0))

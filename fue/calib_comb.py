@@ -251,8 +251,15 @@ def fit_calibration(pairs):
     return a, e, rms
 
 
-def analyze(passes, notes=None):
-    """吹鳴ごとの36個の測定値から、各指標を計算する。"""
+def analyze(passes, notes=None, lengths=None):
+    """吹鳴ごとの36個の測定値から、各指標を計算する。
+
+    lengths に {音名: 実際の管長[mm]} を渡すと、較正定数の当てはめにその値を使う。
+    渡さなければ設計上の管長を使う。実物が設計どおりに刷れているとは限らず、たとえば
+    外見統一のコームでは、いちばん低い音の空洞が外形の長さに頭打ちされて設計より
+    短くなる。そのときは実測した管長で当てはめないと、造形の問題を較正の問題と
+    取り違えてしまう。
+    """
     notes = notes or LAYOUT
     n_pos = len(notes)
     result = {"n_passes": len(passes), "positions": [], "notes": {}}
@@ -291,11 +298,18 @@ def analyze(passes, notes=None):
     result["blow_dof"] = dof
 
     # 音ごとの集計（同じ音の3本）。
-    ss_f, dof_f = 0.0, 0
+    # あわせて、1本の平均が吹鳴 n 回の平均であることによる水増し分 σ_吹き方^2/n を、
+    # 本ごとの回数に合わせて足し込んでおく（回数が本によって違うことがあるため）。
+    ss_f, dof_f, inflate, n_inf = 0.0, 0, 0.0, 0
     for note in NOTES12:
         idxs = [i for i, nm in enumerate(notes) if nm == note]
         means = [result["positions"][i]["dev_cents"] for i in idxs]
+        counts = [len(result["positions"][i]["values"]) for i in idxs
+                  if result["positions"][i]["dev_cents"] is not None]
         means = [m for m in means if m is not None]
+        if len(means) >= 2:
+            inflate += sum(1.0 / c for c in counts) / len(counts)
+            n_inf += 1
         info = {
             "copies": len(idxs),
             "measured": len(means),
@@ -310,11 +324,11 @@ def analyze(passes, notes=None):
     result["forming_dof"] = dof_f
 
     # 造形のばらつきから、吹き方のばらつきが混ざるぶんを差し引く。
-    # 1本の平均は吹鳴 n 回の平均なので、その分散は σ_吹き方^2 / n だけ水増しされている。
+    # 本ごとに吹鳴の回数が違うので、1/n の平均を使って水増し分を見積もる。
     corrected = None
     if result["forming_sd_cents"] is not None and result["blow_sd_cents"] is not None:
-        n = max(1, min(len(e["values"]) for e in result["positions"] if e["values"]))
-        var = result["forming_sd_cents"] ** 2 - result["blow_sd_cents"] ** 2 / n
+        share = inflate / n_inf if n_inf else 1.0
+        var = result["forming_sd_cents"] ** 2 - result["blow_sd_cents"] ** 2 * share
         corrected = math.sqrt(var) if var > 0 else 0.0
     result["forming_sd_corrected"] = corrected
 
@@ -357,7 +371,10 @@ def analyze(passes, notes=None):
     for i, e in enumerate(result["positions"]):
         if e["mean"] is None:
             continue
-        pairs.append((length_for_note(notes[i]), e["mean"]))
+        note = notes[i]
+        L = (lengths or {}).get(note, length_for_note(note))
+        pairs.append((L, e["mean"]))
+    result["fit_used_measured_lengths"] = bool(lengths)
     if len(pairs) >= 3:
         a_new, e_new, rms = fit_calibration(pairs)
         result["fit"] = {"A": a_new, "e": e_new, "rms_cents": rms, "n": len(pairs)}
@@ -403,12 +420,20 @@ def format_report(res):
         w("  造形のばらつき  : %.1f セント（自由度%d、そのまま）" %
           (res["forming_sd_cents"], res["forming_dof"]))
     if res["forming_sd_corrected"] is not None:
-        w("  造形のばらつき  : %.1f セント（吹き方のばらつきを差し引いた値）" %
-          res["forming_sd_corrected"])
-        if res["forming_sd_corrected"] <= 12.0:
-            w("      → 10セント前後なので、50セント刻みが成立する見込みである。")
+        if res["forming_sd_corrected"] <= 0.0:
+            w("  造形のばらつき  : 吹き方のばらつきに埋もれて検出できない")
+            w("      → 本どうしの散らばりは、吹き方のばらつきだけで説明がつく大きさである。")
+            w("      → 造形のばらつきは多くとも %.1f セント程度と言える（それ以上の主張はできない）。"
+              % res["forming_sd_cents"])
+            w("      → 50セント刻みには有利な結果だが、確かめるには吹き方のばらつきを"
+              "小さくした測り直しが要る。")
         else:
-            w("      → 10セント前後より大きいので、50セント刻みは危うい。")
+            w("  造形のばらつき  : %.1f セント（吹き方のばらつきを差し引いた値）" %
+              res["forming_sd_corrected"])
+            if res["forming_sd_corrected"] <= 12.0:
+                w("      → 10セント前後なので、50セント刻みが成立する見込みである。")
+            else:
+                w("      → 10セント前後より大きいので、50セント刻みは危うい。")
     if res["common_offset_cents"] is not None:
         w("  全音に共通するずれ: %+.1f セント（基準笛との比で読むので復号では消える）" %
           res["common_offset_cents"])
@@ -430,8 +455,9 @@ def format_report(res):
         w("")
         w("[較正定数の再推定]")
         w("  現行 A=%.1f e=%.3f" % (CALIB_A, CALIB_E))
-        w("  再推定 A=%.1f e=%.3f（%d本で当てはめ、残差の実効値 %.1f セント）" %
-          (f["A"], f["e"], f["n"], f["rms_cents"]))
+        w("  再推定 A=%.1f e=%.3f（%d本で当てはめ、残差の実効値 %.1f セント、管長は%s）" %
+          (f["A"], f["e"], f["n"], f["rms_cents"],
+           "実測値" if res.get("fit_used_measured_lengths") else "設計値"))
         w("  out/cipher_mini10_calib.txt をこの値へ書き換えると、以後の笛がこの較正で刷られる。")
     return "\n".join(out)
 
