@@ -204,8 +204,8 @@ def layout(count, reference=True, correction_mm=0.0, host_path=HOST, uniform_win
 
     # 外形は使う音のうち最長管(=最低音)に統一
     Ls = [mini10.length_for_note(n) for n in seq]
-    L_max = max(Ls)
-    sample = mini10.uniform_flute(L_max, L_max=L_max, correction_mm=correction_mm)
+    L_max = mini10.uniform_body_length(Ls)
+    sample = mini10.uniform_flute(max(Ls), L_max=L_max, correction_mm=correction_mm)
     width = sample.bounds[1][1] - sample.bounds[0][1]
 
     # 各壁の使える y 範囲（両端 margin を除く）。全壁で共通の一定ピッチ p を、

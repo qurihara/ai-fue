@@ -248,6 +248,21 @@ def test_alignment_merges_a_split_blow():
     assert len([p for p in path if p[1] != "miss"]) == 36
 
 
+def test_alignment_absorbs_an_extra_sound():
+    """どの笛でもない余分な音を、並びをずらさずに吸収できること。
+
+    円周に笛が並ぶスプールでは、1周して基準笛へ戻ったぶんが余分に入りやすい。
+    これを吸収できないと、以降の対応が1本ずつずれて全部が読み違いになる。
+    """
+    meas = _blow(cc.LAYOUT)
+    meas.append(meas[0])                     # 1周して先頭へ戻ってしまった
+    cost, path = cc.align_measurements(meas, cc.LAYOUT)
+    kinds = [k for _, k, _ in path]
+    assert kinds.count("extra") == 1
+    assert kinds.count("one") == 36
+    assert [k for k in kinds if k != "extra"] == ["one"] * 36
+
+
 def test_blow_direction_is_detected():
     """端から端まで吹いたとき、どちらの端から始めたかを測定値から決められること。"""
     d, fwd, rev = cc.blow_direction(_blow(cc.LAYOUT))

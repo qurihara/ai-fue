@@ -73,7 +73,7 @@ def place_flutes(notes, carve=True, spool_path=SPOOL, start_deg=90.0, rrim=100.0
     spool = _spool_body(spool_path, geom_key)
     xface, sign = _outer_face(spool, rrim)      # 円盤(外面)がどちら側かを実測
     yc, zc = 100.0, 100.0
-    L_max = max(mini10.length_for_note(nt) for nt in notes)   # 外見統一の外形長
+    L_max = mini10.uniform_body_length([mini10.length_for_note(nt) for nt in notes])
     n = len(notes)
     placed, infos = [], []
     for i, note in enumerate(notes):
@@ -104,7 +104,7 @@ def place_flutes_multiobj(notes, carve=True, spool_path=SPOOL, start_deg=90.0, r
     spool = _spool_body(spool_path, geom_key)
     xface, sign = _outer_face(spool, rrim)
     yc, zc = 100.0, 100.0
-    L_max = max(mini10.length_for_note(nt) for nt in notes)
+    L_max = mini10.uniform_body_length([mini10.length_for_note(nt) for nt in notes])
     n = len(notes)
     placed, infos = [], []
     for i, note in enumerate(notes):

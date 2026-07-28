@@ -103,13 +103,35 @@ def build_calib_comb(notes, gap=0.0, merge=True, overlap=0.3):
     return comb, infos
 
 
+BODY_MARGIN = 3.0   # 外見統一の外形に持たせる余白[mm]。
+# いちばん低い音にも内部の仕切り壁を作れるようにするためのもの。外形長を最長管ちょうどに
+# 揃えると、最低音だけは壁を置く余地がなく、末端の壁のぶんボアが短くなる。2026-07-28 の
+# 較正コームでは G#6 の空洞が設計より1.57mm短く、約+52セント高く鳴っていた。スプール
+# 「pass_#26」が復号できなかった原因の1つもこれである（G#6が1スロット高く読まれた）。
+# cipherflute.WALL_MARGIN と同じ考え方で、そちらは最初からこの余白を持っていた。
+
+
+def uniform_body_length(lengths, margin=BODY_MARGIN):
+    """外見統一版の外形長を返す。いちばん長い管に余白を足す。"""
+    return max(lengths) + margin
+
+
 def uniform_flute(L, L_max=None, wall_thickness=1.3, correction_mm=0.0):
     """外見統一版：外形を最長管 L_max に揃え、内部の仕切り壁でボア長(=音長)を L にする。
     壁より末端側のボアは埋めず密閉空洞のまま残す(重さをほぼ一定に保つ)。基礎実験では
     correction_mm=0（壁を音長Lちょうどに置く）で刷り、下がり量を実測してから補償を決める。
-    向きは flute と同じ native（窓=+z, 床=z=0, 最小角=原点）。L>=L_max では壁なし。"""
-    if L_max is None or L >= L_max:
+    向きは flute と同じ native（窓=+z, 床=z=0, 最小角=原点）。
+
+    L_max を渡さなければ、外形が管長ちょうどの普通の笛になる（単体で使う場合）。
+    L_max を渡したのに壁を置く余地が無ければ例外にする。黙って壁なしの笛を返すと、
+    いちばん低い音だけボアが短くなり、音が高くずれていることに気づけないためである。
+    外形長は uniform_body_length で決めること。"""
+    if L_max is None:
         return flute(L)
+    if L + wall_thickness > L_max:
+        raise ValueError(
+            "外形長 %.2fmm では管長 %.2fmm の笛に仕切り壁(%.2fmm)を置けない。"
+            "uniform_body_length で余白を足した外形長を渡すこと。" % (L_max, L, wall_thickness))
     shell = flute(L_max)
     b = shell.bounds
     wall_x0 = L - correction_mm            # 壁の頭側の面（ここでボアを閉じる＝ボア長L）
@@ -134,7 +156,7 @@ def build_uniform_calib_comb(notes, correction_mm=0.0, gap=0.0, merge=True, over
     見た目では音（長さ）が分からないので、研究では順番で識別する（低い順に並べる）。"""
     base = trimesh.load(BASE)
     Ls = [length_for_note(n) for n in notes]
-    L_max = max(Ls)
+    L_max = uniform_body_length(Ls)
     flutes, infos, y = [], [], 0.0
     for n, L in zip(notes, Ls):
         f = uniform_flute(L, L_max=L_max, correction_mm=correction_mm)

@@ -25,7 +25,7 @@ OVER = 0.3       # 笛の床へ食い込ませて確実に一体化させる量
 def build(note="C7", notes=None, bar=BAR):
     """段階(2)の試験片を作る。戻り値 (mesh, flute, 情報dict)。"""
     notes = notes or (mini10.CALIB11 + ["G7"])          # 12音 G#6〜G7
-    L_max = max(mini10.length_for_note(n) for n in notes)
+    L_max = mini10.uniform_body_length([mini10.length_for_note(n) for n in notes])
     L = mini10.length_for_note(note)
     g = mini10.uniform_flute(L, L_max=L_max)            # native: 窓=+z, 床=z=0, 長さ=+x
     # x軸まわり -90度: 窓(+z)を +y へ、幅(+y)を -z へ。窓が水平方向に開く。
@@ -105,7 +105,7 @@ def build_multi(note="C7", notes=None, bar=BAR):
     戻り値は (mesh, 面ごとの検査点dict, 情報dict)。
     """
     notes = notes or (mini10.CALIB11 + ["G7"])          # 12音 G#6〜G7
-    L_max = max(mini10.length_for_note(n) for n in notes)
+    L_max = mini10.uniform_body_length([mini10.length_for_note(n) for n in notes])
     L = mini10.length_for_note(note)
 
     barbox = trimesh.creation.box(extents=[L_max, bar, bar])
@@ -190,7 +190,7 @@ def _carve(parts, flute):
 def build_angle(theta_deg, note="C7", notes=None):
     """1つの角度ぶんの試験片。戻り値 (mesh, 検査点dict, 情報dict)。"""
     notes = notes or (mini10.CALIB11 + ["G7"])
-    L_max = max(mini10.length_for_note(n) for n in notes)
+    L_max = mini10.uniform_body_length([mini10.length_for_note(n) for n in notes])
     L = mini10.length_for_note(note)
     g = mini10.uniform_flute(L, L_max=L_max)
 
@@ -232,7 +232,7 @@ SKIRT_BITE = 0.4          # 裾の頭を笛の断面より少し大きくして�
 def build_vertical(mouth="up", note="C7", notes=None):
     """縦置きの試験片。mouth="up" なら吹き込み口が上、"down" なら下を向く。"""
     notes = notes or (mini10.CALIB11 + ["G7"])
-    L_max = max(mini10.length_for_note(n) for n in notes)
+    L_max = mini10.uniform_body_length([mini10.length_for_note(n) for n in notes])
     L = mini10.length_for_note(note)
     g = mini10.uniform_flute(L, L_max=L_max)
 

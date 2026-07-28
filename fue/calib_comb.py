@@ -138,7 +138,8 @@ def parse_measurements(text, first=1, last=None):
     return passes
 
 
-def align_measurements(meas, notes, center=70.0, sigma=45.0, miss=6.0, split=3.0):
+def align_measurements(meas, notes, center=70.0, sigma=45.0, miss=6.0, split=3.0,
+                       extra=6.0):
     """測定値の並びを、期待する音の並びへ対応づける（動的計画法）。
 
     実物を続けて吹くと、鳴らない笛が飛ばされたり、1本の吹鳴が途中の音の揺れで2つに
@@ -147,8 +148,12 @@ def align_measurements(meas, notes, center=70.0, sigma=45.0, miss=6.0, split=3.0
     狙いからのずれが共通の値 center の近くに揃う対応を選ぶ。
 
     meas は測定値の並び（欠測を除いたもの）、notes は吹いた順の音名の並びである。
+    どの笛にも対応しない余分な音（円周に並ぶスプールを1周して基準笛へ戻ってしまう、
+    咳や物音が1本として入る）も "extra" として吸収できる。
+
     戻り値は (合計費用, 対応の並び)。対応は (音の位置, 種別, 使った測定値) の組で、
-    種別は "one"（1対1）、"split"（2つに分かれた）、"miss"（鳴らなかった）である。
+    種別は "one"（1対1）、"split"（2つに分かれた）、"miss"（鳴らなかった）、
+    "extra"（どの笛でもない余分な音）である。
     費用は小さいほど良く、吹いた向きの判定にも使える（正順と逆順で比べる）。
     """
     m, n = len(meas), len(notes)
@@ -162,7 +167,14 @@ def align_measurements(meas, notes, center=70.0, sigma=45.0, miss=6.0, split=3.0
 
     for i in range(m + 1):
         for j in range(n + 1):
-            if D[i][j] == inf or j >= n:
+            if D[i][j] == inf:
+                continue
+            if i < m:                               # どの笛でもない余分な音
+                c = D[i][j] + extra
+                if c < D[i + 1][j]:
+                    D[i + 1][j] = c
+                    B[i + 1][j] = (i, j, "extra", [meas[i]])
+            if j >= n:
                 continue
             c = D[i][j] + miss                      # この音は鳴らなかった
             if c < D[i][j + 1]:
