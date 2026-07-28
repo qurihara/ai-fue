@@ -1,6 +1,6 @@
 {
  "type": "process",
- "name": "0.08mm careful thinwall @BBL A1M (PLA) +brim",
+ "name": "0.08mm careful thinwall @BBL A1M (PLA)",
  "inherits": "fdm_process_single_0.08",
  "from": "system",
  "setting_id": "GP049",
@@ -61,6 +61,6 @@
  "detect_thin_wall": [
   "1"
  ],
- "brim_width": "8",
- "brim_object_gap": "0.1"
+ "brim_width": "5",
+ "brim_object_gap": "0"
 }

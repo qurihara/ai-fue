@@ -184,7 +184,7 @@ def _even_positions(ymin, ymax, k, width, margin):
     return [lo + j * step for j in range(k)]
 
 
-def layout(count, reference=True, correction_mm=0.0, host_path=HOST,
+def layout(count, reference=True, correction_mm=0.0, host_path=HOST, uniform_window=True,
            gap_mm=3.0, margin_mm=6.0, embed_mm=2.0, notes=None, geom_key="3", slots=13):
     """必要本数を上端リッジに沿って配置。戻り値 (host, placed[list mesh], infos[list dict])。
     notes 未指定なら音セット(slots=13→CALIB13 / 11→CALIB11)を巡回した見本音列（外見統一なので
@@ -242,7 +242,10 @@ def layout(count, reference=True, correction_mm=0.0, host_path=HOST,
         if si >= len(seq):
             break
         y0, y1 = spans[wi]
-        winside = +1 if cx >= x_mid else -1     # モデル中心より外側へ窓を開口
+        # 窓の向きは全本そろえる（2026-07-28）。以前はモデル中心より外側へ向けていたが、
+        # 向きが2種類できて印刷向きの検査が煩雑になるうえ、揃える利点のほうが大きい。
+        # 板の厚みは約2mmで隣の板とは10mm以上あくので、どちら側を向いても窓の前は空気である。
+        winside = +1 if uniform_window else (+1 if cx >= x_mid else -1)
         y = y0 + margin_mm
         for _ in range(ks[wi]):
             if si >= len(seq):
@@ -271,6 +274,32 @@ def carve(host, placed, engine="manifold"):
     return body
 
 
+# 通常の本立として使う向きへ全体を起こす回転。x軸まわりに+90度で
+#   もとのy（仕切りの背丈）→ +z（高さ）、もとのz（押し出し120mm）→ -y（奥行き）。
+# これで仕切りの上端が真上を向き、[* 笛の長軸が水平になる]（もとのzに沿っていたため）。
+# 窓はもとの±xのまま水平を向くので、印刷向きは±90度＝2026-07-27に実機で確かめた範囲に入る。
+R_UPRIGHT = np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]], float)
+
+
+def to_upright(meshes):
+    """本立てと笛をまとめて、通常の使用向きへ起こす。ベッド(z=0)へ落とす。"""
+    M = _mat(R_UPRIGHT)
+    for m in meshes:
+        m.apply_transform(M)
+    zmin = min(m.bounds[0][2] for m in meshes)
+    ymin = min(m.bounds[0][1] for m in meshes)
+    xmin = min(m.bounds[0][0] for m in meshes)
+    for m in meshes:
+        m.apply_transform(tf.translation_matrix([-xmin, -ymin, -zmin]))
+    return meshes
+
+
+def flute_orientation(winside, upright):
+    """配置した笛の回転行列を返す。印刷向きの検査 orient_check へ渡すためのもの。"""
+    R = R_WIN_PLUS if winside > 0 else R_WIN_MINUS
+    return (R_UPRIGHT @ R) if upright else R
+
+
 def build_scene(host, placed, infos, carve_body=True):
     body = carve(host, placed) if carve_body else host
     sc = trimesh.Scene()
@@ -296,6 +325,8 @@ def verify_cavity(placed, combined, correction_mm=0.0):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="本立て上端リッジへ暗号笛を鉛直配置")
     ap.add_argument("--count", type=int, default=0, help="データ笛の本数（0=体系ごとの128bit本数。13音は35, 11音は38）")
+    ap.add_argument("--flat", action="store_true",
+                    help="通常の使用向きへ起こさず、もとの寝かせた向きのまま出す（笛が縦置きになるので非推奨）")
     ap.add_argument("--slots", type=int, default=13, choices=(11, 13),
                     help="スロット体系（13=F#6..F#7/GF13, 11=G#6..F#7/GF11・低音2音除く安定版）")
     ap.add_argument("--no-reference", action="store_true", help="先頭の基準笛を付けない（絶対音程）")
@@ -316,6 +347,29 @@ def main(argv=None):
         geom_key=args.geom, slots=args.slots)
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+
+    # 通常の本立として使う向きへ起こす（既定）。これで笛の長軸が水平になる。
+    upright = not args.flat
+    if upright:
+        to_upright([host] + placed)
+
+    # 印刷向きの検査（2026-07-28に実機で確定した範囲に入っているか）
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import orient_check as oc
+    checks = [("f%02d %s" % (it["idx"], it["note"]),
+               dict(R=flute_orientation(+1 if it["win"] == "+x" else -1, upright)))
+              for it in infos]
+    results = oc.check_many(checks)
+    bad = [(n, r) for n, r in results if r.verdict != "ok"]
+    kinds = sorted({(r.verdict, round(r.angle_deg), round(r.tilt_deg)) for _, r in results})
+    print("印刷向きの検査: %d本中 ok %d本" % (len(results), len(results) - len(bad)))
+    for vd, ang, tl in kinds:
+        n = sum(1 for _, r in results
+                if (r.verdict, round(r.angle_deg), round(r.tilt_deg)) == (vd, ang, tl))
+        print("   %-8s 窓の角度 %+4d度 / 長軸の傾き %2d度 … %d本" % (vd, ang, tl, n))
+    if bad:
+        print("   [注意] 検証していない向きの笛がある。1本目: %s" % bad[0][1].message)
+
     if args.multiobj:
         sc, body = build_scene(host, placed, infos, carve_body=not args.no_carve)
         sc.export(args.out)
