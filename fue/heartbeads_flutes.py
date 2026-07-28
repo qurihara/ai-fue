@@ -214,10 +214,13 @@ def place_flute_around_hole(note, bead, angle_deg, l_max, fuse=0.5, wall_in=WALL
     u = np.cross([0.0, 0.0, 1.0], w)
     v = fl.vertices
     hole_w = float(np.dot([cx, cy, 0.0], w))
-    shift_hug = (hole_w - (r + fuse)) - v.dot(w).max()          # 窓の面を穴の壁へ
+    # 笛の「背中」（窓の反対側）を穴の壁に合わせる。こうすると本体が穴へ食い込み、
+    # 窓は穴の内側に開いて空気に触れる。窓の面を穴の壁に合わせる置き方では、窓と穴の
+    # あいだに薄い材料が残って密閉され、鳴らなくなる（2026-07-28 に一度これで作り直した）。
+    shift_hole = (hole_w - (r + fuse)) - v.dot(w).min()
     surf = float((bead.vertices.dot(-w)).max())
     shift_wall = -(surf - wall_in) - v.dot(w).min()             # 背中を表面の内側へ
-    shift_w = max(shift_hug, shift_wall)                        # 穴に近い方を採る
+    shift_w = max(shift_hole, shift_wall)                       # 穴に近い方を採る
     shift_u = float(np.dot([cx, cy, 0.0], u)) - (v.dot(u).min() + v.dot(u).max()) / 2.0
     d = shift_w * w + shift_u * u
     d[2] = ztop - fl.bounds[1][2]                               # 吸込口をハート上端へ
