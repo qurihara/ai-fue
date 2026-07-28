@@ -98,29 +98,53 @@ def place_flutes(notes, carve=True, spool_path=SPOOL, start_deg=90.0, rrim=100.0
 
 
 def place_flutes_multiobj(notes, carve=True, spool_path=SPOOL, start_deg=90.0, rrim=100.0,
-                          geom_key="3"):
+                          geom_key="3", ref_tab=True, l_max=None, print_pose=True):
     """スプール本体と各笛を別オブジェクトにした Scene を返す（GUIでオブジェクトごとの設定用）。
-    彫り抜き(carve)はスプール本体だけに適用し、笛は別オブジェクトのまま残す。戻り値 (scene, infos)。"""
+    彫り抜き(carve)はスプール本体だけに適用し、笛は別オブジェクトのまま残す。戻り値 (scene, infos)。
+
+    l_max を渡すと外形長をその値に固定する。1つの秘密を複数のスプールへ分けて埋めるときは、
+    プレートごとに音の顔ぶれが違っても外形は同じでなければならない（外見から音が読めては
+    ならないため）。ref_tab=False なら基準笛の印(タブ)を付けない（基準笛が別のプレートに
+    ある場合）。"""
     spool = _spool_body(spool_path, geom_key)
     xface, sign = _outer_face(spool, rrim)
     yc, zc = 100.0, 100.0
-    L_max = mini10.uniform_body_length([mini10.length_for_note(nt) for nt in notes])
+    L_max = l_max or mini10.uniform_body_length([mini10.length_for_note(nt) for nt in notes])
     n = len(notes)
     placed, infos = [], []
     for i, note in enumerate(notes):
         L = mini10.length_for_note(note)
         g = mini10.uniform_flute(L, L_max=L_max)
-        if i == 0:
+        if i == 0 and ref_tab:
             g = mini10.reference_tab(g)
         g = _orient_and_place(g, xface, sign, yc, zc, rrim)
         theta = np.deg2rad(start_deg + i * (360.0 / n))
-        g.apply_transform(tf.rotation_matrix(theta, [1, 0, 0], [0, yc, zc]))
+        rot = tf.rotation_matrix(theta, [1, 0, 0], [0, yc, zc])
+        g.apply_transform(rot)
         placed.append(g)
-        infos.append(dict(note=note, L=round(L, 1), angle=round((start_deg + i * 360.0 / n) % 360, 1)))
+        # 向きの検査(orient_check)に渡せるよう、native姿勢からの回転を記録しておく。
+        R = rot[:3, :3] @ (M_INNER if sign > 0 else M_INNER_MINX)[:3, :3]
+        infos.append(dict(note=note, L=round(L, 1),
+                          angle=round((start_deg + i * 360.0 / n) % 360, 1), R=R))
     body = spool
     if carve:
         for g in placed:
             body = body.difference(g.convex_hull, engine="manifold")
+    if print_pose:
+        # 元の3mfは円盤が立った姿勢（スプールの軸がx）である。印刷は円盤を寝かせて
+        # 外面をベッドに付ける。こうすると笛の長軸が水平になり、窓は真上を向く。
+        # 検証済みの向き（横置き・窓が-135度から+135度）のちょうど真ん中である。
+        P = tf.rotation_matrix(np.pi / 2 if sign > 0 else -np.pi / 2, [0, 1, 0])
+        body.apply_transform(P)
+        for g in placed:
+            g.apply_transform(P)
+        zmin = min([body.bounds[0][2]] + [g.bounds[0][2] for g in placed])
+        T = tf.translation_matrix([0, 0, -zmin])
+        body.apply_transform(T)
+        for g in placed:
+            g.apply_transform(T)
+        for it in infos:
+            it["R"] = P[:3, :3] @ it["R"]
     sc = trimesh.Scene()
     sc.add_geometry(body, geom_name="spool_0.20mm")
     for i, (note, g) in enumerate(zip(notes, placed)):
