@@ -23,9 +23,12 @@
 
 使い方:
     python fue/calib_comb.py 測定値.txt
+    python fue/calib_comb.py 測定値.txt --range=4-33   # 4番から33番までを吹いた場合
 
 測定値ファイルは、1回ぶんの吹鳴（36個の数値）を1つのまとまりとして、空行かコメント行で
-区切って並べる。鳴らなかった笛は - か x と書けば欠測として扱う。
+区切って並べる。鳴らなかった笛は - か x と書けば欠測として扱う。両端の笛がめくれなどの
+造形不良で鳴らず、生きている範囲だけを吹いた場合は --range=最初-最後 を渡せば、その範囲の
+個数だけを書けばよい。範囲の外は欠測として集計する。
 """
 import math
 import os
@@ -85,11 +88,15 @@ def cents(f, f_ref):
     return 1200.0 * math.log2(f / f_ref)
 
 
-def parse_measurements(text):
+def parse_measurements(text, first=1, last=None):
     """測定値のテキストを、吹鳴1回ぶん36個の並びの一覧へ変換する。
 
     空行かコメント行（# で始まる行）でまとまりを区切る。各まとまりから数値を順に拾い、
-    - か x か欠測を表す語は None にする。36個ちょうどでないまとまりは例外にする。
+    - か x か欠測を表す語は None にする。
+
+    first と last は、実際に吹いた位置の範囲（1始まり、両端を含む）である。両端の笛が
+    めくれなどの造形不良で鳴らず、生きている範囲だけを吹いた場合に使う。範囲の外は
+    欠測として埋める。既定では36個ちょうどを求める。
     """
     blocks, cur = [], []
     for line in text.splitlines():
@@ -103,6 +110,13 @@ def parse_measurements(text):
     if cur:
         blocks.append(cur)
 
+    n_all = len(LAYOUT)
+    last = n_all if last is None else last
+    if not (1 <= first <= last <= n_all):
+        raise ValueError("範囲の指定が正しくない: %d〜%d（1〜%dの中で指定する）"
+                         % (first, last, n_all))
+    n_want = last - first + 1
+
     token = re.compile(r"[-+]?\d*\.?\d+|[-xX×]|欠|なし")
     passes = []
     for block in blocks:
@@ -112,12 +126,13 @@ def parse_measurements(text):
                 vals.append(None)
             else:
                 vals.append(float(tok))
-        if len(vals) != len(LAYOUT):
+        if len(vals) != n_want:
             raise ValueError(
-                "1回ぶんの測定値が%d個ある。%d個でなければならない: %s"
-                % (len(vals), len(LAYOUT), vals)
+                "1回ぶんの測定値が%d個ある。%d番から%d番までの%d個でなければならない。"
+                "両端が造形不良で鳴らないなら、その位置に - と書くか、範囲を指定する: %s"
+                % (len(vals), first, last, n_want, vals)
             )
-        passes.append(vals)
+        passes.append([None] * (first - 1) + vals + [None] * (n_all - last))
     if not passes:
         raise ValueError("測定値が1回ぶんも読み取れなかった。")
     return passes
@@ -195,6 +210,9 @@ def analyze(passes, notes=None):
             entry["dev_cents"] = _mean(cs)
             entry["sd_cents"] = _sd(cs)
         result["positions"].append(entry)
+
+    # 一度も鳴らなかった位置（造形不良）。本数そのものが測定値なので記録する。
+    result["dead"] = [(e["index"], e["note"]) for e in result["positions"] if not e["values"]]
 
     # 吹き方のばらつき（位置内のばらつきをまとめたもの）。
     ss, dof = 0.0, 0
@@ -304,6 +322,14 @@ def format_report(res):
         sp = "%6.1f" % i["spread_cents"] if i["spread_cents"] is not None else "     -"
         w("  %-4s   %2d   %2d    %s cent  %s cent" % (note, i["copies"], i["measured"], dev, sp))
     w("")
+    if res["dead"]:
+        w("[鳴らなかった位置（造形不良）]")
+        w("  %d本／36本。%s" %
+          (len(res["dead"]), "、".join("%d番(%s)" % d for d in res["dead"])))
+        thin = [n for n in NOTES12 if res["notes"][n]["measured"] < 2]
+        if thin:
+            w("  残りが1本以下で3本の散らばりを出せない音: %s" % "、".join(thin))
+        w("")
     w("[指標]")
     if res["blow_sd_cents"] is not None:
         w("  吹き方のばらつき: %.1f セント（自由度%d）" % (res["blow_sd_cents"], res["blow_dof"]))
@@ -345,12 +371,22 @@ def format_report(res):
 
 
 def main(argv):
-    if len(argv) < 2:
+    args = [a for a in argv[1:] if not a.startswith("--")]
+    opts = [a for a in argv[1:] if a.startswith("--")]
+    if not args:
         print(__doc__)
         return 1
-    with open(argv[1], encoding="utf-8") as fp:
+    first, last = 1, len(LAYOUT)
+    for o in opts:
+        if o.startswith("--range="):
+            lo, _, hi = o.split("=", 1)[1].partition("-")
+            first, last = int(lo), int(hi)
+        else:
+            print("知らないオプション: %s" % o)
+            return 1
+    with open(args[0], encoding="utf-8") as fp:
         text = fp.read()
-    res = analyze(parse_measurements(text))
+    res = analyze(parse_measurements(text, first=first, last=last))
     print(format_report(res))
     return 0
 

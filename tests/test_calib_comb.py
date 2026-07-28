@@ -108,6 +108,48 @@ def test_fit_on_uniform_offset_matches_scaled_A():
     assert abs(f["A"] / cc.CALIB_A - 2 ** (1 / 12.0)) < 1e-3
 
 
+def test_range_fills_dead_ends():
+    """両端が造形不良のとき、生きている範囲だけを書いて --range で位置を合わせられること。"""
+    body = " ".join("2000" for _ in range(30))
+    passes = cc.parse_measurements(body, first=4, last=33)
+    assert len(passes[0]) == 36
+    assert passes[0][:3] == [None, None, None]
+    assert passes[0][33:] == [None, None, None]
+    assert passes[0][3] == 2000.0
+
+
+def test_range_rejects_wrong_count():
+    try:
+        cc.parse_measurements(" ".join("2000" for _ in range(29)), first=4, last=33)
+    except ValueError as e:
+        assert "4番から33番" in str(e)
+        return
+    raise AssertionError("個数が合わない入力は例外にならなければならない")
+
+
+def test_dead_ends_still_leave_two_copies_per_note():
+    """両端4本ずつが死んでも、どの音も2本以上残ること（σを出せる条件）。"""
+    for k in (3, 4):
+        sub = cc.LAYOUT[k:36 - k]
+        for note in cc.NOTES12:
+            assert sub.count(note) >= 2, (k, note)
+        for a, b in zip(sub, sub[1:]):
+            assert a != b  # 音の変わり目で区切れること
+
+
+def test_dead_positions_are_reported():
+    """一度も鳴らなかった位置が造形不良として数え上げられること。"""
+    passes = _synth(offset_cents=0.0, forming_sd=5.0, blow_sd=3.0)
+    for row in passes:
+        for i in list(range(3)) + list(range(33, 36)):
+            row[i] = None
+    res = cc.analyze(passes)
+    assert len(res["dead"]) == 6
+    assert res["dead"][0][0] == 1 and res["dead"][-1][0] == 36
+    assert res["forming_sd_corrected"] is not None  # 残り2本でも推定は出る
+    assert "鳴らなかった位置" in cc.format_report(res)
+
+
 def test_report_runs():
     res = cc.analyze(_synth(offset_cents=70.0, forming_sd=10.0, blow_sd=8.0))
     text = cc.format_report(res)
