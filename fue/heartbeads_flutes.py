@@ -19,6 +19,7 @@ import trimesh
 
 sys.path.insert(0, os.path.dirname(__file__))
 import mini10
+import orient_check
 
 HEART = os.path.join(os.path.dirname(__file__), os.pardir, "temp", "tools", "HeartBeads.3mf")
 
@@ -179,3 +180,102 @@ def main(argv=None):
 
 if __name__ == "__main__":
     main()
+
+
+# ---- かたわれ1つ・笛3本・寝かせ印刷（2026-07-28 追加） ------------------------
+#
+# 笛の長軸を寝かせて刷ると、窓の向きは検証済みの範囲（-135度から+135度）に入って
+# いなければならない。穴のまわりに十字（0・90・180・270度）で置くと、寝かせたとき
+# 1本だけが「窓が真下」（180度）になり、これが唯一鳴らない向きである。ハートの平らな面を
+# ベッドに付ける姿勢（x軸まわり+90度）では、真下になるのは180度の1本なので、
+# 0・90・270度 の3本を使う。4本にしたければ45度回して±45度と±135度に
+# するしかないが、そうすると4本とも薄い方向へ寄ってハートの側面からはみ出す。
+#
+# 置き方は「穴の壁に寄せる」を基本とし、それだと笛の背中がハートの表面から出てしまう
+# 薄い方向だけは、背中が表面より WALL_IN だけ内側に来るまで穴の側へ押し込む。窓は
+# 穴の内側へ少し食い込むが、窓が開くのは空気側なので発音には有利である。
+FLAT_ANGLES = (0.0, 90.0, 270.0)      # 穴のまわりの配置角。寝かせると窓は 0/-90/+90 度
+WALL_IN = 1.2                          # 笛の背中をハート表面からこれだけ内側に置く[mm]
+
+
+def _rz4(deg):
+    return _rz(deg)
+
+
+def place_flute_around_hole(note, bead, angle_deg, l_max, fuse=0.5, wall_in=WALL_IN):
+    """穴のまわり angle_deg の位置に、窓を穴へ向けて笛を1本置く。戻り値 (mesh, R)。"""
+    cx, cy, r = measure_hole(bead)
+    ztop = bead.bounds[1][2]
+    fl = mini10.uniform_flute(mini10.length_for_note(note), L_max=l_max)
+    R = _rz(angle_deg) @ R3
+    fl.apply_transform(R)
+    w = R[:3, :3] @ np.array([0.0, 0.0, 1.0])      # 窓の向き
+    w = w / np.linalg.norm(w)
+    u = np.cross([0.0, 0.0, 1.0], w)
+    v = fl.vertices
+    hole_w = float(np.dot([cx, cy, 0.0], w))
+    shift_hug = (hole_w - (r + fuse)) - v.dot(w).max()          # 窓の面を穴の壁へ
+    surf = float((bead.vertices.dot(-w)).max())
+    shift_wall = -(surf - wall_in) - v.dot(w).min()             # 背中を表面の内側へ
+    shift_w = max(shift_hug, shift_wall)                        # 穴に近い方を採る
+    shift_u = float(np.dot([cx, cy, 0.0], u)) - (v.dot(u).min() + v.dot(u).max()) / 2.0
+    d = shift_w * w + shift_u * u
+    d[2] = ztop - fl.bounds[1][2]                               # 吸込口をハート上端へ
+    fl.apply_translation(d)
+    return fl, R
+
+
+def build_flat_half(notes, scale=2.4, carve=True, engine="manifold", which="1"):
+    """かたわれ1つに笛を置き、寝かせた印刷姿勢の Scene を返す。戻り値 (scene, infos)。
+
+    印刷姿勢は、笛の長軸(モデルのz)が水平になるようy軸まわりに-90度回したもの。
+    窓の向きは1本ずつ orient_check で確かめ、検証済みの範囲を外れたら例外にする。
+    """
+    if len(notes) > len(FLAT_ANGLES):
+        raise ValueError("寝かせ印刷で置けるのは%d本まで（4本目は窓が真下になる）"
+                         % len(FLAT_ANGLES))
+    g1, g3 = load_halves()
+    bead = (g1 if which == "1" else g3).copy()
+    bead.apply_scale(scale)
+    bead = repair_watertight(bead)
+    l_max = mini10.uniform_body_length(
+        [mini10.length_for_note(n) for n in mini10.CALIB12])
+    if bead.extents[2] < l_max:
+        raise ValueError("ハートの高さ %.1fmm が笛の外形長 %.1fmm より短い。scaleを上げること"
+                         % (bead.extents[2], l_max))
+
+    # 平らな面をベッドに付ける姿勢。x軸まわり+90度で、モデルのy(厚み)が上下、
+    # z(笛の長軸)が水平になる。縁で立たせるより footprint が安定する。
+    lay = trimesh.transformations.rotation_matrix(np.pi / 2, [1, 0, 0])
+    placed, infos = [], []
+    for note, ang in zip(notes, FLAT_ANGLES):
+        fl, R = place_flute_around_hole(note, bead, ang, l_max)
+        res = orient_check.check_orientation(R=lay[:3, :3] @ R[:3, :3])
+        if res.verdict != "ok":
+            raise ValueError("%s（穴まわり%.0f度）の向きが %s: %s"
+                             % (note, ang, res.verdict, res.message))
+        placed.append(fl)
+        infos.append(dict(note=note, angle=ang, window_deg=round(res.angle_deg, 1),
+                          tilt_deg=round(res.tilt_deg, 1)))
+
+    body = bead
+    if carve:
+        for fl in placed:
+            body = body.difference(fl.convex_hull, engine=engine)
+
+    sc = trimesh.Scene()
+    for m in [body] + placed:
+        m.apply_transform(lay)
+    zmin = min([body.bounds[0][2]] + [m.bounds[0][2] for m in placed])
+    T = trimesh.transformations.translation_matrix([0, 0, -zmin])
+    for m in [body] + placed:
+        m.apply_transform(T)
+    sc.add_geometry(body, geom_name="heart_0.20mm")
+    for i, (fl, it) in enumerate(zip(placed, infos)):
+        sc.add_geometry(fl, geom_name="flute%d_%s_0.08careful"
+                        % (i + 1, it["note"].replace("#", "s")))
+    # A1 miniのベッド中心へ寄せる
+    ab = sc.bounds
+    sc.apply_transform(trimesh.transformations.translation_matrix(
+        [128.0 - (ab[0][0] + ab[1][0]) / 2.0, 128.0 - (ab[0][1] + ab[1][1]) / 2.0, 0.0]))
+    return sc, infos
