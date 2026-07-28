@@ -390,6 +390,7 @@ function endCapture(){
     return;
   }
   cipherFreqs = cap.seq.map(s=>s.freq);
+  logMeasurements(cap.seq, "拍に合わせる");
   el("capStatus").textContent = cap.seq.length + "本を記録しました。復号します。";
   doDecode();
 }
@@ -424,6 +425,30 @@ function renderAutoSeq(){
   });
 }
 // 開始と終了は同じボタンで兼ねる。押すたびにラベルと色が入れ替わる。
+/* 記録した1回ぶんの測定値を、集計器 fue/calib_comb.py がそのまま読める形で
+ * コンソールへ書き出す。画面の札を目視で書き写す手間をなくすためである。
+ * 1回の吹鳴（コーム1周）が1つのまとまりになるので、出たものをそのまま
+ * つなげて貼れば、複数回ぶんの測定値ファイルになる。
+ * 鳴らなかった笛（飛ばした笛）は - で位置を保つ。 */
+function logMeasurements(seq, how){
+  if(!seq || !seq.length) return;
+  const vals = seq.map(s => (s.skipped || !s.freq) ? "-" : s.freq.toFixed(1));
+  const skipped = seq.filter(s => s.skipped || !s.freq).length;
+  const d = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  const stamp = d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate())
+    + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  const head = ["# " + stamp, how, seq.length + "本"];
+  if(skipped) head.push("うち鳴らず" + skipped + "本");
+  if(how === "続けて吹く"){
+    head.push("区切り " + (el("pitchSplit").checked
+      ? el("splitRange").value + "セント/" + el("gapRange").value + "ms"
+      : el("gapRange").value + "ms"));
+  }
+  const lines = [head.join("  ")];
+  for(let i=0; i<vals.length; i+=12) lines.push(vals.slice(i, i+12).join(" "));
+  console.log(lines.join("\n"));
+}
 function autoSetButton(){
   const b = el("autoStartBtn");
   b.textContent = auto.active ? "終了し復号" : "開始";
@@ -483,6 +508,7 @@ function autoEnd(){
   const ph = skipPlaceholderFreq();
   const skipped = auto.seq.filter(s=>s.skipped).length;
   cipherFreqs = auto.seq.map(s => s.skipped ? ph : s.freq);
+  logMeasurements(auto.seq, "続けて吹く");
   el("autoStatus").textContent = auto.seq.length + "本を記録しました"
     + (skipped ? "（うち" + skipped + "本は鳴らないものとして空けました）" : "") + "。復号します。";
   doDecode();
@@ -544,6 +570,7 @@ function oneEnd(){
   el("oneCand").textContent="–";
   if(!one.seq.length){ el("oneStatus").textContent="1本も入っていません。"; return; }
   cipherFreqs = one.seq.map(s=>s.freq);
+  logMeasurements(one.seq, "1本ずつ入力");
   el("oneStatus").textContent=one.seq.length+"本で復号します。";
   doDecode();
 }

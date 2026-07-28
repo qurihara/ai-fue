@@ -150,6 +150,37 @@ def test_dead_positions_are_reported():
     assert "鳴らなかった位置" in cc.format_report(res)
 
 
+def test_parses_the_decoder_console_output():
+    """復号ページが「終了し復号」で書き出す形を、そのまま読めること。
+
+    形は docs/cipher/index.html の logMeasurements が決めており、そちらは
+    docs/cipher/measure_log.test.js で固定してある。ここでは実際に書き出される
+    見た目（見出しのコメント行、1行12個、鳴らない笛は -）を写して受け取れるか
+    を確かめる。両端が造形不良で4番から33番だけを吹いた場合を想定している。
+    """
+    text = """
+# 2026-07-28 17:20  続けて吹く  30本  うち鳴らず1本  区切り 40セント/220ms
+2088.0 2211.0 2343.0 2482.0 2630.0 2786.0 2952.0 - 3313.0 1748.0 1852.0 1962.0
+2079.0 2203.0 2334.0 2473.0 2620.0 2776.0 2941.0 3116.0 3302.0 1742.0 1846.0 1956.0
+2073.0 2197.0 2327.0 2466.0 2613.0 2768.0
+
+# 2026-07-28 17:23  続けて吹く  30本  区切り 40セント/220ms
+2090.0 2213.0 2345.0 2484.0 2632.0 2788.0 2954.0 3130.0 3315.0 1750.0 1854.0 1964.0
+2081.0 2205.0 2336.0 2475.0 2622.0 2778.0 2943.0 3118.0 3304.0 1744.0 1848.0 1958.0
+2075.0 2199.0 2329.0 2468.0 2615.0 2770.0
+"""
+    passes = cc.parse_measurements(text, first=4, last=33)
+    assert len(passes) == 2
+    assert all(len(p) == 36 for p in passes)
+    assert passes[0][:3] == [None, None, None] and passes[0][33:] == [None, None, None]
+    assert passes[0][3] == 2088.0
+    assert passes[0][10] is None      # 11番目の位置が「鳴らず」
+    res = cc.analyze(passes)
+    assert len(res["dead"]) == 6      # 吹かなかった両端3本ずつ
+    assert res["positions"][10]["n_missing"] == 1
+    assert cc.format_report(res)
+
+
 def test_report_runs():
     res = cc.analyze(_synth(offset_cents=70.0, forming_sd=10.0, blow_sd=8.0))
     text = cc.format_report(res)
