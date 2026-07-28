@@ -49,8 +49,8 @@ SLOT12 = dict(lo_note="G#6", hi_note="G7")
 
 PROUD = 0.3        # 窓を面からどれだけ出すか[mm]
 MARGIN_Z = 12.0    # 壁の笛を置き始める高さ[mm]（底板との取り合いを避ける）
-MARGIN_TOP = 6.0   # 壁の上端に残す余白[mm]
-MARGIN_X = 8.0     # 底板の笛を壁から離す距離[mm]
+MARGIN_TOP = 1.5   # 壁が丸くなり始める高さから、さらに下へ取る余白[mm]
+MARGIN_X = 6.0     # 底板の笛を壁から離す距離[mm]
 MOUTH_Y = 0.4      # 吸込口を置く手前の端面[mm]
 
 
@@ -68,8 +68,19 @@ def measure_host(host):
     xs = np.arange(b[1][0] - 12, b[1][0] + 0.1, 0.1)
     i = host.contains(np.column_stack([xs, np.full_like(xs, 50.0), np.full_like(xs, zc)]))
     right = (float(xs[i][0]), float(xs[i][-1]))
+    # 壁の上端は円形に絞られている。笛は吸込口を手前の端面にそろえ、奥へ66mm伸びるので、
+    # [* 前縁と、笛の足の位置の両方が、まだ full の奥行きで残っている高さ]までしか置けない。
+    # その境目を実測する（設計を変えても自動で追従するように、値を決め打ちしない）。
+    zs = np.arange(float(b[1][2]) - 0.5, base_top, -0.5)
+    xc = (left[0] + left[1]) / 2.0
+    front = host.contains(np.column_stack([np.full_like(zs, xc),
+                                           np.full_like(zs, MOUTH_Y + 0.4), zs]))
+    back = host.contains(np.column_stack([np.full_like(zs, xc),
+                                          np.full_like(zs, MOUTH_Y + 66.0), zs]))
+    ok = np.where(front & back)[0]
+    wall_top = float(zs[ok[0]]) if len(ok) else base_top + 20.0
     return dict(base_top=base_top, left=left, right=right,
-                top=float(b[1][2]), depth=float(b[1][1]))
+                top=float(b[1][2]), wall_top=wall_top, depth=float(b[1][1]))
 
 
 def _rot(axis, deg):
@@ -101,23 +112,35 @@ def place(note, R, window_plane, l_max, mouth_y=MOUTH_Y, ref_tab=False):
     return fl, w
 
 
-def add_front_tab(fl, R, out=2.4, size=(3.0, 2.0)):
-    """基準笛の印を、手前の端面から出っぱる小さな突起として付ける。
+def add_front_tab(fl, R, host_center=None, out=2.5, size=(2.5, 1.6)):
+    """基準笛の印を、吸込口のある端面から手前へ出る小さな突起として付ける。
 
-    mini10.reference_tab は native 姿勢を前提に吸込口の脇へ箱を置くので、本立てのように
-    笛を回してから使うと、壁の中に埋まって触っても見ても分からない。ここでは世界座標で、
-    吸込口の横に、手前（-y）へ出る突起を付ける。吸込口そのものは塞がない。
+    突起は[* 笛自身の断面の中に収める]。隣の笛との隙間へ横に出すと、隙間が2mmを切る
+    詰め方では隣に当たる。前方（吸込口の側）だけへ出せば、隣にも板の縁にも触れない。
+    位置は断面の窓寄りに取る。吸込口の風道は床の側にあるので、そこは塞がない。
+
+    mini10.reference_tab は native 姿勢を前提に箱を置くので、笛を回してから呼ぶと
+    まったく違う場所に生えてしまう。ここでは配置に使った回転行列から軸を作る。
     """
-    width = R[:3, :3] @ np.array([0.0, 1.0, 0.0])      # 笛の幅方向
-    width = width / np.linalg.norm(width)
-    b = fl.bounds
-    center = (b[0] + b[1]) / 2.0
-    span = float(fl.vertices.dot(width).max() - fl.vertices.dot(width).min())
-    pos = center - center.dot(width) * width + (float(fl.vertices.dot(width).max())
-                                                + size[0] / 2.0 + 0.5) * width
-    pos[1] = b[0][1] - out / 2.0 + 0.3                 # 手前へ出す
+    axis = R[:3, :3] @ np.array([1.0, 0.0, 0.0])       # 長軸（吸込口→足）
+    width = R[:3, :3] @ np.array([0.0, 1.0, 0.0])      # 幅
+    win = R[:3, :3] @ np.array([0.0, 0.0, 1.0])        # 窓の向き
+    for v in (axis, width, win):
+        v /= np.linalg.norm(v)
+    v = fl.vertices
+    mouth = float(v.dot(axis).min())
+    center_w = (float(v.dot(width).min()) + float(v.dot(width).max())) / 2.0
+    top_v = float(v.dot(win).max())
+    pos = (axis * (mouth - out / 2.0 + 0.2)
+           + width * center_w
+           + win * (top_v - size[1] / 2.0 - 0.6))
     tab = trimesh.creation.box(extents=[size[0], out, size[1]])
-    tab.apply_transform(tf.translation_matrix(pos))
+    M = np.eye(4)
+    M[:3, 0] = width
+    M[:3, 1] = axis
+    M[:3, 2] = win
+    M[:3, 3] = pos
+    tab.apply_transform(M)
     return trimesh.boolean.union([fl, tab], engine="manifold")
 
 
@@ -128,11 +151,30 @@ def layout(notes, host, geom):
     """
     l_max = mini10.uniform_body_length(
         [mini10.length_for_note(n) for n in mini10.CALIB12])
-    n_wall = (len(notes) - max(4, len(notes) // 5)) // 2
-    n_base = len(notes) - 2 * n_wall
-    zs = np.linspace(MARGIN_Z, geom["top"] - MARGIN_TOP - 7.0, n_wall) + 3.5
+    # 壁と底板に何本ずつ置くかは、隣どうしの隙間ができるだけ均等になるように決める。
+    span_wall = (geom["wall_top"] - MARGIN_TOP) - MARGIN_Z
+    span_base = (geom["right"][0] - MARGIN_X) - (geom["left"][1] + MARGIN_X)
+    best = None
+    for n_base in range(2, len(notes) - 3):
+        n_wall, rem = divmod(len(notes) - n_base, 2)
+        if rem or n_wall < 1:
+            continue
+        gw = (span_wall - 7.0 * n_wall) / max(1, n_wall - 1)
+        gb = (span_base - 7.0 * n_base) / max(1, n_base - 1)
+        if min(gw, gb) < 1.0:            # 隙間1mmを下回る詰め方はしない
+            continue
+        score = -min(gw, gb)             # いちばん狭い隙間ができるだけ広くなる分け方
+        if best is None or score < best[0]:
+            best = (score, n_wall, n_base, gw, gb)
+    if best is None:
+        raise ValueError("笛%d本は、この本立てには詰め込めない（壁%.0fmm・底板%.0mm）"
+                         % (len(notes), span_wall, span_base))
+    _, n_wall, n_base, gap_w, gap_b = best
+    zs = np.linspace(MARGIN_Z, geom["wall_top"] - MARGIN_TOP - 7.0, n_wall) + 3.5
     xs = np.linspace(geom["left"][1] + MARGIN_X,
                      geom["right"][0] - MARGIN_X - 7.0, n_base) + 3.5
+    print("  壁は z=%.1f まで（そこから上は円形に絞られる）。隣どうしの隙間は壁%.1fmm・底板%.1fmm"
+          % (geom["wall_top"], gap_w, gap_b))
 
     placed, infos = [], []
     order = ([("left", z) for z in zs[::-1]]
