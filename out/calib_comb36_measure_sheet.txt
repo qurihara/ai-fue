@@ -1,6 +1,6 @@
 較正コーム36本（12音 G#6〜G7 を各3本）測定記入表
 
-開くURL: https://qurihara.github.io/ai-fue/cipher/#pitchsplit=1&splitcents=40&minnote=80
+開くURL: https://qurihara.github.io/ai-fue/cipher/#pitchsplit=1&splitcents=80&minnote=80
 吹き方: 「続けて吹く」を押し、最初の0.4秒は静かにする。左から右へ36本を一気に吹く。
         1本0.5から1秒、全体で30秒ほど。吹き終えたら「終了し復号」を押す。
         札が36枚にならなければ splitcents を増減してやり直す。これを3回繰り返す。
