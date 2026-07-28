@@ -150,6 +150,27 @@
       </label>
     </div>
     <div class="muted" style="margin:0 0 10px">息継ぎをせず、唇を当てたまま次の笛へ滑らせて読めます。<b>隣り合う笛が同じ音だと1本に融合してしまう</b>ので、同じ音が隣り合わない並びのときだけ使ってください（印刷済みのスプールとカードはどちらも条件を満たしています）。</div>
+    <details style="margin:0 0 10px">
+      <summary class="muted" style="cursor:pointer">区切りの細かい調整</summary>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 2px">
+        <label class="muted" for="splitRange">音の変わり目とみなす隔たり：</label>
+        <input type="range" id="splitRange" min="10" max="200" step="5" value="50" style="flex:1;min-width:160px">
+        <span class="muted" id="splitVal" style="font-variant-numeric:tabular-nums">50 セント</span>
+      </div>
+      <div class="muted" style="margin:0 0 8px">小さくすると音の変わり目を拾いやすくなります。半音は100セントです。上の「音が変わったところでも区切る」に入れているときだけ効きます。</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 2px">
+        <label class="muted" for="stableRange">変わったと認めるまでの時間：</label>
+        <input type="range" id="stableRange" min="20" max="200" step="10" value="70" style="flex:1;min-width:160px">
+        <span class="muted" id="stableVal" style="font-variant-numeric:tabular-nums">70 ms</span>
+      </div>
+      <div class="muted" style="margin:0 0 8px">離れた音がこの時間続いたら、そこで区切ります。短くすると速く反応しますが、吹き始めの音の揺れで誤って区切りやすくなります。</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 2px">
+        <label class="muted" for="minnoteRange">これより短い音は捨てる：</label>
+        <input type="range" id="minnoteRange" min="40" max="300" step="10" value="120" style="flex:1;min-width:160px">
+        <span class="muted" id="minnoteVal" style="font-variant-numeric:tabular-nums">120 ms</span>
+      </div>
+      <div class="muted" style="margin:0 0 4px">咳や物音を1本と数えないための足切りです。速く吹いて取りこぼすときは短くしてください。</div>
+    </details>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button id="autoStartBtn">開始</button>
       <button class="sec" id="autoSkipBtn" disabled>この笛は飛ばす</button>
@@ -246,6 +267,14 @@ const segOptions = {};  // 無音区切りの調整（gap= onmargin= minnote=）
   num("minnote", "minNoteMs");    // これより短い音は雑音として捨てる[ms]
   num("splitcents", "pitchSplitCents");  // 音の変わり目とみなす隔たり[セント]
   num("stablems", "pitchStableMs");      // 離れた音がこの時間続いたら区切る[ms]
+  // つまみの初期値。URLで指定があればそれを、なければ既定値を表示する。
+  const setRange = (id, valId, unit, v, lo, hi) => {
+    if(v !== undefined && v !== null) el(id).value = String(Math.max(lo, Math.min(hi, v)));
+    el(valId).textContent = el(id).value + " " + unit;
+  };
+  setRange("splitRange",   "splitVal",   "セント", segOptions.pitchSplitCents, 10, 200);
+  setRange("stableRange",  "stableVal",  "ms",     segOptions.pitchStableMs,   20, 200);
+  setRange("minnoteRange", "minnoteVal", "ms",     segOptions.minNoteMs,       40, 300);
   if(q.get("pitchsplit") === "1") el("pitchSplit").checked = true;
   const sha = (q.get("sha256") || q.get("hash") || "").trim();
   if(sha) el("cipherHash").value = sha;
@@ -429,7 +458,9 @@ async function autoStart(){
   const opts = Object.assign({}, segOptions, {
     gapMs: parseInt(el("gapRange").value, 10),
     // 音の変わり目でも区切るかは、開始のたびにチェックの状態から読む
-    pitchSplitCents: el("pitchSplit").checked ? (segOptions.pitchSplitCents || 50) : 0,
+    pitchSplitCents: el("pitchSplit").checked ? parseInt(el("splitRange").value, 10) : 0,
+    pitchStableMs: parseInt(el("stableRange").value, 10),
+    minNoteMs: parseInt(el("minnoteRange").value, 10),
     endMs: Number.MAX_SAFE_INTEGER});
   auto.seg = window.SilenceSegmenter.create(opts);
   auto.active=true; auto.seq=[]; auto.t0=performance.now();
@@ -736,6 +767,27 @@ el("gapRange").oninput = ()=>{
   const v = parseInt(el("gapRange").value, 10);
   el("gapVal").textContent = v + " ms";
   if(auto.seg) auto.seg.options.gapMs = v;
+};
+// 細かい調整のつまみも、動かしたその場で反映する。
+el("splitRange").oninput = ()=>{
+  const v = parseInt(el("splitRange").value, 10);
+  el("splitVal").textContent = v + " セント";
+  if(auto.seg && el("pitchSplit").checked) auto.seg.options.pitchSplitCents = v;
+};
+el("stableRange").oninput = ()=>{
+  const v = parseInt(el("stableRange").value, 10);
+  el("stableVal").textContent = v + " ms";
+  if(auto.seg) auto.seg.options.pitchStableMs = v;
+};
+el("minnoteRange").oninput = ()=>{
+  const v = parseInt(el("minnoteRange").value, 10);
+  el("minnoteVal").textContent = v + " ms";
+  if(auto.seg) auto.seg.options.minNoteMs = v;
+};
+// 「音が変わったところでも区切る」も、吹いている最中に切り替えられる。
+el("pitchSplit").onchange = ()=>{
+  if(auto.seg) auto.seg.options.pitchSplitCents =
+    el("pitchSplit").checked ? parseInt(el("splitRange").value, 10) : 0;
 };
 el("oneStartBtn").onclick = oneStart;
 el("oneCommitBtn").onclick = oneCommit;
