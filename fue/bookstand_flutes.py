@@ -48,8 +48,13 @@ CONFIG = os.path.join(ROOT, "docs", "cipher", "cipher_config.json")
 DEMO_PAYLOAD = b"pass_#26"      # 64bit。以前のスプールから引き継いだデモの秘密
 SLOT12 = dict(lo_note="G#6", hi_note="G7")
 
-PROUD = 1.0        # 窓を面からどれだけ出すか[mm]。面一だと露出が足りない
-MOUTH_PROUD = 1.0  # 吸込口を本体の前面からどれだけ前へ出すか[mm]
+# 吸込口は[* 面一（0.0）でよい]。本体の前面にそのまま穴として開く（実測で被り0.00mm）。
+# 面より引っ込めると被って塞がるので、そこだけ気をつければよい（底板の笛を前面より
+# 0.4mm奥に置いて0.35mm塞いだことがある）。
+# 窓は面一だと[* 0.08mmの薄皮が残った]（凸包の面と本体の面がぴったり重なるため）。
+# 押し出し線1本(0.42mm)より薄いので刷られない公算が高いが、0.3mm出しておけば確実に消える。
+PROUD = 0.3        # 窓を面からどれだけ出すか[mm]
+MOUTH_PROUD = 0.0  # 吸込口を本体の前面からどれだけ前へ出すか[mm]
 MARGIN_Z = 12.0    # 壁の笛を置き始める高さ[mm]（底板との取り合いを避ける）
 MARGIN_TOP = 1.5   # 壁が丸くなり始める高さから、さらに下へ取る余白[mm]
 MARGIN_X = 6.0     # 底板の笛を壁から離す距離[mm]
@@ -203,6 +208,23 @@ def layout(notes, host, geom):
     return placed, infos
 
 
+def carve_tool(fl, R, ahead=0.6, out=0.4):
+    """彫り抜きに使う道具（笛の凸包を、吸込口の側と窓の側へ少しだけ広げたもの）。
+
+    笛をちょうど面一に置くと、凸包の面と本体の面が同一平面になり、boolean が
+    不安定になって彫り残しが出る（実際に36本中23本のボアに材料が残った）。
+    道具を吸込口の向きと窓の向きへ少し伸ばして、面がぴったり重ならないようにする。
+    伸ばすのは外へ抜ける2方向だけなので、余分に彫れるのは表面のごく薄い層である。
+    """
+    axis = R[:3, :3] @ np.array([1.0, 0.0, 0.0])
+    win = R[:3, :3] @ np.array([0.0, 0.0, 1.0])
+    axis = axis / np.linalg.norm(axis)
+    win = win / np.linalg.norm(win)
+    v = fl.vertices
+    pts = np.vstack([v, v - axis * ahead, v + win * out])
+    return trimesh.Trimesh(vertices=pts).convex_hull
+
+
 def build(notes, carve=True, engine="manifold"):
     host = trimesh.load(HOST, force="mesh")
     host.apply_translation(-host.bounds[0])
@@ -220,8 +242,8 @@ def build(notes, carve=True, engine="manifold"):
 
     body = engrave_star(host, placed[0], infos[0]["R"])
     if carve:
-        for fl in placed:
-            body = body.difference(fl.convex_hull, engine=engine)
+        for fl, it in zip(placed, infos):
+            body = body.difference(carve_tool(fl, it["R"]), engine=engine)
 
     sc = trimesh.Scene()
     sc.add_geometry(body, geom_name="bookstand_0.20mm")
