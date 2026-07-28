@@ -38,6 +38,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import cipher_codec as cd
 import mini10
 import orient_check
+import stencil
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 OUT = os.path.join(ROOT, "out")
@@ -47,11 +48,12 @@ CONFIG = os.path.join(ROOT, "docs", "cipher", "cipher_config.json")
 DEMO_PAYLOAD = b"pass_#26"      # 64bit。以前のスプールから引き継いだデモの秘密
 SLOT12 = dict(lo_note="G#6", hi_note="G7")
 
-PROUD = 0.3        # 窓を面からどれだけ出すか[mm]
+PROUD = 1.0        # 窓を面からどれだけ出すか[mm]。面一だと露出が足りない
+MOUTH_PROUD = 1.0  # 吸込口を本体の前面からどれだけ前へ出すか[mm]
 MARGIN_Z = 12.0    # 壁の笛を置き始める高さ[mm]（底板との取り合いを避ける）
 MARGIN_TOP = 1.5   # 壁が丸くなり始める高さから、さらに下へ取る余白[mm]
 MARGIN_X = 6.0     # 底板の笛を壁から離す距離[mm]
-MOUTH_Y = 0.4      # 吸込口を置く手前の端面[mm]
+MOUTH_Y = -MOUTH_PROUD   # 吸込口のy座標。本体の前面(y=0)より前へ出す
 
 
 def measure_host(host):
@@ -73,10 +75,11 @@ def measure_host(host):
     # その境目を実測する（設計を変えても自動で追従するように、値を決め打ちしない）。
     zs = np.arange(float(b[1][2]) - 0.5, base_top, -0.5)
     xc = (left[0] + left[1]) / 2.0
+    # 探る点は本体の中に取る（吸込口は本体より前へ出しているので、MOUTH_Yを基準にしない）
     front = host.contains(np.column_stack([np.full_like(zs, xc),
-                                           np.full_like(zs, MOUTH_Y + 0.4), zs]))
+                                           np.full_like(zs, 0.6), zs]))
     back = host.contains(np.column_stack([np.full_like(zs, xc),
-                                          np.full_like(zs, MOUTH_Y + 66.0), zs]))
+                                          np.full_like(zs, MOUTH_Y + 66.5), zs]))
     ok = np.where(front & back)[0]
     wall_top = float(zs[ok[0]]) if len(ok) else base_top + 20.0
     return dict(base_top=base_top, left=left, right=right,
@@ -112,51 +115,38 @@ def place(note, R, window_plane, l_max, mouth_y=MOUTH_Y, ref_tab=False):
     return fl, w
 
 
-def add_front_tab(fl, R, host_center=None, out=2.5, size=(2.5, 1.6)):
-    """基準笛の印を、吸込口のある端面から手前へ出る小さな突起として付ける。
+def engrave_star(host, fl, R, r=2.4, depth=0.8, gap=3.5):
+    """1本目（基準笛）の[* 足のすぐ先]に、＊を浅く彫り込む。
 
-    突起は[* 笛自身の断面の中に収める]。隣の笛との隙間へ横に出すと、隙間が2mmを切る
-    詰め方では隣に当たる。前方（吸込口の側）だけへ出せば、隣にも板の縁にも触れない。
-    位置は断面の窓寄りに取る。吸込口の風道は床の側にあるので、そこは塞がない。
-
-    mini10.reference_tab は native 姿勢を前提に箱を置くので、笛を回してから呼ぶと
-    まったく違う場所に生えてしまう。ここでは配置に使った回転行列から軸を作る。
+    Chordika のトニック笛と同じ目印である。突起や隆起した帯は目立ちすぎるので、
+    本の側（本立ての内側）を向く面へ、少しだけ彫る。笛の足より先の材料に彫るので、
+    ボアにも窓にも吸込口にも触れない。
     """
-    axis = R[:3, :3] @ np.array([1.0, 0.0, 0.0])       # 長軸（吸込口→足）
-    width = R[:3, :3] @ np.array([0.0, 1.0, 0.0])      # 幅
-    win = R[:3, :3] @ np.array([0.0, 0.0, 1.0])        # 窓の向き
-    for v in (axis, width, win):
+    axis = R[:3, :3] @ np.array([1.0, 0.0, 0.0])       # 吸込口→足
+    win = R[:3, :3] @ np.array([0.0, 0.0, 1.0])        # 窓の向き＝内側
+    for v in (axis, win):
         v /= np.linalg.norm(v)
     v = fl.vertices
-    mouth = float(v.dot(axis).min())
-    center_w = (float(v.dot(width).min()) + float(v.dot(width).max())) / 2.0
-    top_v = float(v.dot(win).max())
-    pos = (axis * (mouth - out / 2.0 + 0.2)
-           + width * center_w
-           + win * (top_v - size[1] / 2.0 - 0.6))
-    tab = trimesh.creation.box(extents=[size[0], out, size[1]])
+    foot = float(v.dot(axis).max())
+    center_u = np.array([0.0, 0.0, 0.0])
+    width = R[:3, :3] @ np.array([0.0, 1.0, 0.0])
+    width = width / np.linalg.norm(width)
+    cw = (float(v.dot(width).min()) + float(v.dot(width).max())) / 2.0
+    # 彫る面は「その笛が埋まっている板の、内側を向く面」である。ホスト全体の最外面を
+    # 取ると、反対側の壁の外面に彫ってしまう（一度それで外れた）。笛は窓を面より
+    # PROUD だけ出して置いてあるので、笛自身から面の位置を逆算する。
+    surf = float(v.dot(win).max()) - PROUD
+    pos = axis * (foot + gap + r) + width * cw + win * surf
+
+    poly = stencil.asterisk(0.0, 0.0, r)
+    tool = trimesh.creation.extrude_polygon(poly, height=depth + 0.5)
     M = np.eye(4)
-    M[:3, 0] = width
-    M[:3, 1] = axis
-    M[:3, 2] = win
-    M[:3, 3] = pos
-    tab.apply_transform(M)
-    return trimesh.boolean.union([fl, tab], engine="manifold")
-
-
-def start_marker(host, fl, R, geom, length=22.0, proud=1.5, height=3.0):
-    """1本目（基準笛）がどれかを外から見て分かるよう、本立ての外面に隆起した帯を付ける。
-
-    笛に付ける小さな突起だけでは、隣の笛と紛れて分かりにくい。壁の外側の面に、
-    その笛の高さで手前から奥へ伸びる帯を出すと、離れて見ても触っても分かる。
-    帯は外面なので、ボアにも窓にも吸込口にも触れない。
-    """
-    b = fl.bounds
-    zc = (b[0][2] + b[1][2]) / 2.0
-    outer_left = geom["left"][0]
-    bar = trimesh.creation.box(extents=[proud * 2, length, height])
-    bar.apply_transform(tf.translation_matrix([outer_left, MOUTH_Y + length / 2.0, zc]))
-    return trimesh.boolean.union([host, bar], engine="manifold")
+    M[:3, 0] = axis
+    M[:3, 1] = width
+    M[:3, 2] = -win                                    # 内側の面から材料の中へ掘る
+    M[:3, 3] = pos + win * 0.5                          # 面から少し外に出してから掘る
+    tool.apply_transform(M)
+    return trimesh.boolean.difference([host, tool], engine="manifold")
 
 
 def layout(notes, host, geom):
@@ -182,7 +172,7 @@ def layout(notes, host, geom):
         if best is None or score < best[0]:
             best = (score, n_wall, n_base, gw, gb)
     if best is None:
-        raise ValueError("笛%d本は、この本立てには詰め込めない（壁%.0fmm・底板%.0mm）"
+        raise ValueError("笛%d本は、この本立てには詰め込めない（壁%.0fmm・底板%.0fmm）"
                          % (len(notes), span_wall, span_base))
     _, n_wall, n_base, gap_w, gap_b = best
     zs = np.linspace(MARGIN_Z, geom["wall_top"] - MARGIN_TOP - 7.0, n_wall) + 3.5
@@ -208,8 +198,6 @@ def layout(notes, host, geom):
             fl.apply_translation([pos - (fl.bounds[0][0] + fl.bounds[1][0]) / 2, 0, 0])
         else:
             fl.apply_translation([0, 0, pos - (fl.bounds[0][2] + fl.bounds[1][2]) / 2])
-        if i == 0:
-            fl = add_front_tab(fl, R)
         placed.append(fl)
         infos.append(dict(note=note, where=where, R=R))
     return placed, infos
@@ -230,7 +218,7 @@ def build(notes, carve=True, engine="manifold"):
             raise ValueError("%s（%s）の向きが %s: %s"
                              % (it["note"], it["where"], res.verdict, res.message))
 
-    body = start_marker(host, placed[0], infos[0]["R"], geom)
+    body = engrave_star(host, placed[0], infos[0]["R"])
     if carve:
         for fl in placed:
             body = body.difference(fl.convex_hull, engine=engine)
