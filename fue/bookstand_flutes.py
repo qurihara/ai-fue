@@ -144,6 +144,21 @@ def add_front_tab(fl, R, host_center=None, out=2.5, size=(2.5, 1.6)):
     return trimesh.boolean.union([fl, tab], engine="manifold")
 
 
+def start_marker(host, fl, R, geom, length=22.0, proud=1.5, height=3.0):
+    """1本目（基準笛）がどれかを外から見て分かるよう、本立ての外面に隆起した帯を付ける。
+
+    笛に付ける小さな突起だけでは、隣の笛と紛れて分かりにくい。壁の外側の面に、
+    その笛の高さで手前から奥へ伸びる帯を出すと、離れて見ても触っても分かる。
+    帯は外面なので、ボアにも窓にも吸込口にも触れない。
+    """
+    b = fl.bounds
+    zc = (b[0][2] + b[1][2]) / 2.0
+    outer_left = geom["left"][0]
+    bar = trimesh.creation.box(extents=[proud * 2, length, height])
+    bar.apply_transform(tf.translation_matrix([outer_left, MOUTH_Y + length / 2.0, zc]))
+    return trimesh.boolean.union([host, bar], engine="manifold")
+
+
 def layout(notes, host, geom):
     """左の壁（上から下）→底板（左から右）→右の壁（下から上）の順に置く。
 
@@ -215,7 +230,7 @@ def build(notes, carve=True, engine="manifold"):
             raise ValueError("%s（%s）の向きが %s: %s"
                              % (it["note"], it["where"], res.verdict, res.message))
 
-    body = host
+    body = start_marker(host, placed[0], infos[0]["R"], geom)
     if carve:
         for fl in placed:
             body = body.difference(fl.convex_hull, engine=engine)
