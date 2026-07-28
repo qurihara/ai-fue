@@ -181,6 +181,48 @@ def test_parses_the_decoder_console_output():
     assert cc.format_report(res)
 
 
+def _blow(notes, offset=65.0):
+    return [cc.note_to_freq(n) * 2 ** (offset / 1200.0) for n in notes]
+
+
+def test_alignment_maps_one_to_one():
+    """欠けも分かれもなければ、素直に1対1で対応すること。"""
+    meas = _blow(cc.LAYOUT)
+    cost, path = cc.align_measurements(meas, cc.LAYOUT)
+    assert [k for _, k, _ in path] == ["one"] * 36
+    assert cost < 36 * 0.05
+
+
+def test_alignment_finds_a_silent_flute():
+    """鳴らなかった1本を、位置をずらさずに「鳴らず」として拾えること。"""
+    meas = _blow(cc.LAYOUT)
+    del meas[17]                       # 18番目が鳴らなかった
+    cost, path = cc.align_measurements(meas, cc.LAYOUT)
+    kinds = [k for _, k, _ in path]
+    assert kinds.count("miss") == 1
+    assert kinds.index("miss") == 17
+
+
+def test_alignment_merges_a_split_blow():
+    """1本の吹鳴が2つに分かれたとき、まとめて1本として扱えること。"""
+    meas = _blow(cc.LAYOUT)
+    f = meas[5]
+    meas[5:6] = [f * 2 ** (-0.02), f * 2 ** (0.02)]   # 約48セント離れた2つに分かれた
+    cost, path = cc.align_measurements(meas, cc.LAYOUT)
+    kinds = [k for _, k, _ in path]
+    assert kinds.count("split") == 1
+    assert kinds.index("split") == 5
+    assert len([p for p in path if p[1] != "miss"]) == 36
+
+
+def test_blow_direction_is_detected():
+    """端から端まで吹いたとき、どちらの端から始めたかを測定値から決められること。"""
+    d, fwd, rev = cc.blow_direction(_blow(cc.LAYOUT))
+    assert d == "forward" and fwd < rev
+    d, fwd, rev = cc.blow_direction(_blow(cc.LAYOUT[::-1]))
+    assert d == "reverse" and rev < fwd
+
+
 def test_report_runs():
     res = cc.analyze(_synth(offset_cents=70.0, forming_sd=10.0, blow_sd=8.0))
     text = cc.format_report(res)

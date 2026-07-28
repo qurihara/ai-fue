@@ -138,6 +138,72 @@ def parse_measurements(text, first=1, last=None):
     return passes
 
 
+def align_measurements(meas, notes, center=70.0, sigma=45.0, miss=6.0, split=3.0):
+    """測定値の並びを、期待する音の並びへ対応づける（動的計画法）。
+
+    実物を続けて吹くと、鳴らない笛が飛ばされたり、1本の吹鳴が途中の音の揺れで2つに
+    分かれたりして、測定値の個数が笛の本数と合わなくなる。そこで、音1つに対して
+    測定値0個（鳴らず）・1個・2個（区切りの誤分割。2つは幾何平均でまとめる）を許し、
+    狙いからのずれが共通の値 center の近くに揃う対応を選ぶ。
+
+    meas は測定値の並び（欠測を除いたもの）、notes は吹いた順の音名の並びである。
+    戻り値は (合計費用, 対応の並び)。対応は (音の位置, 種別, 使った測定値) の組で、
+    種別は "one"（1対1）、"split"（2つに分かれた）、"miss"（鳴らなかった）である。
+    費用は小さいほど良く、吹いた向きの判定にも使える（正順と逆順で比べる）。
+    """
+    m, n = len(meas), len(notes)
+    inf = float("inf")
+    D = [[inf] * (n + 1) for _ in range(m + 1)]
+    B = [[None] * (n + 1) for _ in range(m + 1)]
+    D[0][0] = 0.0
+
+    def w(f, note):
+        return ((cents(f, note_to_freq(note)) - center) / sigma) ** 2
+
+    for i in range(m + 1):
+        for j in range(n + 1):
+            if D[i][j] == inf or j >= n:
+                continue
+            c = D[i][j] + miss                      # この音は鳴らなかった
+            if c < D[i][j + 1]:
+                D[i][j + 1] = c
+                B[i][j + 1] = (i, j, "miss", [])
+            if i < m:                               # 1対1で対応する
+                c = D[i][j] + w(meas[i], notes[j])
+                if c < D[i + 1][j + 1]:
+                    D[i + 1][j + 1] = c
+                    B[i + 1][j + 1] = (i, j, "one", [meas[i]])
+            if i + 1 < m and abs(cents(meas[i], meas[i + 1])) < 100:
+                avg = math.sqrt(meas[i] * meas[i + 1])   # 1本が2つに分かれた
+                c = D[i][j] + w(avg, notes[j]) + split
+                if c < D[i + 2][j + 1]:
+                    D[i + 2][j + 1] = c
+                    B[i + 2][j + 1] = (i, j, "split", [meas[i], meas[i + 1]])
+
+    if D[m][n] == inf:
+        raise ValueError("測定値を音の並びへ対応づけられなかった。")
+    path, i, j = [], m, n
+    while B[i][j]:
+        pi, pj, kind, vals = B[i][j]
+        path.append((pj, kind, vals))
+        i, j = pi, pj
+    path.reverse()
+    return D[m][n], path
+
+
+def blow_direction(meas, layout=None, **kw):
+    """吹いた向きを、対応づけの費用が小さい方から判定する。
+
+    戻り値は ("forward" か "reverse", 正順の費用, 逆順の費用)。並びの端から端まで
+    吹くとき、どちらの端から始めたかを取り違えると較正を丸ごと誤るので、
+    測定値そのものから決める。
+    """
+    layout = layout or LAYOUT
+    fwd, _ = align_measurements(meas, layout, **kw)
+    rev, _ = align_measurements(meas, layout[::-1], **kw)
+    return ("forward" if fwd <= rev else "reverse"), fwd, rev
+
+
 def _mean(xs):
     return sum(xs) / len(xs)
 
