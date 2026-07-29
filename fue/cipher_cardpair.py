@@ -28,7 +28,7 @@ import sys
 
 import numpy as np
 import trimesh
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, MultiPolygon, Point
 from shapely.affinity import scale as shp_scale, translate as shp_translate
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -44,6 +44,9 @@ CX, CY, CZ = 85.6, 53.98, 0.5      # クレジットカードの大きさと、�
 OVER = 0.3                          # 隣り合う笛の重なり（Chordikaと同じ）
 CORNER_R = 2.0
 N_FLUTES = 8
+BAND_GAP = 1.5       # 笛の足から刻印帯までの距離[mm]
+BAND_H = 4.0         # 刻印帯の文字高さ[mm]
+STRAP_R = 2.5        # ストラップ穴の半径[mm]
 
 
 def heart_polygon(width=34.0, height=30.0, cx=0.0, cy=0.0, n=240):
@@ -60,7 +63,19 @@ def heart_polygon(width=34.0, height=30.0, cx=0.0, cy=0.0, n=240):
     return shp_translate(poly, cx - c.x, cy - c.y)
 
 
-def build_card(notes, l_max, mirror=False):
+def cut_plate(mesh, poly):
+    """2Dの図形を、板(z=0..CZ)だけ貫通で抜く。上の笛には触れない（Chordikaと同じ）。"""
+    geoms = list(poly.geoms) if isinstance(poly, MultiPolygon) else [poly]
+    for g in geoms:
+        if g.is_empty:
+            continue
+        pr = trimesh.creation.extrude_polygon(g, height=CZ + 0.4)
+        pr.apply_translation([0, 0, -0.2])
+        mesh = trimesh.boolean.difference([mesh, pr], engine="manifold")
+    return mesh
+
+
+def build_card(notes, l_max, mirror=False, label=None, strap=True):
     """8本の笛を載せたクレジットカード大の板を1枚作る。
 
     mirror=True なら左右を反転する（吸込口が反対の短辺に来る）。2枚を余白どうし
@@ -85,6 +100,21 @@ def build_card(notes, l_max, mirror=False):
     card = trimesh.boolean.union([plate, comb], engine="manifold")
     keep = NC._corner_prism(CX, CY, CORNER_R, "round", -1.0, comb.bounds[1][2] + 1.0)
     card = trimesh.boolean.intersection([card, keep], engine="manifold")
+
+    # 刻印帯：笛の足とハートのあいだの余白に、文字を板だけ貫通で抜く
+    if label:
+        x_band = l_max + BAND_GAP + BAND_H / 2.0
+        pl, _ = NC._text_line(label, x_band, BAND_H, CY)
+        if pl is not None and not pl.is_empty:
+            card = cut_plate(card, pl)
+
+    # ストラップ穴（板だけでなく全厚を貫通させる。笛には掛からない位置に置く）
+    if strap:
+        c = Point(CX - (STRAP_R + 3.0), STRAP_R + 3.0).buffer(STRAP_R, resolution=48)
+        pr = trimesh.creation.extrude_polygon(c, height=comb.bounds[1][2] + 2.0)
+        pr.apply_translation([0, 0, -1.0])
+        card = trimesh.boolean.difference([card, pr], engine="manifold")
+
     if mirror:
         card.apply_transform(trimesh.transformations.reflection_matrix(
             [CX / 2, 0, 0], [1, 0, 0]))
@@ -93,10 +123,11 @@ def build_card(notes, l_max, mirror=False):
     return card
 
 
-def build_pair(notes_a, notes_b, l_max, heart=(34.0, 30.0), gap=0.0):
+def build_pair(notes_a, notes_b, l_max, heart=(17.0, 15.0), gap=0.0,
+               labels=("CipherFlute", "2 of 2")):
     """2枚を余白どうし向かい合わせに並べ、境界にハートを抜く。"""
-    a = build_card(notes_a, l_max, mirror=False)
-    b = build_card(notes_b, l_max, mirror=True)
+    a = build_card(notes_a, l_max, mirror=False, label=labels[0])
+    b = build_card(notes_b, l_max, mirror=True, label=labels[1])
     b.apply_translation([CX + gap, 0, 0])
 
     top = max(a.bounds[1][2], b.bounds[1][2])
@@ -126,7 +157,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="暗号笛カード2枚＋境界のハート（分散暗号v3）")
     ap.add_argument("--secret", type=int, default=20260729, help="デモの秘密（整数）")
     ap.add_argument("--no-reference", action="store_true", help="基準笛を置かない")
-    ap.add_argument("--heart", type=float, nargs=2, default=(34.0, 30.0), help="ハートの幅と高さ")
+    ap.add_argument("--heart", type=float, nargs=2, default=(17.0, 15.0), help="ハートの幅と高さ")
+    ap.add_argument("--labels", nargs=2, default=("CipherFlute", "2 of 2"), help="2枚の刻印")
     ap.add_argument("--out", default=os.path.join(OUT, "cipher_cardpair_v3.3mf"))
     args = ap.parse_args(argv)
 
@@ -153,7 +185,8 @@ def main(argv=None):
     if not args.no_reference:
         print("  先頭のC7は基準笛。温度と息の強さを打ち消す（そのぶんデータは7本）")
 
-    a, b, hp = build_pair(notes_a, notes_b, l_max, heart=tuple(args.heart))
+    a, b, hp = build_pair(notes_a, notes_b, l_max, heart=tuple(args.heart),
+                          labels=tuple(args.labels))
     res = orient_check.check_orientation(R=np.eye(3))
     print("向きの検査: 窓%+.0f度・長軸の傾き%.0f度 → %s（笛はnative姿勢のまま寝ている）"
           % (res.angle_deg, res.tilt_deg, res.verdict))
