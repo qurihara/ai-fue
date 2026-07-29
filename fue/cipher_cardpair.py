@@ -101,33 +101,42 @@ def build_card(notes, l_max, mirror=False, label=None, strap=True):
     keep = NC._corner_prism(CX, CY, CORNER_R, "round", -1.0, comb.bounds[1][2] + 1.0)
     card = trimesh.boolean.intersection([card, keep], engine="manifold")
 
-    # 刻印帯：笛の足とハートのあいだの余白に、文字を板だけ貫通で抜く
+    # 反転は刻印より先に行う。あとで反転すると文字が鏡文字になって読めなくなる。
+    if mirror:
+        card.apply_transform(trimesh.transformations.reflection_matrix(
+            [CX / 2, 0, 0], [1, 0, 0]))
+        card.apply_translation(-card.bounds[0] * np.array([1, 0, 0]))
+
+    # 刻印帯：笛の足とハートのあいだの余白に、文字を板だけ貫通で抜く。
+    # 2枚とも同じ文字列を入れる（対であることが物を見て分かるようにする）。
     if label:
         x_band = l_max + BAND_GAP + BAND_H / 2.0
-        pl, _ = NC._text_line(label, x_band, BAND_H, CY)
+        if mirror:
+            x_band = CX - x_band            # 反転後の座標系では帯も反対の端に来る
+        pl, _ = NC._text_line(label, x_band, BAND_H, CY, rot180=not mirror)
         if pl is not None and not pl.is_empty:
             card = cut_plate(card, pl)
 
     # ストラップ穴（板だけでなく全厚を貫通させる。笛には掛からない位置に置く）
     if strap:
-        c = Point(CX - (STRAP_R + 3.0), STRAP_R + 3.0).buffer(STRAP_R, resolution=48)
+        sx = STRAP_R + 3.0 if mirror else CX - (STRAP_R + 3.0)
+        c = Point(sx, STRAP_R + 3.0).buffer(STRAP_R, resolution=48)
         pr = trimesh.creation.extrude_polygon(c, height=comb.bounds[1][2] + 2.0)
         pr.apply_translation([0, 0, -1.0])
         card = trimesh.boolean.difference([card, pr], engine="manifold")
 
-    if mirror:
-        card.apply_transform(trimesh.transformations.reflection_matrix(
-            [CX / 2, 0, 0], [1, 0, 0]))
-        card.apply_translation([0, 0, 0])
-        card.apply_translation(-card.bounds[0] * np.array([1, 0, 0]))
     return card
 
 
 def build_pair(notes_a, notes_b, l_max, heart=(17.0, 15.0), gap=0.0,
-               labels=("CipherFlute", "2 of 2")):
-    """2枚を余白どうし向かい合わせに並べ、境界にハートを抜く。"""
-    a = build_card(notes_a, l_max, mirror=False, label=labels[0])
-    b = build_card(notes_b, l_max, mirror=True, label=labels[1])
+               label="CipherFlute 2of2"):
+    """2枚を余白どうし向かい合わせに並べ、境界にハートを抜く。
+
+    刻印は2枚とも同じ文字列にする。対の片割れどうしであることが、音を鳴らさなくても
+    見ただけで分かるようにするためである。
+    """
+    a = build_card(notes_a, l_max, mirror=False, label=label)
+    b = build_card(notes_b, l_max, mirror=True, label=label)
     b.apply_translation([CX + gap, 0, 0])
 
     top = max(a.bounds[1][2], b.bounds[1][2])
@@ -158,7 +167,10 @@ def main(argv=None):
     ap.add_argument("--secret", type=int, default=20260729, help="デモの秘密（整数）")
     ap.add_argument("--no-reference", action="store_true", help="基準笛を置かない")
     ap.add_argument("--heart", type=float, nargs=2, default=(17.0, 15.0), help="ハートの幅と高さ")
-    ap.add_argument("--labels", nargs=2, default=("CipherFlute", "2 of 2"), help="2枚の刻印")
+    ap.add_argument("--label", default="CipherFlute 2of2",
+                    help="刻印の文字列（2枚とも同じものを入れる）")
+    ap.add_argument("--split-out", action="store_true",
+                    help="2枚を別々の3mfにも書き出す（1枚ずつ印刷するため）")
     ap.add_argument("--out", default=os.path.join(OUT, "cipher_cardpair_v3.3mf"))
     args = ap.parse_args(argv)
 
@@ -186,7 +198,7 @@ def main(argv=None):
         print("  先頭のC7は基準笛。温度と息の強さを打ち消す（そのぶんデータは7本）")
 
     a, b, hp = build_pair(notes_a, notes_b, l_max, heart=tuple(args.heart),
-                          labels=tuple(args.labels))
+                          label=args.label)
     res = orient_check.check_orientation(R=np.eye(3))
     print("向きの検査: 窓%+.0f度・長軸の傾き%.0f度 → %s（笛はnative姿勢のまま寝ている）"
           % (res.angle_deg, res.tilt_deg, res.verdict))
@@ -199,6 +211,18 @@ def main(argv=None):
     print("カード1枚 %.1f×%.1f×%.1fmm、2枚並べて %s mm -> %s"
           % (*np.round(a.extents, 1), np.round(sc.bounds[1] - sc.bounds[0], 1),
              os.path.relpath(args.out, ROOT)))
+    print("刻印は2枚とも「%s」（対であることが見て分かる）" % args.label)
+
+    # 1枚ずつ印刷するために、別々の3mfにも書き出す。A1 miniは解凍後gcodeが4MB前後で
+    # 頭打ちになるので、2枚を1つのプレートに載せると上限を超える。
+    if args.split_out:
+        base = os.path.splitext(args.out)[0]
+        for tag, mesh in (("A", a), ("B", b)):
+            one = mesh.copy()
+            one.apply_translation(-one.bounds[0])
+            p = "%s_%s.3mf" % (base, tag)
+            trimesh.Scene({"card%s_0.08careful" % tag: one}).export(p)
+            print("  1枚だけ書き出し -> %s" % os.path.relpath(p, ROOT))
     print("ハート %.0f×%.0fmm を境界にまたがせて抜いた（1枚では半分にしかならない）"
           % tuple(args.heart))
     return 0
