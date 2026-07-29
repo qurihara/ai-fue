@@ -71,6 +71,37 @@ def halves(scale):
     return out
 
 
+def fill_heart(plate, frac=0.5):
+    """ハートの抜きを、板の[* 上半分だけ]埋める。
+
+    笛を下の縁にそろえて並べるとハートの抜きを横切るので、そのままでは笛の下に材料が
+    無くなる。上半分（笛が入る側）を埋め、下半分は残す。表からは平らになり、裏からは
+    深さ半分のくぼみ＝彫刻として見える。キーリングの穴は埋めない（紐を通すため）。
+
+    輪郭は断面から取るが、to_planar が返す2D座標はワールドとずれるので、必ず一緒に
+    返る変換行列で3Dへ戻す（スキルの注意どおり）。
+    """
+    from shapely.geometry import Polygon
+    b = plate.bounds
+    zc = (b[0][2] + b[1][2]) / 2.0
+    sec = plate.section(plane_origin=[0, 0, zc], plane_normal=[0, 0, 1])
+    planar, to_3D = sec.to_planar()
+    rings = [r for poly in planar.polygons_full for r in poly.interiors]
+    if not rings:
+        return plate
+    # ワールドでのyが低い方＝ハート（高い方はキーリングの穴）
+    def world_y(ring):
+        pts = np.array([[p[0], p[1], 0.0, 1.0] for p in ring.coords])
+        return float((pts @ to_3D.T)[:, 1].mean())
+    heart = min(rings, key=world_y)
+    thick = b[1][2] - b[0][2]
+    tool = trimesh.creation.extrude_polygon(Polygon(heart), height=thick * frac)
+    tool.apply_transform(to_3D)
+    # 上面をぴったり合わせて上半分に置く（外形を変えないため）
+    tool.apply_translation([0, 0, b[1][2] - tool.bounds[1][2]])
+    return trimesh.boolean.union([plate, tool], engine="manifold")
+
+
 def find_bands(plate, body, width=FLUTE_W + 2 * SIDE_WALL, step_x=0.25, step_y=0.4):
     """幅 width の帯が材料の中をまっすぐ（板の長手＝y方向に）通せる場所を実測で探す。
 
@@ -121,6 +152,47 @@ def pick_two(found, width=FLUTE_W + 2 * SIDE_WALL, gap=GAP):
 R_FLAT = tf.rotation_matrix(np.radians(90), [0, 0, 1])
 
 
+def layout_bottom(plate, notes, l_max, gap=GAP):
+    """笛を板の下の縁にそろえて横に並べる。
+
+    ハートの抜きは fill_heart で上半分を埋めてあるので、そこを横切ってよい。
+    2本の吸込口は[* 同じ高さにそろえる]。板の下端は丸いので、材料が始まる高さは帯ごとに
+    違う。早い方に合わせる（遅い方に合わせると、早い方の吸込口が材料に埋まる）。
+    """
+    b = plate.bounds
+    zc = (b[0][2] + b[1][2]) / 2.0
+    xc = (b[0][0] + b[1][0]) / 2.0
+    n = len(notes)
+    span = n * FLUTE_W + (n - 1) * gap
+    x_left = xc - span / 2.0
+    ys = np.arange(0.0, b[1][1], 0.2)
+    starts = []
+    for k in range(n):
+        x0 = x_left + k * (FLUTE_W + gap)
+        xs = np.linspace(x0 + 0.4, x0 + FLUTE_W - 0.4, 5)
+        first = 0.0
+        for y in ys:
+            pts = np.column_stack([xs, np.full_like(xs, y), np.full_like(xs, zc)])
+            if plate.contains(pts).all():
+                first = y
+                break
+        starts.append(first)
+    # 2本の吸込口をそろえる。材料が始まるのが[* 早い方]に合わせる。遅い方に合わせると、
+    # 早い方の吸込口が材料の中に埋まって塞がる（実際にそれで4mm被った）。
+    y_mouth = min(starts) - MOUTH_OUT
+    placed = []
+    for k, note in enumerate(notes):
+        x0 = x_left + k * (FLUTE_W + gap)
+        fl = mini10.uniform_flute(mini10.length_for_note(note), L_max=l_max)
+        fl.apply_transform(R_FLAT)
+        d = np.array([x0 - fl.bounds[0][0],
+                      y_mouth - fl.bounds[0][1],
+                      (b[1][2] - (fl.bounds[1][2] - fl.bounds[0][2])) - fl.bounds[0][2]])
+        fl.apply_translation(d)
+        placed.append(fl)
+    return placed, y_mouth
+
+
 def place(note, plate, band, l_max):
     """1本を帯へ置く。吸込口は材料が始まる少し手前（空気の側）に出す。"""
     _, x0, y0, _ = band
@@ -151,20 +223,14 @@ def build(notes_per_half, scale=1.8, note_set=None, carve=True, engine="manifold
     infos = []
     xcursor = 0.0
     for (key, plate), notes in zip(halves(scale), notes_per_half):
-        found = find_bands(plate, l_max)
-        bands = pick_two(found)
-        if len(bands) < len(notes):
-            raise ValueError("片割れ '%s' に幅%.1fmm・長さ%.1fmmの帯が%d本しか取れない"
-                             % (key, FLUTE_W + 2 * SIDE_WALL, l_max, len(bands)))
-        bands.sort(key=lambda b: b[1])          # 左から右の順に吹く
-        placed = []
-        for note, band in zip(notes, bands):
-            fl = place(note, plate, band, l_max)
+        plate = fill_heart(plate)               # ハートの上半分を埋めてから置く
+        placed, y_mouth = layout_bottom(plate, notes, l_max)
+        for note, fl in zip(notes, placed):
             res = orient_check.check_orientation(R=R_FLAT)
             if res.verdict != "ok":
                 raise ValueError("向きが %s: %s" % (res.verdict, res.message))
-            placed.append(fl)
-            infos.append(dict(half=key, note=note, x=round(band[1], 1),
+            infos.append(dict(half=key, note=note, x=round(fl.bounds[0][0], 1),
+                              y_mouth=round(y_mouth, 1),
                               window_deg=round(res.angle_deg, 1),
                               tilt_deg=round(res.tilt_deg, 1)))
         body = plate
