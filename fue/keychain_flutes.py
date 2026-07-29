@@ -58,6 +58,8 @@ BACK_WALL = 1.0      # 笛の裏に残す板の厚み[mm]
 GAP = 1.0            # 笛どうしの隙間[mm]
 SIDE_WALL = 1.2      # 笛の左右に残す板の肉厚[mm]
 SINK = 0.3           # 笛を板の上面へどれだけ沈めるか[mm]（融合させるため）
+EDGE_OFFSET = 4.0    # 笛の左端を、板の左端からどれだけ離すか[mm]。両方の片割れで同じ値を
+                     # 使うので、2つ並べたときに笛の位置がそろって見える。
 
 
 def halves(scale):
@@ -189,28 +191,17 @@ def support_map(plate, l_max, width=FLUTE_W, step_x=0.5, step_y=0.5):
 def layout_on_top(plate, notes, l_max, gap=GAP):
     """笛を板の上面に乗せて横に並べる。彫り抜かないので、ボアが埋まる心配が無い。
 
-    x は、2本とも真下に材料がある帯の組み合わせから選ぶ（同じなら左へ寄せる。板の
-    基幹部に載せるため）。y は[* 板の下の縁にそろえる]。板の下側が継ぎ手の曲線で
+    x は[* 板の左端から EDGE_OFFSET だけ離した位置]に置く。片割れごとに幅が違っても、
+    端からの距離をそろえておけば、2つ並べたときに笛の位置がそろって見える。
+    y は[* 板の下の縁にそろえる]。板の下側が継ぎ手の曲線で
     削れている片割れでは、笛の一部がハートの抜きや板の外へ張り出すことになるが、
     上に乗せる形なので発音そのものには影響しない（張り出した部分は宙に浮く）。
     """
-    sm = support_map(plate, l_max)
-    xs = sorted(sm)
-    n = len(notes)
-    best = None
-    for x0 in xs:
-        cand = [round(x0 + k * (FLUTE_W + gap), 2) for k in range(n)]
-        vals = [sm.get(min(sm, key=lambda t: abs(t - c))) for c in cand]
-        if any(v is None for v in vals):
-            continue
-        if cand[-1] + FLUTE_W > plate.bounds[1][0]:
-            continue
-        score = (max(vals), x0)
-        if best is None or score < best[0]:
-            best = (score, cand, max(vals))
-    if best is None:
-        raise ValueError("笛%d本を乗せられる場所が無い" % n)
-    _, cand, _ = best
+    b = plate.bounds
+    cand = [round(b[0][0] + EDGE_OFFSET + k * (FLUTE_W + gap), 2) for k in range(len(notes))]
+    if cand[-1] + FLUTE_W > b[1][0]:
+        raise ValueError("板の幅 %.1fmm では、端から%.1fmmに笛%d本を並べられない"
+                         % (b[1][0] - b[0][0], EDGE_OFFSET, len(notes)))
     # y は下の縁にそろえる。帯ごとに材料が始まる高さが違うので、早い方に合わせる。
     ys = np.arange(0.0, plate.bounds[1][1], 0.2)
     zc = (plate.bounds[0][2] + plate.bounds[1][2]) / 2.0
