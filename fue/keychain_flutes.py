@@ -58,8 +58,9 @@ BACK_WALL = 1.0      # 笛の裏に残す板の厚み[mm]
 GAP = 1.0            # 笛どうしの隙間[mm]
 SIDE_WALL = 1.2      # 笛の左右に残す板の肉厚[mm]
 SINK = 0.3           # 笛を板の上面へどれだけ沈めるか[mm]（融合させるため）
-EDGE_OFFSET = 4.0    # 笛の左端を、板の左端からどれだけ離すか[mm]。両方の片割れで同じ値を
+EDGE_OFFSET = 4.0    # 笛を板の[* 外側の縁]からどれだけ離すか[mm]。両方の片割れで同じ値を
                      # 使うので、2つ並べたときに笛の位置がそろって見える。
+OUTER = {"1": "left", "3": "right"}   # 片割れごとの「外側の縁」。反対側が継ぎ手。
 
 
 def halves(scale):
@@ -71,6 +72,43 @@ def halves(scale):
         m.apply_scale(scale)
         m.apply_translation(-m.bounds[0])
         out.append((key, m))
+    return out
+
+
+def widen(plate, dx, side="left", cut=3.0):
+    """板を x 方向に引き伸ばして、何もない板の面積を増やす。
+
+    キーリングの穴やハートの抜き、継ぎ手の曲線は[* 変形させない]。外側の縁のすぐ内側で
+    板を切り、外側の部分をそのまま dx だけ外へずらし、空いたところを切り口の断面で埋める。
+    こうすると、増えるのは特徴の無い平らな板だけになる。
+
+    side は「外側の縁」がどちらか。継ぎ手は反対側にあるので、そちらは触らない。
+    """
+    if dx <= 0:
+        return plate
+    b = plate.bounds
+    sgn = -1.0 if side == "left" else +1.0
+    x_cut = (b[0][0] + cut) if side == "left" else (b[1][0] - cut)
+
+    sec = plate.section(plane_origin=[x_cut, 0, 0], plane_normal=[1, 0, 0])
+    planar, to_3D = sec.to_planar()
+    from shapely.ops import unary_union
+    poly = unary_union([p for p in planar.polygons_full])
+    slab = trimesh.creation.extrude_polygon(poly, height=dx + 0.2)
+    slab.apply_transform(to_3D)
+    # 切り口から外側へ dx ぶん伸ばす（0.1mmだけ食い込ませて面の重なりを避ける）
+    if side == "left":
+        slab.apply_translation([x_cut + 0.1 - slab.bounds[1][0], 0, 0])
+    else:
+        slab.apply_translation([x_cut - 0.1 - slab.bounds[0][0], 0, 0])
+
+    outer = trimesh.intersections.slice_mesh_plane(
+        plate, plane_normal=[sgn, 0, 0], plane_origin=[x_cut, 0, 0], cap=True)
+    inner = trimesh.intersections.slice_mesh_plane(
+        plate, plane_normal=[-sgn, 0, 0], plane_origin=[x_cut, 0, 0], cap=True)
+    outer.apply_translation([sgn * dx, 0, 0])
+    out = trimesh.boolean.union([inner, slab, outer], engine="manifold")
+    out.apply_translation(-out.bounds[0])
     return out
 
 
@@ -188,37 +226,63 @@ def support_map(plate, l_max, width=FLUTE_W, step_x=0.5, step_y=0.5):
     return out
 
 
-def layout_on_top(plate, notes, l_max, gap=GAP):
-    """笛を板の上面に乗せて横に並べる。彫り抜かないので、ボアが埋まる心配が無い。
-
-    x は[* 板の左端から EDGE_OFFSET だけ離した位置]に置く。片割れごとに幅が違っても、
-    端からの距離をそろえておけば、2つ並べたときに笛の位置がそろって見える。
-    y は[* 板の下の縁にそろえる]。板の下側が継ぎ手の曲線で
-    削れている片割れでは、笛の一部がハートの抜きや板の外へ張り出すことになるが、
-    上に乗せる形なので発音そのものには影響しない（張り出した部分は宙に浮く）。
-    """
+def flute_xs(plate, n, side, gap=GAP):
+    """外側の縁から EDGE_OFFSET だけ離して、笛 n 本を内側へ順に並べる x を返す。"""
     b = plate.bounds
-    cand = [round(b[0][0] + EDGE_OFFSET + k * (FLUTE_W + gap), 2) for k in range(len(notes))]
-    if cand[-1] + FLUTE_W > b[1][0]:
-        raise ValueError("板の幅 %.1fmm では、端から%.1fmmに笛%d本を並べられない"
-                         % (b[1][0] - b[0][0], EDGE_OFFSET, len(notes)))
-    # y は下の縁にそろえる。帯ごとに材料が始まる高さが違うので、早い方に合わせる。
-    ys = np.arange(0.0, plate.bounds[1][1], 0.2)
-    zc = (plate.bounds[0][2] + plate.bounds[1][2]) / 2.0
-    starts = []
-    for x0 in cand:
-        xs2 = np.linspace(x0 + 0.4, x0 + FLUTE_W - 0.4, 5)
-        first = 0.0
-        for y in ys:
-            pts = np.column_stack([xs2, np.full_like(xs2, y), np.full_like(xs2, zc)])
-            if plate.contains(pts).all():
-                first = y
-                break
-        starts.append(first)
+    if side == "left":
+        return [b[0][0] + EDGE_OFFSET + k * (FLUTE_W + gap) for k in range(n)]
+    return [b[1][0] - EDGE_OFFSET - FLUTE_W - k * (FLUTE_W + gap) for k in range(n)]
+
+
+def supported_fraction(plate, x0, y0, length):
+    """笛の真下に材料がある割合。上に乗せるので、これが低いと宙づりになる。"""
+    b = plate.bounds
+    xs = np.linspace(x0 + 0.5, x0 + FLUTE_W - 0.5, 5)
+    ys = np.linspace(y0 + 0.5, y0 + length - 0.5, 60)
+    X, Y = np.meshgrid(xs, ys, indexing="ij")
+    pts = np.column_stack([X.ravel(), Y.ravel(), np.full(X.size, b[1][2] - 0.5)])
+    return float(plate.contains(pts).reshape(X.shape).all(axis=0).mean())
+
+
+def material_start(plate, x0):
+    """その帯で板の材料が始まる y。板の下端は丸いので帯ごとに違う。"""
+    b = plate.bounds
+    zc = (b[0][2] + b[1][2]) / 2.0
+    xs = np.linspace(x0 + 0.4, x0 + FLUTE_W - 0.4, 5)
+    for y in np.arange(0.0, b[1][1], 0.25):
+        if plate.contains(np.column_stack(
+                [xs, np.full_like(xs, y), np.full_like(xs, zc)])).all():
+            return float(y)
+    return None
+
+
+def needed_widen(plate0, n, side, l_max, want=0.99, step=2.0, limit=30.0):
+    """笛 n 本が真下に材料を持つようになる、いちばん小さい引き伸ばし量を返す。"""
+    dx = 0.0
+    while dx <= limit:
+        p = fill_heart(widen(plate0, dx, side=side))
+        xs = flute_xs(p, n, side)
+        starts = [material_start(p, x) for x in xs]
+        if all(s is not None for s in starts):
+            y0 = min(starts)
+            if all(supported_fraction(p, x, y0, l_max) >= want for x in xs):
+                return dx
+        dx += step
+    raise ValueError("%dmm まで伸ばしても笛%d本を載せられない" % (limit, n))
+
+
+def layout_on_top(plate, notes, l_max, side="left", gap=GAP):
+    """笛を板の上面に乗せて並べる。彫り抜かないので、ボアが埋まる心配が無い。
+
+    x は板の[* 外側の縁]から EDGE_OFFSET だけ離す（継ぎ手は反対側なので触らない）。
+    y は板の下の縁にそろえる。2本の帯で材料が始まる高さが違うので、早い方に合わせる。
+    """
+    xs = flute_xs(plate, len(notes), side, gap)
+    starts = [material_start(plate, x) or 0.0 for x in xs]
     y0 = min(starts) - MOUTH_OUT
     ztop = plate.bounds[1][2]
     placed = []
-    for note, x0 in zip(notes, cand):
+    for note, x0 in zip(notes, xs):
         fl = mini10.uniform_flute(mini10.length_for_note(note), L_max=l_max)
         fl.apply_transform(R_FLAT)
         # 面がぴったり接するだけだと融合が心もとないので、少しだけ沈める。
@@ -300,8 +364,11 @@ def build(notes_per_half, scale=1.8, note_set=None, carve=True, engine="manifold
     infos = []
     xcursor = 0.0
     for (key, plate), notes in zip(halves(scale), notes_per_half):
-        plate = fill_heart(plate)               # ハートの上半分を埋めてから乗せる
-        placed, y_mouth = layout_on_top(plate, notes, l_max)
+        side = OUTER[key]
+        dx = needed_widen(plate, len(notes), side, l_max)   # 何もない板を増やす
+        plate = fill_heart(widen(plate, dx, side=side))
+        placed, y_mouth = layout_on_top(plate, notes, l_max, side=side)
+        print("  片割れ%s: x方向に %.0fmm 伸ばした（幅 %.1fmm）" % (key, dx, plate.extents[0]))
         for note, fl in zip(notes, placed):
             res = orient_check.check_orientation(R=R_FLAT)
             if res.verdict != "ok":
