@@ -58,10 +58,15 @@ def _outer_face(body, rrim=100.0, probe_r=95.0):
     return 0.0, -1
 
 
-def _orient_and_place(g, xface, sign, yc, zc, rrim):
-    """1本の笛を、外面の側に応じて向けて置く（床を外面に面一・窓を内側・吸込口をリムへ）。"""
+def _orient_and_place(g, xface, sign, yc, zc, rrim, width=None):
+    """1本の笛を、外面の側に応じて向けて置く（床を外面に面一・窓を内側・吸込口をリムへ）。
+
+    width を渡すと、その幅で中心を合わせる。基準笛の印（タブや矢印）を付けた笛は幅が
+    広くなるので、印まで含めた幅で中心を取ると[* 本体そのものが横へずれて隣の笛と当たる]。
+    印の無い笛の幅を渡して、本体の位置が印の有無で動かないようにする。
+    """
     g.apply_transform(M_INNER if sign > 0 else M_INNER_MINX)
-    wz = g.bounds[1][2] - g.bounds[0][2]
+    wz = width if width is not None else (g.bounds[1][2] - g.bounds[0][2])
     dz = (zc - wz / 2) if sign > 0 else (zc + wz / 2)
     g.apply_transform(tf.translation_matrix([xface, yc + rrim, dz]))
     return g
@@ -111,13 +116,35 @@ def place_flutes_multiobj(notes, carve=True, spool_path=SPOOL, start_deg=90.0, r
     yc, zc = 100.0, 100.0
     L_max = l_max or mini10.uniform_body_length([mini10.length_for_note(nt) for nt in notes])
     n = len(notes)
+
+    plain = mini10.uniform_flute(mini10.length_for_note(notes[0]), L_max=L_max)
+    plain_w = float(np.abs(
+        (M_INNER if sign > 0 else M_INNER_MINX)[:3, :3] @ (plain.bounds[1] - plain.bounds[0]))[2])
+
+    def place(mesh, i):
+        mesh = _orient_and_place(mesh, xface, sign, yc, zc, rrim, width=plain_w)
+        theta = np.deg2rad(start_deg + i * (360.0 / n))
+        rot = tf.rotation_matrix(theta, [1, 0, 0], [0, yc, zc])
+        mesh.apply_transform(rot)
+        return mesh, rot
+
+    # 印の矢印を、次に吹く笛の側へ向ける。native の +y と -y のどちらが 2本目の方向かは
+    # 置き方（外面がどちら側か・回す向き）で決まるので、実際に2本置いて確かめる。
+    probe_L = mini10.length_for_note(notes[0])
+    p0, rot0 = place(mini10.uniform_flute(probe_L, L_max=L_max), 0)
+    p1, _ = place(mini10.uniform_flute(probe_L, L_max=L_max), 1)
+    R0 = rot0[:3, :3] @ (M_INNER if sign > 0 else M_INNER_MINX)[:3, :3]
+    to_next = p1.bounds.mean(axis=0) - p0.bounds.mean(axis=0)
+    tab_plus_y = bool(np.dot(R0 @ np.array([0.0, 1.0, 0.0]), to_next) > 0)
+
     placed, infos = [], []
     for i, note in enumerate(notes):
         L = mini10.length_for_note(note)
         g = mini10.uniform_flute(L, L_max=L_max)
         if i == 0 and ref_tab:
-            g = mini10.reference_tab(g)
-        g = _orient_and_place(g, xface, sign, yc, zc, rrim)
+            # 三角形の印にして、始まりの笛と進む向きの両方を形で示す。
+            g = mini10.direction_tab(g, plus_y=tab_plus_y)
+        g = _orient_and_place(g, xface, sign, yc, zc, rrim, width=plain_w)
         theta = np.deg2rad(start_deg + i * (360.0 / n))
         rot = tf.rotation_matrix(theta, [1, 0, 0], [0, yc, zc])
         g.apply_transform(rot)

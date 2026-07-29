@@ -182,6 +182,28 @@ def reference_tab(mesh, length=4.0, out=2.5, height=1.5):
     return trimesh.boolean.union([mesh, tab], engine="manifold")
 
 
+def direction_tab(mesh, plus_y=False, length=7.0, out=4.0, height=1.5):
+    """基準笛の印を、次に吹く笛の側を指す矢印の形にする。
+
+    長方形のタブは「どこから始めるか」は示すが「どちら回りに進むか」を示さない。円周に
+    笛を並べたスプールでは、これが分からないと逆向きに吹いてしまう（2026-07-29、実際に
+    逆向きに吹かれた）。そこで印を三角形にして、進む向きそのものを形で示す。
+
+    矢印は吸込口(x=0)の脇に置き、笛の幅方向(±y)へ尖らせる。plus_y=True なら +y 側、
+    False なら -y 側を指す。床(z=0)と同じ高さから height だけ立てるので、寝かせ印刷でも
+    宙に浮かない。ボア・窓・吸込口には掛からない。native向き前提。
+    """
+    b = mesh.bounds
+    y0 = b[1][1] if plus_y else b[0][1]
+    tip = y0 + (out if plus_y else -out)
+    tri = trimesh.creation.extrude_triangulation(
+        vertices=np.array([[0.0, y0], [length, y0], [length / 2.0, tip]]),
+        faces=np.array([[0, 1, 2]]), height=height)
+    if tri.volume < 0:
+        tri.invert()
+    return trimesh.boolean.union([mesh, tri], engine="manifold")
+
+
 # 素数13スロットの較正コーム: F#6..F#7（安定帯 F#6〜G#7 の下側13音・GF(13)で1記号=1本）。
 CALIB13 = ["F#6", "G6", "G#6", "A6", "A#6", "B6", "C7", "C#7", "D7", "D#7", "E7", "F7", "F#7"]
 # 素数11スロットの体系: G#6..F#7（13音から低音2音 F#6,G6 を除く）。低音ほど管が長く造形誤差が
