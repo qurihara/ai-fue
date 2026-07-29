@@ -69,6 +69,31 @@ def cents(a, b):
     return 1200.0 * np.log2(a / b)
 
 
+def best_alignment(mean, ideal):
+    """吹き始めの位置と回る向きを総当たりし、いちばん合う (ずらし量, 向き) を返す。
+
+    スプールは笛が円周に並ぶので、どの笛から吹き始めたか、どちら回りに進んだかが
+    実物からは分かりにくい。相対スロット（先頭を仮の基準にした半音差）がもっとも
+    多く一致する対応づけを選び、同点なら残差の小さい方を採る。
+    """
+    n = len(ideal)
+    ok = ~np.isnan(mean)
+    if ok.sum() < 2:
+        return 0, 1
+    rel_m = np.round(cents(mean, mean[np.argmax(ok)]) / 100.0)
+    best = None
+    for direction in (1, -1):
+        for shift in range(n):
+            ref = ideal[[(shift + direction * i) % n for i in range(n)]]
+            rel_w = np.round(cents(ref, ref[np.argmax(ok)]) / 100.0)
+            hit = int(np.sum((rel_m == rel_w)[ok]))
+            dev = cents(mean, ref)
+            score = float(np.sqrt(np.nanmean((dev - np.nanmedian(dev)) ** 2)))
+            if best is None or (hit, -score) > (best[0], -best[1]):
+                best = (hit, score, shift, direction)
+    return best[2], best[3]
+
+
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if len(argv) < 2:
@@ -84,6 +109,16 @@ def main(argv=None):
     print("測定は%d回ぶん" % len(runs))
 
     arr = np.array([[np.nan if v is None else v for v in r] for r in runs], dtype=float)
+
+    # 円周に並ぶ笛は、どこから吹き始めたか・どちら回りかが分からないことがある。
+    # 回転と向きを総当たりして、相対スロットがいちばん多く一致する対応づけを選ぶ。
+    shift, direction = best_alignment(np.nanmean(arr, axis=0), ideal)
+    if (shift, direction) != (0, 1):
+        order = [(shift + direction * i) % len(notes) for i in range(len(notes))]
+        print("吹いた順番が設計と違っていた。%s・設計の%d本目から始まっている（並べ直して集計する）"
+              % ("順方向" if direction > 0 else "逆方向", shift + 1))
+        notes = [notes[j] for j in order]
+        ideal = ideal[order]
     dead = [i + 1 for i in range(len(notes)) if np.all(np.isnan(arr[:, i]))]
     print("鳴らなかった笛: %s" % ("なし" if not dead else " ".join("%d本目(%s)" % (i, notes[i - 1]) for i in dead)))
 
