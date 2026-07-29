@@ -57,6 +57,7 @@ MOUTH_OUT = 1.0      # 吸込口を板の外形より前へ出す量[mm]
 BACK_WALL = 1.0      # 笛の裏に残す板の厚み[mm]
 GAP = 1.0            # 笛どうしの隙間[mm]
 SIDE_WALL = 1.2      # 笛の左右に残す板の肉厚[mm]
+SINK = 0.3           # 笛を板の上面へどれだけ沈めるか[mm]（融合させるため）
 
 
 def halves(scale):
@@ -152,6 +153,75 @@ def pick_two(found, width=FLUTE_W + 2 * SIDE_WALL, gap=GAP):
 R_FLAT = tf.rotation_matrix(np.radians(90), [0, 0, 1])
 
 
+def support_map(plate, l_max, width=FLUTE_W, step_x=0.5, step_y=0.5):
+    """帯の左端xごとに、笛を[* 上面に乗せられる]いちばん低い開始yを返す。
+
+    上に乗せるので、笛の真下に材料が笛の長さぶん続いていなければならない。
+    ハートの抜きは fill_heart で上半分を埋めてあるので、そこも乗せられる。
+    """
+    b = plate.bounds
+    ztop = b[1][2] - 0.5
+    xs = np.arange(0.0, b[1][0], step_x)
+    ys = np.arange(0.0, b[1][1], step_y)
+    X, Y = np.meshgrid(xs, ys, indexing="ij")
+    ins = plate.contains(np.column_stack(
+        [X.ravel(), Y.ravel(), np.full(X.size, ztop)])).reshape(X.shape)
+    nw = int(round(width / step_x))
+    out = {}
+    for i in range(len(xs) - nw):
+        band = ins[i:i + nw].all(axis=0)
+        cur = 0
+        start = None
+        found = None
+        for j, v in enumerate(band):
+            if v:
+                if cur == 0:
+                    start = ys[j]
+                cur += 1
+                if cur * step_y >= l_max and found is None:
+                    found = start
+            else:
+                cur = 0
+        out[round(xs[i], 2)] = found
+    return out
+
+
+def layout_on_top(plate, notes, l_max, gap=GAP):
+    """笛を板の上面に乗せて横に並べる。彫り抜かないので、ボアが埋まる心配が無い。
+
+    置き場所は、2本とも真下に材料がある帯の組み合わせのうち、[* そろえた開始yが
+    いちばん低くなるもの]を選ぶ。同じ高さなら左に寄せる（板の基幹部に載せるため）。
+    """
+    sm = support_map(plate, l_max)
+    xs = sorted(sm)
+    n = len(notes)
+    best = None
+    for x0 in xs:
+        cand = [round(x0 + k * (FLUTE_W + gap), 2) for k in range(n)]
+        vals = [sm.get(min(sm, key=lambda t: abs(t - c))) for c in cand]
+        if any(v is None for v in vals):
+            continue
+        if cand[-1] + FLUTE_W > plate.bounds[1][0]:
+            continue
+        score = (max(vals), x0)
+        if best is None or score < best[0]:
+            best = (score, cand, max(vals))
+    if best is None:
+        raise ValueError("笛%d本を乗せられる場所が無い" % n)
+    _, cand, y0 = best
+    ztop = plate.bounds[1][2]
+    placed = []
+    for note, x0 in zip(notes, cand):
+        fl = mini10.uniform_flute(mini10.length_for_note(note), L_max=l_max)
+        fl.apply_transform(R_FLAT)
+        # 面がぴったり接するだけだと融合が心もとないので、少しだけ沈める。
+        # 笛の床は0.5mm厚なので、0.3mm沈めてもボアには届かない。
+        fl.apply_translation([x0 - fl.bounds[0][0], y0 - fl.bounds[0][1],
+                              (ztop - SINK) - fl.bounds[0][2]])
+        placed.append(fl)
+    return placed, y0
+
+
 def layout_bottom(plate, notes, l_max, gap=GAP):
     """笛を板の下の縁にそろえて横に並べる。
 
@@ -223,8 +293,8 @@ def build(notes_per_half, scale=1.8, note_set=None, carve=True, engine="manifold
     infos = []
     xcursor = 0.0
     for (key, plate), notes in zip(halves(scale), notes_per_half):
-        plate = fill_heart(plate)               # ハートの上半分を埋めてから置く
-        placed, y_mouth = layout_bottom(plate, notes, l_max)
+        plate = fill_heart(plate)               # ハートの上半分を埋めてから乗せる
+        placed, y_mouth = layout_on_top(plate, notes, l_max)
         for note, fl in zip(notes, placed):
             res = orient_check.check_orientation(R=R_FLAT)
             if res.verdict != "ok":
@@ -233,10 +303,8 @@ def build(notes_per_half, scale=1.8, note_set=None, carve=True, engine="manifold
                               y_mouth=round(y_mouth, 1),
                               window_deg=round(res.angle_deg, 1),
                               tilt_deg=round(res.tilt_deg, 1)))
+        # 上に乗せるので彫り抜かない。笛の床がそのまま板の上面に接する。
         body = plate
-        if carve:
-            for fl in placed:
-                body = body.difference(carve_tool(fl), engine=engine)
         shift = tf.translation_matrix([xcursor - body.bounds[0][0], 0, 0])
         body.apply_transform(shift)
         sc.add_geometry(body, geom_name="keychain_%s_0.20mm" % key)
