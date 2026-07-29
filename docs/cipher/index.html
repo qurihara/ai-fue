@@ -212,6 +212,22 @@
     </div>
   </div>
 
+  <h2>4. 2枚を合わせて認証する（2-of-2）</h2>
+  <div class="card">
+    <div class="muted">秘密を2つに分けて2枚のカードに入れてある場合の読み方です。片方には乱数が、もう片方には「秘密−乱数」が入っているので、<b>2枚そろって初めて秘密が出ます</b>。1枚だけでは何も分かりません。<br>
+      <b>1枚ずつ別々に読みます。</b>それぞれのカードが自分の基準笛を先頭に持っているためで、2枚を続けて吹くと2枚目の基準笛がデータとして読まれてしまいます。読み方は「2. 続けて吹く」と同じで、息を切るか音の変わり目で自動的に次の笛へ進みます。<br>
+      吹き始めは<b>ストラップ穴と同じ側の端の笛</b>です。そこから反対の端へ向かって8本を続けて吹き、もう一度ボタンを押して確定してください。<br>
+      いま印刷してあるカードは検査用の笛が1本だけなので、<b>途中の笛が鳴らなかったときは訂正が効きません</b>。読めなかったらそのカードを吹き直してください（何度でもやり直せます）。</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+      <button id="shareBtn">1枚目を吹く（開始）</button>
+      <button class="sec" id="shareClearBtn">やり直す</button>
+    </div>
+    <div class="seq" id="shareSeq"></div>
+    <span class="status" id="shareStatus"></span>
+    <div class="muted big" style="margin-top:8px">合わせた秘密: <b id="shareSecret" style="color:var(--ok);word-break:break-all">–</b></div>
+    <div class="muted big" style="margin-top:4px">照合: <b id="shareVerdict">–</b></div>
+  </div>
+
   <p class="muted">復号ロジックは <a href="cipher_codec.js">cipher_codec.js</a>（Python版 fue/cipher_codec.py と一致）。設定は <a href="cipher_config.json">cipher_config.json</a>。音程検出は <a href="https://github.com/ianprime0509/pitchy" target="_blank">pitchy</a>。測定・較正ツールは <a href="../">こちら</a>。</p>
 </div>
 
@@ -476,8 +492,9 @@ function autoSkip(){
   if(navigator.vibrate) navigator.vibrate([15,40,15]);
 }
 async function autoStart(){
-  if(!await ensureMic()){ el("autoStatus").textContent="マイクを開始できませんでした。"; return; }
-  if(cap.active || one.active){ el("autoStatus").textContent="ほかの入力方式が動いています。先にそちらを終えてください。"; return; }
+  // 始められたかを返す。2-of-2 の流れが、失敗したまま「終了」待ちにならないようにするため。
+  if(!await ensureMic()){ el("autoStatus").textContent="マイクを開始できませんでした。"; return false; }
+  if(cap.active || one.active){ el("autoStatus").textContent="ほかの入力方式が動いています。先にそちらを終えてください。"; return false; }
   // 無音による自動終了は使わない（利用者を急かさないため）。終わりはボタンで決める。
   // 区切りの長さは画面のつまみから読む（吹いている最中の変更も効く）。
   const opts = Object.assign({}, segOptions, {
@@ -495,6 +512,7 @@ async function autoStart(){
   el("autoHint").textContent="部屋の静けさを測っています。少しだけ静かにしてください。";
   autoSetButton();
   renderAutoSeq();
+  return true;
 }
 function autoStop(){
   auto.active=false;
@@ -511,6 +529,8 @@ function autoEnd(){
   logMeasurements(auto.seq, "続けて吹く");
   el("autoStatus").textContent = auto.seq.length + "本を記録しました"
     + (skipped ? "（うち" + skipped + "本は鳴らないものとして空けました）" : "") + "。復号します。";
+  // 2-of-2 の途中なら、通常の照合ではなく断片として受け取る
+  if(share.capturing){ shareCapture(); return; }
   doDecode();
 }
 function autoToggle(){ auto.active ? autoEnd() : autoStart(); }
@@ -533,6 +553,86 @@ function autoClear(){
   el("autoHint").textContent="開始すると、まず部屋の静けさを0.4秒ほど測り、そこを基準に区切りを判定します。";
   autoSetButton();
   renderAutoSeq();
+}
+
+// --- 2-of-2（2枚のカードを合わせる） ---
+/* 秘密を2つに分けた断片を、1枚ずつ読んで足し合わせる。読み取りそのものは
+ * 「2. 続けて吹く」と同じ仕組みを使い、確定したところで通常の照合へ渡さず
+ * こちらで受け取る。2枚そろった時点で合成し、認証まで進む。 */
+const share = {capturing:false, cards:[]};
+const SHARE_LABEL = ["1枚目", "2枚目"];
+function shareRender(){
+  const box = el("shareSeq"); box.innerHTML = "";
+  share.cards.forEach((c, i) => {
+    const d = document.createElement("div");
+    d.className = "chip";
+    d.innerHTML = '<div class="idx">' + SHARE_LABEL[i] + '</div>'
+      + '<div class="nm" style="font-size:.95rem">' + c.symbols.join(",") + '</div>'
+      + '<div class="fz">' + c.count + '本</div>';
+    box.appendChild(d);
+  });
+  const b = el("shareBtn");
+  const which = SHARE_LABEL[Math.min(share.cards.length, 1)];
+  b.textContent = share.capturing ? which + "を終了し復号" : which + "を吹く（開始）";
+  b.classList.toggle("ok", share.capturing);
+  b.disabled = share.cards.length >= 2;
+}
+async function shareToggle(){
+  if(share.cards.length >= 2) return;
+  if(share.capturing){ autoEnd(); return; }      // autoEnd から shareCapture が呼ばれる
+  el("shareStatus").textContent = SHARE_LABEL[share.cards.length] + "を、ストラップ穴側の端から順に吹いてください。";
+  share.capturing = await autoStart() === true;  // 始められなかったときは待ちに入らない
+  if(!share.capturing) el("shareStatus").textContent = "マイクを開始できませんでした。上のマイク開始を押してから、もう一度試してください。";
+  shareRender();
+}
+async function shareCapture(){
+  share.capturing = false;
+  const result = window.CipherCodec.decode(cipherFreqs, cipherConfig, true);
+  if(result.status.startsWith("error:")){
+    el("shareStatus").textContent = SHARE_LABEL[share.cards.length] + "を読めませんでした（"
+      + result.status + "）。もう一度吹いてください。";
+    shareRender();
+    return;
+  }
+  share.cards.push({symbols: result.symbols || [], count: cipherFreqs.length});
+  el("shareStatus").textContent = SHARE_LABEL[share.cards.length - 1] + "を読み取りました（" + result.status + "）。"
+    + (share.cards.length < 2 ? "続けて2枚目を吹いてください。" : "");
+  shareRender();
+  if(share.cards.length >= 2) await shareCombine();
+}
+async function shareCombine(){
+  try{
+    const m = window.CipherCodec.slots(cipherConfig).length;
+    const base = window.CipherCodec._wireParams(cipherConfig, m).mb;
+    const got = window.CipherCodec.combineShares(share.cards.map(c => c.symbols), base);
+    el("shareSecret").textContent = got.value + "（記号 " + got.digits.join(",") + "）";
+    const canonical = Uint8Array.from(got.digits);
+    const configured = !!(packEnc || gotoEnc || el("cipherHash").value.trim());
+    if(configured){
+      await verifyCanonical(canonical, "shareVerdict");
+    }else{
+      // 照合用の値が渡されていないデモでは、2枚そろって復元できたこと自体を成功として示す
+      el("shareVerdict").innerHTML = '<span class="okmark">2枚がそろい、秘密を復元しました</span>'
+        + ' <span class="muted">（照合用の値が無いので、値そのものを表示しています）</span>';
+      el("successSub").textContent = "2枚を合わせた秘密は " + got.value + " です";
+      el("successGo").style.display = "none";
+      el("successOverlay").classList.add("show");
+    }
+    el("shareStatus").textContent = "2枚がそろいました。やり直すときは「やり直す」を押してください。";
+  }catch(e){
+    el("shareSecret").textContent = "–";
+    el("shareVerdict").innerHTML = '<span class="ngmark">合わせられません（' + e.message + '）</span>';
+  }
+}
+function shareClear(){
+  if(share.capturing) autoStop();
+  share.capturing = false;
+  share.cards = [];
+  el("shareStatus").textContent = "";
+  el("shareSecret").textContent = "–";
+  el("shareVerdict").textContent = "–";
+  autoClear();
+  shareRender();
 }
 
 // --- 1文字ずつモード ---
@@ -735,17 +835,24 @@ async function doDecode(){
   status.textContent = result.status + `（訂正 ${result.correctedCount}、消失 ${result.erasureCount}）`;
   const canonical = (cipherConfig.mode === "symbols")
       ? Uint8Array.from(result.symbols||[]) : result.payload;
+  await verifyCanonical(canonical, "verdict");
+}
+
+/* 取り出した秘密（canonical）を照合する。1枚を復号したときと、2枚を合わせたときの
+ * どちらからも呼ぶので、結果を書き込む先だけを引数で受け取る。 */
+async function verifyCanonical(canonical, verdictId){
+  const el_ = (t)=>{ el(verdictId).innerHTML = t; };
 
   // (0) c=: 設定一式を秘密で包んだもの。取り出せたこと自体が認証成功である。
   if(packEnc){
     const pack = await decryptPack(canonical);
     if(!pack){
-      el("verdict").innerHTML='<span class="ngmark">中身を取り出せません（秘密が違います）</span>';
+      el_('<span class="ngmark">中身を取り出せません（秘密が違います）</span>');
       return;
     }
     const msg = (typeof pack.msg === "string") ? pack.msg : "";
-    el("verdict").innerHTML='<span class="okmark">認証成功（秘密で設定を取り出しました）</span>'
-      + (msg ? ' <span class="muted">'+msg.replace(/[<>&]/g, c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]))+'</span>' : "");
+    el_('<span class="okmark">認証成功（秘密で設定を取り出しました）</span>'
+      + (msg ? ' <span class="muted">'+msg.replace(/[<>&]/g, c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]))+'</span>' : ""));
     if(typeof pack.goto === "string" && /^https?:\/\//i.test(pack.goto)){
       showSuccess(pack.goto);
     }else if(msg){
@@ -760,21 +867,20 @@ async function doDecode(){
   // (A) ?goto_enc: 秘密で暗号化された遷移先。復号できれば「認証成功」＝自動遷移
   if(gotoEnc){
     const url = await decryptGoto(canonical);
-    if(url){ el("verdict").innerHTML='<span class="okmark">認証成功（秘密で遷移先を復号）</span>'; showSuccess(url); }
-    else   { el("verdict").innerHTML='<span class="ngmark">遷移先を復号できません（秘密が違います）</span>'; }
+    if(url){ el_('<span class="okmark">認証成功（秘密で遷移先を復号）</span>'); showSuccess(url); }
+    else   { el_('<span class="ngmark">遷移先を復号できません（秘密が違います）</span>'); }
     return;
   }
 
   // (B) 従来: ?sha256 で照合 → ?goto=平文URL へ
   const expected = el("cipherHash").value.trim().toLowerCase();
-  if(!expected){ el("verdict").innerHTML='<span class="muted">照合用SHA-256は未入力</span>'; return; }
-  if(!/^[0-9a-f]{64}$/.test(expected)){ el("verdict").innerHTML='<span class="ngmark">SHA-256は64桁hexで入力してください</span>'; return; }
+  if(!expected){ el_('<span class="muted">照合用SHA-256は未入力</span>'); return; }
+  if(!/^[0-9a-f]{64}$/.test(expected)){ el_('<span class="ngmark">SHA-256は64桁hexで入力してください</span>'); return; }
   const digest = await crypto.subtle.digest("SHA-256", canonical);
   const actual = Array.from(new Uint8Array(digest), x=>x.toString(16).padStart(2,"0")).join("");
   const ok = actual===expected;
-  el("verdict").innerHTML = ok
-      ? '<span class="okmark">SHA-256 OK（一致）</span>'
-      : '<span class="ngmark">SHA-256 NG（不一致）</span>';
+  el_(ok ? '<span class="okmark">SHA-256 OK（一致）</span>'
+         : '<span class="ngmark">SHA-256 NG（不一致）</span>');
   if(ok && gotoUrl){ showSuccess(gotoUrl); }
 }
 
@@ -788,6 +894,9 @@ el("autoStartBtn").onclick = autoToggle;
 el("autoSkipBtn").onclick = autoSkip;
 el("autoUndoBtn").onclick = autoUndo;
 el("autoClearBtn").onclick = autoClear;
+el("shareBtn").onclick = shareToggle;
+el("shareClearBtn").onclick = shareClear;
+shareRender();
 el("successClose").onclick = ()=>{ el("successOverlay").classList.remove("show"); };
 // 区切りの長さのつまみ。吹いている最中でも効くように、動かしたその場で反映する。
 el("gapRange").oninput = ()=>{

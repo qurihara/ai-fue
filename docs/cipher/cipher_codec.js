@@ -398,7 +398,28 @@
     }
   }
 
-  return {noteToMidi, midiToNote, noteToFreq, slots, decode, bytesToHex,
+  function combineShares(lists, base) {
+    /* 2-of-2 の断片を足し合わせて秘密を戻す。
+       各断片は同じ桁数の base 進の記号列である。片方は乱数、もう片方は
+       「秘密−乱数」なので、足して base^桁数 で割った余りが秘密になる。
+       戻り値は {value, digits}。digits は秘密を同じ桁数で表した記号列である。 */
+    if (!Array.isArray(lists) || lists.length < 2) throw new Error("断片が2つ必要です");
+    const n = lists[0].length;
+    lists.forEach(function (d) {
+      if (d.length !== n) throw new Error("断片の記号数が違います");
+      d.forEach(function (s) {
+        if (!(Number.isInteger(s) && s >= 0 && s < base)) throw new Error("記号が範囲外です");
+      });
+    });
+    const span = BigInt(base) ** BigInt(n);          // 桁が多くても正しく扱えるようBigIntで計算する
+    const total = lists.reduce(function (sum, d) {
+      return (sum + _fromBase(d, base)) % span;
+    }, 0n);
+    return {value: Number(total) <= Number.MAX_SAFE_INTEGER ? Number(total) : total,
+            digits: _toBase(total, base, n)};
+  }
+
+  return {noteToMidi, midiToNote, noteToFreq, slots, decode, bytesToHex, combineShares,
     _generator, _rsEncode, _rsDecode, _syndromes, _solve, _toBase, _fromBase,
     _prime, _width, _payloadWidth, _widthToBytes,
     _primeBelow, _wireParams, _diffDecode, _interleaveOrder, _blockLayout, _root};

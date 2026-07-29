@@ -56,4 +56,20 @@ fixture.vectors.filter(v => v.no_repeat).forEach((vector, index) => {
   console.log("PASS bad-width rejection (" + result.status + ")");
 }
 
+// 2-of-2 の断片を合わせる計算。実物のv3カード2枚（秘密260729）と同じ値で確かめる。
+{
+  const a = [0, 8, 0, 4, 3, 4];
+  const b = [0, 9, 8, 5, 5, 3];
+  const got = codec.combineShares([a, b], 11);
+  assert.strictEqual(got.value, 260729, "combineShares value");
+  assert.deepStrictEqual(got.digits, codec._toBase(260729, 11, 6), "combineShares digits");
+  // 片方だけでは秘密にならない（乱数のまま）ことも確かめる
+  assert.notStrictEqual(codec._fromBase(a, 11), 260729);
+  // 桁あふれは剰余で戻る
+  assert.strictEqual(codec.combineShares([[10,10,10,10,10,10],[0,0,0,0,0,1]], 11).value, 0);
+  // 記号数が違う断片は受け付けない
+  assert.throws(() => codec.combineShares([[1,2],[1,2,3]], 11), /記号数/);
+  console.log("PASS combineShares (2-of-2)");
+}
+
 console.log(`ALL PASS (${fixture.vectors.length} vectors)`);
