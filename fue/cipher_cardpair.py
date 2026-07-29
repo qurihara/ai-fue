@@ -13,12 +13,20 @@ Chordika のカード（harmonica_deck/make_chordika_mini10.py）と同じ作り
 そこへハートを抜く。ハートは境界をまたぐので、[* 1枚では半分のハートにしかならず、
 2枚をそろえて初めてハートが現れる]。秘密分散の「2つ合わせて初めて開く」を、形が語る。
 
-秘密の分け方は 2-of-2 である。片方に乱数、もう片方に「秘密−乱数」を入れる。基準笛を置くと
-温度と息の強さを打ち消せるが、その1本ぶん情報が減る（8本→7本）。既定では置く。
+秘密の分け方は 2-of-2 である。片方に乱数、もう片方に「秘密−乱数」を入れる。
+
+符号化はスプールや本立てと同じ fue/cipher_codec を使う。[* 隣り合う笛が必ず違う音になる]
+（no_repeat）ので、無音を置かずに続けて吹いても1本ずつの区切りが分かる。先頭の1本は基準笛で、
+温度と息の強さを打ち消す。残り7本のうちパリティに使う数だけ誤り訂正に回る。
+
+  パリティ0 … 記号7個・24.2ビット（0〜19,487,170）。訂正はできない。
+  パリティ1 … 記号6個・20.8ビット（0〜1,771,560）。既定。
+  パリティ2 … 記号5個・17.3ビット（0〜161,050）。誤り1つを直せる。
 
 使い方:
-    python3 fue/cipher_cardpair.py                      # 既定（基準笛あり・12音）
-    python3 fue/cipher_cardpair.py --no-reference       # 8本ぜんぶデータにする
+    python3 fue/cipher_cardpair.py                      # 既定（パリティ1）
+    python3 fue/cipher_cardpair.py --parity 2           # 誤り訂正を厚くする
+    python3 fue/cipher_cardpair.py --split-out          # 1枚ずつの3mfも書き出す
 """
 from __future__ import annotations
 import argparse
@@ -33,6 +41,7 @@ from shapely.affinity import scale as shp_scale, translate as shp_translate
 
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "harmonica_deck"))
+import cipher_codec
 import mini10
 import namecard as NC
 import orient_check
@@ -162,10 +171,35 @@ def split_secret(secret, m, n):
     return digits(a), digits(b), a, b
 
 
+def codec_config(parity):
+    """カードの符号化の設定。12スロット（G#6〜G7）・隣接同音禁止・基準笛C7。
+
+    スプールや本立てと同じ fue/cipher_codec を使う。隣り合う笛が必ず違う音になるので、
+    無音を置かずに続けて吹いても区切りが分かる。復号ページも同じ設定で読める。
+    """
+    return cipher_codec.CodecConfig(
+        lo_note="G#6", hi_note="G7", reference_note="C7",
+        no_repeat=True, use_reference=True, ecc_parity=parity)
+
+
+def encode_share(value, n_symbols, parity):
+    """share の値を、基準笛を先頭に置いた笛の音名の並びへ符号化する。"""
+    cfg = codec_config(parity)
+    base = cipher_codec._wire_params(cfg)[1]          # 記号の底（12スロットなら11）
+    symbols, v = [], value
+    for _ in range(n_symbols):
+        symbols.append(v % base)
+        v //= base
+    return cipher_codec.encode_symbols(symbols[::-1], cfg).notes
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="暗号笛カード2枚＋境界のハート（分散暗号v3）")
-    ap.add_argument("--secret", type=int, default=20260729, help="デモの秘密（整数）")
-    ap.add_argument("--no-reference", action="store_true", help="基準笛を置かない")
+    ap.add_argument("--secret", type=int, default=260729,
+                    help="デモの秘密（整数）。既定は今日の日付の下6桁")
+    ap.add_argument("--parity", type=int, default=1,
+                    help="誤り訂正のパリティ記号の数。0なら7記号(24.2bit)、1なら6記号(20.8bit)、"
+                         "2なら5記号(17.3bit)まで運べる")
     ap.add_argument("--heart", type=float, nargs=2, default=(17.0, 15.0), help="ハートの幅と高さ")
     ap.add_argument("--label", default="CipherFlute 2of2",
                     help="刻印の文字列（2枚とも同じものを入れる）")
@@ -175,27 +209,37 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     slots = mini10.CALIB12
-    m = len(slots)
-    n_data = N_FLUTES if args.no_reference else N_FLUTES - 1
     l_max = mini10.uniform_body_length([mini10.length_for_note(x) for x in slots])
-    span = m ** n_data
+
+    # 笛8本のうち1本は基準笛なので、データに使えるのは7本。そのうちパリティのぶんを
+    # 引いた残りが、秘密そのものを運ぶ記号の数になる。
+    cfg = codec_config(args.parity)
+    base = cipher_codec._wire_params(cfg)[1]          # 12スロットなら記号の底は11
+    n_sym = N_FLUTES - 1 - args.parity
+    if n_sym < 1:
+        raise SystemExit("パリティが多すぎる（笛は%d本しかない）" % N_FLUTES)
+    span = base ** n_sym
     if not 0 <= args.secret < span:
-        raise SystemExit("秘密は 0 から %d までにする（%d音%d本なので）" % (span - 1, m, n_data))
+        raise SystemExit(
+            "秘密は 0 から %d までにする（記号%d個・底%d。パリティを減らせば広がる）"
+            % (span - 1, n_sym, base))
 
-    da, db, va, vb = split_secret(args.secret, m, n_data)
-    to_notes = lambda ds: [slots[d] for d in ds]
-    notes_a, notes_b = to_notes(da), to_notes(db)
-    if not args.no_reference:
-        notes_a = ["C7"] + notes_a          # 先頭が基準笛
-        notes_b = ["C7"] + notes_b
+    va, vb = split_secret(args.secret, base, n_sym)[2:]
+    notes_a = encode_share(va, n_sym, args.parity)
+    notes_b = encode_share(vb, n_sym, args.parity)
+    for tag, ns in (("A", notes_a), ("B", notes_b)):
+        if len(ns) != N_FLUTES:
+            raise SystemExit("カード%sの笛が%d本になった（%d本にしたい）" % (tag, len(ns), N_FLUTES))
+        if any(x == y for x, y in zip(ns, ns[1:])):
+            raise SystemExit("カード%sに隣り合う同じ音がある" % tag)
 
-    print("秘密 %d（0〜%d、%d音×%d本ぶん＝%.1f bit）" % (
-        args.secret, span - 1, m, n_data, n_data * math.log2(m)))
+    print("秘密 %d（0〜%d、記号%d個×底%d＝%.1f bit）" % (
+        args.secret, span - 1, n_sym, base, n_sym * math.log2(base)))
     print("  カードA の笛: %s（値 %d）" % (" ".join(notes_a), va))
     print("  カードB の笛: %s（値 %d）" % (" ".join(notes_b), vb))
     print("  片方だけでは秘密は分からない（もう片方が乱数の役をする）")
-    if not args.no_reference:
-        print("  先頭のC7は基準笛。温度と息の強さを打ち消す（そのぶんデータは7本）")
+    print("  先頭のC7は基準笛。温度と息の強さを打ち消す")
+    print("  隣り合う笛は必ず違う音（no_repeat）。パリティ%d個ぶんの誤り訂正が付く" % args.parity)
 
     a, b, hp = build_pair(notes_a, notes_b, l_max, heart=tuple(args.heart),
                           label=args.label)
