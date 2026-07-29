@@ -102,8 +102,32 @@ def place_flutes(notes, carve=True, spool_path=SPOOL, start_deg=90.0, rrim=100.0
     return result, infos
 
 
+def rim_wedge(center, r_rim, z0, z1, a_start, a_end, h_start=3.5, h_end=0.0, steps=48):
+    """円盤の外周に、始まりの笛から次の笛の側へ細くなっていく出っぱりを作る。
+
+    笛は円盤の厚み(4mm)いっぱいに埋まっていて、床は外面と面一である。そのため笛に付けた
+    印は外面から出っぱらず、[* 触っても見ても分からない]（2026-07-29、栗原さんの指摘）。
+    出っぱらせられるのは外周のふちだけなので、そこへ印を置く。
+
+    始まりの笛のところが3.5mmで、進む向きへ13度ほどかけて0へ細くなる。指を這わせると、
+    片側からは崖に当たり、反対側からはなだらかに乗り上がるので、[* 触っただけで向きが分かる]。
+    """
+    cx, cy = center
+    ang = np.linspace(a_start, a_end, steps)
+    t = np.linspace(0.0, 1.0, steps)
+    h = h_start + (h_end - h_start) * t
+    inner = np.column_stack([cx + (r_rim - 0.6) * np.cos(ang), cy + (r_rim - 0.6) * np.sin(ang)])
+    outer = np.column_stack([cx + (r_rim + h) * np.cos(ang), cy + (r_rim + h) * np.sin(ang)])
+    poly = np.vstack([inner, outer[::-1]])
+    from shapely.geometry import Polygon as _Poly
+    wedge = trimesh.creation.extrude_polygon(_Poly(poly).buffer(0), height=z1 - z0)
+    wedge.apply_translation([0, 0, z0])
+    return wedge
+
+
 def place_flutes_multiobj(notes, carve=True, spool_path=SPOOL, start_deg=90.0, rrim=100.0,
-                          geom_key="3", ref_tab=True, l_max=None, print_pose=True):
+                          geom_key="3", ref_tab=True, l_max=None, print_pose=True,
+                          rim_mark=True):
     """スプール本体と各笛を別オブジェクトにした Scene を返す（GUIでオブジェクトごとの設定用）。
     彫り抜き(carve)はスプール本体だけに適用し、笛は別オブジェクトのまま残す。戻り値 (scene, infos)。
 
@@ -172,6 +196,20 @@ def place_flutes_multiobj(notes, carve=True, spool_path=SPOOL, start_deg=90.0, r
             g.apply_transform(T)
         for it in infos:
             it["R"] = P[:3, :3] @ it["R"]
+
+        # 外周のふちに、始まりの笛と進む向きを示す出っぱりを足す（印刷姿勢で作る）。
+        if rim_mark and ref_tab and len(placed) >= 2:
+            c = np.array([100.0, 100.0])
+            def angle_of(mesh):
+                v = mesh.bounds.mean(axis=0)[:2] - c
+                return float(np.arctan2(v[1], v[0]))
+            a0, a1 = angle_of(placed[0]), angle_of(placed[1])
+            step = (a1 - a0 + np.pi) % (2 * np.pi) - np.pi      # 進む向き（符号つき）
+            span = np.sign(step) * np.deg2rad(13.0)
+            zt = max(g.bounds[1][2] for g in placed)            # 笛＝円盤の厚み
+            wedge = rim_wedge(c, 100.0, 0.0, zt, a0, a0 + span)
+            body = trimesh.boolean.union([body, wedge], engine="manifold")
+
     sc = trimesh.Scene()
     sc.add_geometry(body, geom_name="spool_0.20mm")
     for i, (note, g) in enumerate(zip(notes, placed)):
