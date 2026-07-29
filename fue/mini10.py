@@ -182,23 +182,29 @@ def reference_tab(mesh, length=4.0, out=2.5, height=1.5):
     return trimesh.boolean.union([mesh, tab], engine="manifold")
 
 
-def direction_tab(mesh, plus_y=False, length=7.0, out=4.0, height=1.5):
+def direction_tab(mesh, plus_y=False, x0=20.0, length=8.0, out=4.0, z0=0.0, z1=None):
     """基準笛の印を、次に吹く笛の側を指す矢印の形にする。
 
     長方形のタブは「どこから始めるか」は示すが「どちら回りに進むか」を示さない。円周に
     笛を並べたスプールでは、これが分からないと逆向きに吹いてしまう（2026-07-29、実際に
     逆向きに吹かれた）。そこで印を三角形にして、進む向きそのものを形で示す。
 
-    矢印は吸込口(x=0)の脇に置き、笛の幅方向(±y)へ尖らせる。plus_y=True なら +y 側、
-    False なら -y 側を指す。床(z=0)と同じ高さから height だけ立てるので、寝かせ印刷でも
-    宙に浮かない。ボア・窓・吸込口には掛からない。native向き前提。
+    [* 高さは笛の高さいっぱい]（既定で z=0 から笛の頂部まで）にする。スプールでは笛が
+    円盤の厚み(2.5mm)より高い(4.0mm)ので、笛と同じ高さの印は窓の側へ1.5mmだけ顔を出し、
+    見ても触っても分かる。床(z=0)と同じ面から立つので、寝かせ印刷でも宙に浮かない。
+
+    x0 は吸込口(x=0)からの距離である。吸込口のすぐ脇はスプールの円盤が厚く(3.6mm)、
+    印がほとんど出ないので、[* 円盤が薄い中ほど]に置く。ボア・窓・吸込口には掛からない。
+    native向き前提。
     """
     b = mesh.bounds
     y0 = b[1][1] if plus_y else b[0][1]
     tip = y0 + (out if plus_y else -out)
+    z1 = b[1][2] if z1 is None else z1
     tri = trimesh.creation.extrude_triangulation(
-        vertices=np.array([[0.0, y0], [length, y0], [length / 2.0, tip]]),
-        faces=np.array([[0, 1, 2]]), height=height)
+        vertices=np.array([[x0, y0], [x0 + length, y0], [x0 + length / 2.0, tip]]),
+        faces=np.array([[0, 1, 2]]), height=z1 - z0)
+    tri.apply_translation([0.0, 0.0, z0])
     if tri.volume < 0:
         tri.invert()
     return trimesh.boolean.union([mesh, tri], engine="manifold")

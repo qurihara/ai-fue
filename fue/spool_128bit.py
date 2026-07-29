@@ -69,6 +69,9 @@ def main(argv=None):
     ap.add_argument("--parity", type=int, default=2, help="RSブロックあたりのパリティ記号数")
     ap.add_argument("--no-carve", action="store_true", help="彫り抜きなし（形の確認用）")
     ap.add_argument("--prefix", default="spool128", help="出力ファイル名の頭")
+    ap.add_argument("--version", default=None,
+                    help="版の名前（例 v4）。付けると out/spool128_v4_plate1.3mf のように書き出す。"
+                         "試行錯誤の途中で前の版を上書きしないための決まりである")
     args = ap.parse_args(argv)
 
     payload = args.payload.encode() if args.payload else DEMO_PAYLOAD
@@ -99,7 +102,10 @@ def main(argv=None):
         sc, infos = spool_flutes.place_flutes_multiobj(
             ns, carve=not args.no_carve, geom_key=p["key"],
             ref_tab=(idx == 0), l_max=l_max)
-        path = os.path.join(OUT, "%s_plate%d.3mf" % (args.prefix, idx + 1))
+        stem = args.prefix if not args.version else "%s_%s" % (args.prefix, args.version)
+        path = os.path.join(OUT, "%s_plate%d.3mf" % (stem, idx + 1))
+        if os.path.exists(path) and args.version:
+            raise SystemExit("すでにある版を上書きしようとしている: %s（--version を新しくする）" % path)
         sc.export(path)
         print()
         print("%s -> %s" % (p["name"], os.path.relpath(path, ROOT)))
