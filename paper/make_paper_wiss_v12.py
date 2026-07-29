@@ -327,6 +327,24 @@ add_table(
         ["本研究", "スマホマイク", "呼気", "約3.7bit/本", "あり"],
     ],
     [0.82, 0.62, 0.52, 0.58, 0.46])
+h2("音でデータを送る通信方式との関係")
+body_p(
+    "本研究の符号化は，音でデータを送る通信方式の系譜に連なる．電話回線のモデム[19]は2つの"
+    "音の高さに0と1を割り当てる周波数偏移変調であり，ファクシミリの手順[20]や押しボタン信号[21]も，"
+    "決められた音の組み合わせに意味を与えている．CipherFluteは12個の高さを使うので，その多値版に"
+    "相当する．基準笛との比で読む仕組みは，受信側が周波数のずれを補正するために置く基準信号と"
+    "同じ役割を果たす．隣り合う笛が同じ音にならないようにする制約は，8B/10B[22]のように必ず遷移を"
+    "起こして受信側が区切りを自力で見つけられるようにする符号と狙いが同じである．誤り訂正を付けて"
+    "記号を並べ替える処理も，通信で広く使われてきたものである．空気を伝わる音でデータを送る試み"
+    "そのものにも長い歴史があり[23]，音響カプラはその代表である．使う音域も1.7 kHzから3.1 kHzで，"
+    "電話網が通す0.3 kHzから3.4 kHzの中に収まっている．あちらは通信路の制約，こちらは笛の大きさ"
+    "という別々の理由でありながら，結果として同じ帯に落ち着いている．")
+body_p(
+    "違いは送信の側にある．通信では送信機が任意の信号をその場で作れるのに対し，CipherFluteでは"
+    "物体の形そのものが信号を固定して保持する．電源も電子回路も要らない代わりに，位相や振幅は"
+    "使えず，吹く速さも一定にならない．運べる量は毎秒10ビットに満たず，モデムには遠く及ばない．"
+    "しかし本研究が求めるのは通信路の速度ではなく，電源なしで長期にわたり同じ信号を出し続ける"
+    "担体である．速度と引き換えに保存性と自作可能性を得た点に，通信方式との位置づけの違いがある．")
 h2("秘密の保管と鍵管理の実務")
 body_p(
     "金属板に秘密を刻印する製品群[15]は災害への耐性に特化した担体であり，偽装性と機械での"
@@ -717,6 +735,11 @@ REFS = [
     "[16] Johnston, R. G.: Tamper-Indicating Seals: Practices, Problems, and Standards, Los Alamos National Laboratory Report (2003).",
     "[17] Eskandari, S., Barrera, D., Stobert, E. and Clark, J.: A First Look at the Usability of Bitcoin Key Management, Proc. NDSS Workshop on Usable Security (USEC 2015) (2015).",
     "[18] Shamir, A.: How to Share a Secret, Communications of the ACM, Vol. 22, No. 11, pp. 612–613 (1979).",
+    "[19] ITU-T: Recommendation V.21, 300 bits per second duplex modem standardized for use in the general switched telephone network (1988).",
+    "[20] ITU-T: Recommendation T.30, Procedures for document facsimile transmission in the general switched telephone network (2005).",
+    "[21] ITU-T: Recommendation Q.23, Technical features of push-button telephone sets (1988).",
+    "[22] Widmer, A. X. and Franaszek, P. A.: A DC-Balanced, Partitioned-Block, 8B/10B Transmission Code, IBM Journal of Research and Development, Vol. 27, No. 5, pp. 440-451 (1983).",
+    "[23] Madhavapeddy, A., Scott, D. and Sharp, R.: Audio Networking: The Forgotten Wireless Technology, IEEE Pervasive Computing, Vol. 4, No. 3, pp. 55-60 (2005).",
 ]
 for r in REFS:
     add_p(S["ref"], r)
