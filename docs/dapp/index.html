@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>暗号笛ウォレット（Polygon Amoy）</title>
+<style>
+  :root{ --bg:#0f1220; --card:#1a1f36; --fg:#e8ecf5; --muted:#98a2c0;
+         --accent:#5b8cff; --ok:#37c98a; --warn:#ffb454; --ng:#ff6b6b; --line:#2b3255; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+       background:var(--bg);color:var(--fg);line-height:1.6}
+  .wrap{max-width:680px;margin:0 auto;padding:20px 16px 60px}
+  h1{font-size:1.35rem;margin:.2em 0}
+  h2{font-size:1.05rem;margin:1.4em 0 .5em;color:var(--accent)}
+  p.lead{color:var(--muted);margin:.2em 0 1em}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:14px 0}
+  button{font:inherit;border:none;border-radius:9px;padding:.7em 1.1em;cursor:pointer;color:#fff;background:var(--accent)}
+  button.sec{background:#2b335c} button.ok{background:var(--ok)} button:disabled{opacity:.45;cursor:default}
+  .muted{color:var(--muted);font-size:.9rem}
+  .status{font-size:.9rem;color:var(--warn);min-height:1.4em}
+  .notice{background:#2a2033;border:1px solid var(--warn);border-left-width:5px;border-radius:10px;
+          padding:14px 16px;margin:14px 0;font-size:.92rem;line-height:1.75}
+  .notice b{color:var(--warn)}
+  .addr{font-family:ui-monospace,Menlo,monospace;font-size:.95rem;word-break:break-all;color:var(--ok)}
+  .bal{font-size:2rem;font-weight:800;font-variant-numeric:tabular-nums}
+  .seq{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .chip{background:#0c0f1d;border:1px solid var(--line);border-radius:9px;padding:.4em .7em;text-align:center;min-width:64px}
+  .chip .idx{font-size:.7rem;color:var(--muted)}
+  .chip .nm{font-size:1rem;font-weight:700;color:var(--accent)}
+  .meter{display:flex;align-items:baseline;gap:.5em;justify-content:center;margin:.3em 0}
+  .hz{font-size:1.8rem;font-weight:700;font-variant-numeric:tabular-nums}
+  .note{font-size:1.8rem;font-weight:700;color:var(--accent)}
+  a{color:var(--accent)}
+  .locked{opacity:.35;pointer-events:none}
+  input.wide{width:100%;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.55em;
+             font-family:ui-monospace,Menlo,monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>暗号笛ウォレット</h1>
+  <p class="lead">笛を吹くと、その場で秘密鍵が組み立てられ、自分の口座が現れます。鍵はどこにも保存されません。ページを閉じれば消えます。ネットワークは Polygon Amoy（テストネット）です。</p>
+
+  <div class="notice">
+    <b>デモンストレーション用です。本物の資産には使わないでください。</b>
+    <ul style="margin:.5em 0 0;padding-left:1.3em">
+      <li>Amoy はテストネットで、そこのトークンに金銭的な価値はありません。</li>
+      <li>笛が運ぶ秘密が小さいと、口座のアドレスから<b>総当たりで秘密鍵に到達できます</b>。カード1枚（約21ビット）は総当たりできる大きさです。価値のあるものを預けてよいのは128ビット級（スプール2枚）だけです。</li>
+      <li>ブラウザの拡張機能や画面の記録からは守れません。金額の大きい用途では専用の端末を使ってください。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button id="micBtn">マイクを開始</button>
+      <span class="status" id="micStatus">笛を吹くにはマイクの許可が要ります。</span>
+    </div>
+    <div class="meter"><span class="hz"><span id="hz">–</span><span style="font-size:.8rem;color:var(--muted)"> Hz</span></span>
+      <span class="note" id="noteName">–</span></div>
+  </div>
+
+  <h2>1. 笛を吹いて口座を開く</h2>
+  <div class="card">
+    <div class="muted">「開始」を押して笛を順に吹きます。息を切るか音が変わったところで自動的に次の笛へ進みます。吹き終えたらもう一度押してください。<br>
+      2枚組（2-of-2）の場合は、1枚目を確定してから2枚目を吹きます。<b>2枚そろうまで口座は現れません。</b></div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0">
+      <label class="muted" for="mode">笛の種類：</label>
+      <select id="mode" style="font:inherit;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.4em">
+        <option value="single">1枚（カード8本・パリティ1）</option>
+        <option value="pair" selected>2枚組（2-of-2 のハートカード）</option>
+        <option value="spool">スプール2枚（128ビット・49本）</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button id="blowBtn">開始</button>
+      <button class="sec" id="skipBtn" disabled>この笛は飛ばす</button>
+      <button class="sec" id="undoBtn" disabled>1本取り消す</button>
+      <button class="sec" id="resetBtn">やり直す</button>
+    </div>
+    <div class="seq" id="seq"></div>
+    <span class="status" id="blowStatus"></span>
+  </div>
+
+  <h2>2. 口座</h2>
+  <div class="card" id="acctCard">
+    <div class="muted">アドレス</div>
+    <div class="addr" id="addr">笛を吹くと現れます</div>
+    <div class="muted" style="margin-top:12px">残高</div>
+    <div class="bal"><span id="bal">–</span> <span style="font-size:1rem;color:var(--muted)">POL</span></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+      <button class="sec" id="refreshBtn" disabled>残高を読み直す</button>
+      <button class="sec" id="forgetBtn" disabled>鍵を忘れる</button>
+    </div>
+    <div class="muted" style="margin-top:10px">受け取りは笛なしでできます。このアドレスを相手に伝えるだけです。送るときだけ笛が要ります。
+      テスト用トークンは <a href="https://faucet.polygon.technology/" target="_blank" rel="noopener">Polygonの蛇口</a> から入れられます。</div>
+    <div class="muted" style="margin-top:10px">接続先（RPC）
+      <input class="wide" id="rpc" value="https://rpc-amoy.polygon.technology" spellcheck="false"></div>
+    <span class="status" id="acctStatus"></span>
+  </div>
+
+  <h2>3. 送る</h2>
+  <div class="card locked" id="sendCard">
+    <div class="muted">まだ用意していません。次の段階で、この画面から署名して送れるようにします。いまは残高の確認までです。</div>
+  </div>
+
+  <p class="muted">鍵の作り方は <a href="flute_key.js">flute_key.js</a>（PBKDF2 60万回・salt は「版｜ラベル」）。音の復号は <a href="../cipher/cipher_codec.js">cipher_codec.js</a>。設計の検討は <a href="DESIGN.md">DESIGN.md</a>。外部のCDNは使わず、必要なライブラリは <a href="vendor/">vendor/</a> に置いています。</p>
+</div>
+
+<script src="../cipher/cipher_codec.js"></script>
+<script src="../cipher/silence_segmenter.js"></script>
+<script type="module">
+import { PitchDetector } from "./vendor/pitchy.js";
+import { deriveAccount } from "./flute_key.js";
+
+const el = (id) => document.getElementById(id);
+const CFG_BASE = {lo_note:"G#6", hi_note:"G7", step_cents:100, reference_note:"C7",
+                  no_repeat:true, use_reference:true};
+const MODES = {
+  single: {label:"カード1枚",     cfg:{...CFG_BASE, ecc_parity:1, mode:"symbols"}, cards:1, expect:8},
+  pair:   {label:"2枚組",         cfg:{...CFG_BASE, ecc_parity:1, mode:"symbols"}, cards:2, expect:8},
+  spool:  {label:"スプール2枚",   cfg:{...CFG_BASE, ecc_parity:2, mode:"sequential"}, cards:1, expect:49},
+};
+
+// --- マイクと音程 ---
+let ac, analyser, detector, buf, running = false;
+async function startMic(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
+    ac = new (window.AudioContext||window.webkitAudioContext)();
+    const src = ac.createMediaStreamSource(stream);
+    analyser = ac.createAnalyser(); analyser.fftSize = 2048;
+    src.connect(analyser);
+    detector = PitchDetector.forFloat32Array(analyser.fftSize);
+    buf = new Float32Array(analyser.fftSize);
+    running = true; loop();
+    el("micStatus").textContent = "マイクが動いています。";
+    el("micBtn").disabled = true;
+    return true;
+  }catch(e){
+    el("micStatus").textContent = "マイクを開始できませんでした（" + e.message + "）";
+    return false;
+  }
+}
+function loop(){
+  if(!running) return;
+  analyser.getFloatTimeDomainData(buf);
+  const [pitch, clarity] = detector.findPitch(buf, ac.sampleRate);
+  let sum = 0; for(let i=0;i<buf.length;i++) sum += buf[i]*buf[i];
+  const db = 20 * Math.log10(Math.sqrt(sum/buf.length) + 1e-12);
+  const good = clarity > 0.85 && pitch > 200 && pitch < 6000;
+  el("hz").textContent = good ? pitch.toFixed(1) : "–";
+  el("noteName").textContent = good ? noteOf(pitch) : "–";
+  // 区切り検出へ流す。時刻・音量(dB)・いま聞こえている高さ、の順で渡す仕様である。
+  if(seg && active){
+    const ev = seg.feed(performance.now() - t0, db, good ? pitch : 0);
+    if(ev.type === "note"){
+      seq.push({freq: ev.freq, note: noteOf(ev.freq)});
+      renderSeq();
+      if(navigator.vibrate) navigator.vibrate(20);
+    }else if(ev.type === "calibrating"){
+      el("blowStatus").textContent = "部屋の静けさを測っています。少しだけ静かにしてください。";
+    }else if(ev.type === "idle" && seq.length === 0){
+      el("blowStatus").textContent = "準備できました。1本目を吹いてください。";
+    }
+  }
+  requestAnimationFrame(loop);
+}
+function noteOf(freq){
+  return window.CipherCodec.midiToNote(Math.round(69 + 12*Math.log2(freq/440)));
+}
+
+// --- 吹いて記号を読む ---
+let seg = null, active = false, seq = [], cards = [], t0 = 0;
+function renderSeq(){
+  const box = el("seq"); box.innerHTML = "";
+  cards.forEach((c,i)=>{
+    const d = document.createElement("div"); d.className = "chip";
+    d.innerHTML = '<div class="idx">' + (i+1) + '枚目</div><div class="nm">読取済</div>';
+    box.appendChild(d);
+  });
+  seq.forEach((s,i)=>{
+    const d = document.createElement("div"); d.className = "chip";
+    d.innerHTML = '<div class="idx">' + (i+1) + '</div><div class="nm">' + (s.skipped ? "—" : s.note) + '</div>';
+    box.appendChild(d);
+  });
+  const m = MODES[el("mode").value];
+  el("blowBtn").textContent = active ? "終了して読む"
+      : (cards.length ? (cards.length+1) + "枚目を吹く" : "開始");
+  el("blowBtn").classList.toggle("ok", active);
+  el("skipBtn").disabled = !active; el("undoBtn").disabled = !(active && seq.length);
+}
+async function blowStart(){
+  if(!running && !await startMic()) return;
+  seg = window.SilenceSegmenter.create({gapMs:100, pitchSplitCents:80, pitchStableMs:70,
+                                        minNoteMs:120, endMs:Number.MAX_SAFE_INTEGER});
+  active = true; seq = []; t0 = performance.now();
+  el("blowStatus").textContent = "吹いてください。";
+  renderSeq();
+}
+function blowEnd(){
+  active = false;
+  const m = MODES[el("mode").value];
+  const freqs = seq.map(s => s.skipped ? window.CipherCodec.noteToFreq(CFG_BASE.lo_note)/2 : s.freq);
+  seg = null;
+  if(!freqs.length){ el("blowStatus").textContent = "1本も入っていません。"; renderSeq(); return; }
+  const r = window.CipherCodec.decode(freqs, m.cfg, true);
+  if(r.status.startsWith("error:")){
+    el("blowStatus").textContent = "読めませんでした（" + r.status + "）。もう一度吹いてください。";
+    seq = []; renderSeq(); return;
+  }
+  cards.push(m.cfg.mode === "symbols" ? {symbols:r.symbols} : {payload:r.payload});
+  seq = [];
+  el("blowStatus").textContent = cards.length + "枚目を読み取りました（" + r.status + "）。"
+      + (cards.length < m.cards ? "続けて次の1枚を吹いてください。" : "");
+  renderSeq();
+  if(cards.length >= m.cards) openAccount();
+}
+function blowToggle(){ active ? blowEnd() : blowStart(); }
+
+// --- 口座を開く ---
+let account = null;
+async function openAccount(){
+  const m = MODES[el("mode").value];
+  let secret;
+  try{
+    if(m.cfg.mode === "symbols"){
+      const table = window.CipherCodec.slots(m.cfg);
+      const base = window.CipherCodec._wireParams(m.cfg, table.length).mb;
+      secret = m.cards === 2
+        ? window.CipherCodec.combineShares(cards.map(c=>c.symbols), base).digits
+        : cards[0].symbols;
+    }else{
+      secret = cards[0].payload;
+    }
+  }catch(e){ el("blowStatus").textContent = "合わせられません（" + e.message + "）"; return; }
+
+  el("acctStatus").textContent = "鍵を組み立てています…";
+  account = await deriveAccount(secret, {label: "amoy"});
+  el("addr").textContent = account.address;
+  el("refreshBtn").disabled = false; el("forgetBtn").disabled = false;
+  el("acctStatus").textContent = "";
+  refresh();
+}
+async function rpc(method, params){
+  const res = await fetch(el("rpc").value.trim(), {
+    method:"POST", headers:{"content-type":"application/json"},
+    body: JSON.stringify({jsonrpc:"2.0", id:1, method, params}),
+  });
+  const j = await res.json();
+  if(j.error) throw new Error(j.error.message);
+  return j.result;
+}
+async function refresh(){
+  if(!account) return;
+  el("acctStatus").textContent = "残高を読んでいます…";
+  try{
+    const wei = BigInt(await rpc("eth_getBalance", [account.address, "latest"]));
+    const whole = wei / 10n**18n, frac = (wei % 10n**18n).toString().padStart(18,"0").slice(0,6);
+    el("bal").textContent = whole.toString() + "." + frac;
+    el("acctStatus").textContent = "";
+  }catch(e){
+    el("acctStatus").textContent = "残高を読めませんでした（" + e.message + "）。接続先を確かめてください。";
+  }
+}
+function forget(){
+  account = null; cards = []; seq = []; active = false; seg = null;
+  el("addr").textContent = "笛を吹くと現れます"; el("bal").textContent = "–";
+  el("refreshBtn").disabled = true; el("forgetBtn").disabled = true;
+  el("blowStatus").textContent = ""; el("acctStatus").textContent = "鍵を忘れました。";
+  renderSeq();
+}
+
+el("micBtn").onclick = startMic;
+el("blowBtn").onclick = blowToggle;
+el("resetBtn").onclick = forget;
+el("forgetBtn").onclick = forget;
+el("refreshBtn").onclick = refresh;
+el("skipBtn").onclick = ()=>{ if(active){ seq.push({skipped:true}); renderSeq(); } };
+el("undoBtn").onclick = ()=>{ if(seq.length){ seq.pop(); renderSeq(); } };
+el("mode").onchange = forget;
+renderSeq();
+</script>
+</body>
+</html>
