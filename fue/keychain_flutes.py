@@ -189,8 +189,10 @@ def support_map(plate, l_max, width=FLUTE_W, step_x=0.5, step_y=0.5):
 def layout_on_top(plate, notes, l_max, gap=GAP):
     """笛を板の上面に乗せて横に並べる。彫り抜かないので、ボアが埋まる心配が無い。
 
-    置き場所は、2本とも真下に材料がある帯の組み合わせのうち、[* そろえた開始yが
-    いちばん低くなるもの]を選ぶ。同じ高さなら左に寄せる（板の基幹部に載せるため）。
+    x は、2本とも真下に材料がある帯の組み合わせから選ぶ（同じなら左へ寄せる。板の
+    基幹部に載せるため）。y は[* 板の下の縁にそろえる]。板の下側が継ぎ手の曲線で
+    削れている片割れでは、笛の一部がハートの抜きや板の外へ張り出すことになるが、
+    上に乗せる形なので発音そのものには影響しない（張り出した部分は宙に浮く）。
     """
     sm = support_map(plate, l_max)
     xs = sorted(sm)
@@ -208,7 +210,21 @@ def layout_on_top(plate, notes, l_max, gap=GAP):
             best = (score, cand, max(vals))
     if best is None:
         raise ValueError("笛%d本を乗せられる場所が無い" % n)
-    _, cand, y0 = best
+    _, cand, _ = best
+    # y は下の縁にそろえる。帯ごとに材料が始まる高さが違うので、早い方に合わせる。
+    ys = np.arange(0.0, plate.bounds[1][1], 0.2)
+    zc = (plate.bounds[0][2] + plate.bounds[1][2]) / 2.0
+    starts = []
+    for x0 in cand:
+        xs2 = np.linspace(x0 + 0.4, x0 + FLUTE_W - 0.4, 5)
+        first = 0.0
+        for y in ys:
+            pts = np.column_stack([xs2, np.full_like(xs2, y), np.full_like(xs2, zc)])
+            if plate.contains(pts).all():
+                first = y
+                break
+        starts.append(first)
+    y0 = min(starts) - MOUTH_OUT
     ztop = plate.bounds[1][2]
     placed = []
     for note, x0 in zip(notes, cand):
