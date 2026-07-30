@@ -275,11 +275,15 @@ def engrave_index(host, geom, index, height=3.0, depth=0.8):
     if not parts:
         return host
     tool = trimesh.util.concatenate(parts)
-    # 押し出しは +z 方向なので、前面（-y を向く面）へ向けて倒す
-    M = _rot([1.0, 0.0, 0.0], -90.0)
+    # 押し出しは +z 方向なので、前面（−y を向く面）へ向けて倒す。
+    # [* 回す向きに注意]。−90度で倒すと、外から見たとき文字が上下逆さまになる
+    # （文字の上 +y が −z へ行ってしまう）。+90度なら文字の上が +z を向く。
+    # 外から見た座標系は、視線 +y・上 +z のとき右が +x である（2026-07-30に直した）。
+    M = _rot([1.0, 0.0, 0.0], 90.0)
     tool.apply_transform(M)
     b = tool.bounds
-    # 正面の左端から6mm、底板の厚みの中央へ置く
+    # 正面の左端から6mm、底板の厚みの中央へ置く。押し出しが −y 向きになったので、
+    # 前面（y=0）をまたぐように x/y を合わせる。
     shift = np.array([6.0 - b[0][0],
                       depth - b[1][1],
                       (geom["base_top"] - (b[1][2] - b[0][2])) / 2.0 - b[0][2]])
@@ -332,7 +336,10 @@ def main(argv=None):
     ap.add_argument("--symbols", default=None,
                     help="記号列を直接載せる（例 0,7,8,2,0,10）。秘密分散の断片を入れるときに使う")
     ap.add_argument("--index", type=int, default=None,
-                    help="断片の番号（1〜3）。正面の底板に数字を彫る")
+                    help="断片の番号（1〜3）を正面の底板に彫る。"
+                         "[* 既定では彫らない]。2026-07-30の栗原さんの判断で、"
+                         "担体の形（箱・カード・本立て）が違えば取り違えないので番号は不要とした。"
+                         "底板の前面は厚さ5mmしかなく、読める大きさが入らないという事情もある")
     args = ap.parse_args(argv)
 
     payload = args.payload.encode() if args.payload else DEMO_PAYLOAD

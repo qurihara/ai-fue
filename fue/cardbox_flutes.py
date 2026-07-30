@@ -220,7 +220,10 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Chordikaの箱の床に笛を仕込む")
     ap.add_argument("--symbols", required=True, help="載せる記号列（例 6,7,1,2,1）")
     ap.add_argument("--parity", type=int, default=2, help="RSブロックあたりのパリティ記号数")
-    ap.add_argument("--index", type=int, default=None, help="断片の番号（短辺の外面に彫る）")
+    ap.add_argument("--index", type=int, default=None,
+                    help="断片の番号を短辺の外面に彫る。[* 既定では彫らない]。"
+                         "2026-07-30の栗原さんの判断で、担体の形が違えば取り違えないので"
+                         "番号は不要とした。彫るなら文字高さ18mm（既定）でないと実物では読めない")
     ap.add_argument("--no-carve", action="store_true")
     ap.add_argument("--no-fill-front", action="store_true",
                     help="吸込口の面を埋めない（v1の挙動）")
