@@ -1,35 +1,38 @@
 # 音でデータを送る通信方式の歴史と現在
 
-調査担当の切り口は「空気中の音や電話回線の音声帯域を使ってデータを送る技術の系譜」である。電話回線のモデム、ファクシミリの手順、押しボタン信号、音響カプラ、カセットテープへの記録、放送による配布、超音波ビーコン、可聴音による端末間通信、音による機器設定、船舶と航空の音響信号までを対象とした。書誌情報はITUの勧告ページ、Crossrefのdoi登録レコード、J-STAGE、CiNii Research、著者本人の業績ページ、学会の予稿集PDF、公的機関の一次文書に当たって確認した。
+調査担当の切り口は「空気中の音や電話回線の音声帯域を使ってデータを送る技術の系譜」である。電話回線のモデム、ファクシミリの手順、押しボタン信号、音響カプラ、カセットテープへの記録、放送による配布、超音波ビーコン、可聴音による端末間通信、音による機器設定、船舶と航空の音響信号までを対象とした。書誌情報はITUの勧告ページ、Crossrefのdoi登録レコード、J-STAGE、CiNii Research、著者本人の業績ページ、学会の予稿集PDF、公的機関の一次文書に当たって確認した。この文書は2026年7月30日に別の担当者が独立に検証し、9件を訂正した。訂正の内容は末尾の「検証の記録」の節にまとめてある。
 
 ## この切り口の要約
 
-音でデータを送る技術は1960年前後に電話網のなかで体系化された。Schenkerが1960年に示した二群の音声周波数による押しボタン発信の符号は、可聴域に離散的な周波数の集合を定めて記号を割り当て、受信側は周波数の同定だけで復号する。これがCipherFluteの半音刻みスロットの直接の先祖であり、のちにITU-T勧告Q.23になった。同じ時期に周波数偏移変調のモデムがV.21として、ファクシミリの手順がT.30として整い、音声帯域は汎用の搬送路になった。1970年代には音響カプラが普及し、1975年にはカセットテープに音として計算機のデータを固定するKansas City標準が定まり、1984年にはイギリスの放送局が番組の電波でプログラムを音として配った。音の波形を物理媒体や放送に固定して配る発想はこの時期に出そろっている。
+音でデータを送る技術は1960年前後に電話網のなかで体系化された。Schenkerが1960年に示した二群の音声周波数による押しボタン発信の符号は、可聴域に離散的な周波数の集合を定めて記号を割り当て、受信側は周波数の同定だけで復号する。この符号は低群と高群から1つずつ選んだ2音を同時に鳴らす「四かける四」の16通りであって、1回に1音しか出さないCipherFluteとは記号の作り方が異なる。ただし群のなかの隣り合う周波数を21対19という一定の比で並べており、対数の目盛の上で等間隔に周波数を配置する考え方はここで既に確立している。この方式はのちにITU-T勧告Q.23になった。同じ時期に周波数偏移変調のモデムがV.21として、ファクシミリの手順がT.30として整い、音声帯域は汎用の搬送路になった。1970年代には音響カプラが普及し、1975年にはカセットテープに音として計算機のデータを固定するKansas City標準が定まり、1984年にはイギリスの放送局が番組の電波でプログラムを音として配った。音の波形を物理媒体や放送に固定して配る発想はこの時期に出そろっている。
 
-2000年代からは空気中の可聴音そのものを通信路として扱う研究が始まった。LopesとAguiarは空中音響通信を正面から扱い、2002年にはピアノとクラリネットと鐘という音響楽器を送信機に用いている。その後は音響OFDM、チャープ信号、音響電子透かしが加わり、2010年代には超音波ビーコンが商用化された。この系譜のなかでCipherFluteは、送信機が形状として固定され書き換えができず、電源を持たず、人間の息だけで駆動するという極端な特殊例に位置づく。周波数スロットへの記号割り当てと誤り訂正という符号の組み合わせはggwaveなどが既に採っているため、新規性はそこに置かないほうがよい。
+2000年代からは空気中の可聴音そのものを通信路として扱う研究が始まった。LopesとAguiarは空中音響通信を正面から扱い、符号化した信号が機械の音ではなく鳥や虫の声、映画のロボットの声、あるいは音階に沿った疑似的な旋律に聞こえるようにする設計を複数示している。2002年の共著論文は、ピアノとクラリネットと鐘の音を単純な物理モデルで合成した音片を用い、それらを音楽の和声の規則に従って組み合わせて記号を作る方式である。実物の楽器を送信機にしたのではない。その後は音響OFDM、チャープ信号、音響電子透かしが加わり、2010年代には超音波ビーコンが商用化された。この系譜のなかでCipherFluteは、送信機が形状として固定され書き換えができず、電源を持たず、人間の息だけで駆動するという極端な特殊例に位置づく。周波数スロットへの記号割り当てと誤り訂正という符号の組み合わせはggwaveなどが既に採っており、音階の音に記号を割り当てるという発想もLopesとAguiar、およびMadhavapeddyらが2000年代半ばまでに実装しているため、新規性はそこに置かないほうがよい。
 
 ## 新規性への脅威が大きい文献
 
+2026年7月30日の検証の結果として一言添える。この節に「高」と判定した文献は1件も残らなかった。当初「高」とされていたDominguesらの2002年の論文は、要旨に当たって内容を確かめた結果「中」に下がった。ただしこれは安心してよいという意味ではない。符号の語彙の作り方という面では、下記の第11項のMadhavapeddyらの旋律によるデータ伝送がCipherFluteの設計をほぼ先取りしており、この切り口で最も注意して差分を述べるべき文献は第11項である。当初の調査担当者はこの点を見落としていたので、判定の理由を書き換えた。
+
 ### 1. Aerial communications using piano, clarinet, and bells
 
-- 著者: N. Domingues, J. Lacerda, P. M. Q. Aguiar, C. V. Lopes
-- 発表: 2002 IEEE Workshop on Multimedia Signal Processing (MMSP), pp. 460-463, 2002年
-- 確認先: https://doi.org/10.1109/MMSP.2002.1203345 （Crossrefのdoi登録レコードで題名、著者、会議名、ページを確認した）
-- 著者本人の業績ページでも確認した: https://ics.uci.edu/~lopes/publications.html
+- 著者: Natacha Domingues, João Lacerda, Pedro M. Q. Aguiar, Cristina Videira Lopes
+- 発表: 2002 IEEE Workshop on Multimedia Signal Processing (MMSP), pp. 460-463, 2002年12月
+- 確認先: https://doi.org/10.1109/MMSP.2002.1203345 （Crossrefのdoi登録レコードで題名、4名の著者、会議名、ページを確認した）
+- 著者本人の業績ページでも確認した: https://ics.uci.edu/~lopes/publications.html （著者名の綴りを Natacha Domingues, João Lacerda, Pedro M. Q. Aguiar, Cristina Lopes と確認し、発表が2002年12月であることも確認した）
+- 要旨の全文はOpenAlexの登録レコードから取得した: https://api.openalex.org/works/doi:10.1109/MMSP.2002.1203345
 
-内容の要約を述べる。この論文は、LopesとAguiarが2001年から進めていた空中音響通信の研究の一環であり、電子的に合成した搬送波ではなく、ピアノとクラリネットと鐘という音響楽器が出す実際の楽音を伝送の媒体として使うことを扱っている。空中音響通信の研究群のなかでは、通信路の設計を「人が聞いても不自然でない音」に寄せる方向の初期の試みにあたる。同じ著者らはWASPAA 2001で空中音響通信の基本方式を、IEEE Pervasive Computing 2003で音響モデムの全体像を発表しており、この楽器の論文はその中間に位置する。なおIEEE Xploreと出版社系の要旨ページはいずれも取得できず、変調方式の細部や達成ビットレートまでは確認できていない。
+内容の要約を述べる。ここは2026年7月30日の検証で大きく書き換えた箇所である。要旨の全文に当たった結果、この論文は実物のピアノやクラリネットや鐘を送信機に使ったものではないことが判明した。要旨は、機械と機械のあいだの空中音響通信の新しい仕組みを探る研究であり、ピアノ、クラリネット、鐘の音についての単純なモデルから音の素片を作り、その素片を音楽の和声に従って組み合わせることで記号列を符号化すると述べている。すなわち送信側はスピーカーから合成音を出す装置であり、出てくる音が楽器のように聞こえるという点が主眼である。Crossrefが登録している参考文献の一覧にChowningの周波数変調による複雑な音色の合成の論文が含まれていることも、合成による音作りであることを裏づける。要旨は伝送速度について「ごく低いビットレートを要求する応用に向く」とだけ述べ、具体的な数値を挙げていない。同じ著者らはWASPAA 2001で空中音響通信の基本方式を、IEEE Pervasive Computing 2003で音響モデムの全体像を発表しており、この論文はその中間に位置する。
 
-CipherFluteとの関係を述べる。CipherFluteは笛という音響楽器が出す楽音の高さを記号として使う。楽音を通信の記号として使うという着想そのものは、この論文がすでに2002年に提示している。したがってCipherFluteが「楽器の音でデータを運ぶ」という水準で新規性を主張すると、この論文と正面から衝突する。逆に言えば、この論文の送信機は演奏者または機構が任意の音列を出す能動的な装置であり、形状が符号を固定してはいない。
+CipherFluteとの関係を述べる。CipherFluteは笛という実際の発音体が出す楽音の高さを記号として使う。この論文が示したのは、合成音の音色と和声を人の耳に自然に聞こえるように設計するという方向であって、実体のある発音体を符号の担体にする話ではない。したがってCipherFluteが「実物の発音体の音高で符号を運ぶ」と述べるかぎり、この論文と正面から衝突することはない。ただし「楽音を通信の記号にする」という水準の着想はこの論文と、同じ著者らのWASPAA 2001およびIEEE Pervasive Computing 2003が先行している。
 
-脅威の度合いは「高」と判定する。理由を述べる。楽音の高さを符号の語彙に使うという中核の着想が20年以上前に先行しており、CipherFluteの新規性をそこに置くことができなくなるからである。差分は、送信機が受動的な造形物であって符号が形状として不可逆に固定される点、および日用品への偽装と秘密分散という応用の枠組みにあると明示する必要がある。
+脅威の度合いは、当初の調査担当者の判定「高」を「中」に引き下げる。理由を述べる。要旨に当たったところ、送信機が受動的な物体ではなく合成音を鳴らす能動的な装置であり、CipherFluteの中核の主張である「電源も可動部もない造形物が符号を保持する」とは別の対象を扱っていることが確認できたからである。それでも音階や和声を符号の語彙にするという着想の先行例であることは変わらないため、引用して差分を明示する必要は残る。
 
 ### 2. ggwave（データ・オーバー・サウンドの実装）
 
 - 著者: Georgi Gerganov（オープンソース実装、継続的に開発）
 - 発表: ソフトウェアリポジトリ（学術発表ではない）
-- 確認先: https://github.com/ggerganov/ggwave
+- 確認先: https://github.com/ggerganov/ggwave （説明文の全文を https://raw.githubusercontent.com/ggerganov/ggwave/master/README.md で取得し、以下の数値がすべて原文どおりであることを確認した）
 
-内容の要約を述べる。ggwaveは音でデータを送るための小さなライブラリであり、多周波の周波数偏移変調を用いる。周波数間隔は46.875ヘルツで、可聴用のプロトコルは1875ヘルツ、超音波用のプロトコルは15000ヘルツを基準周波数とし、4.5キロヘルツの帯域に96個の等間隔の周波数を並べる。データは4ビットずつに分割され、各片が特定の周波数に割り当てられ、6つの音を同時に鳴らして1回あたり3バイトを送る。復調の頑健性を上げるためにReed–Solomon符号を用いる。用途としては機器のペアリング、音のQRコード、連絡先の交換、認可の受け渡しなどが挙げられている。2025年に話題になったGibberLinkという、会話する人工知能どうしが音の通信に切り替える実演も、このライブラリを使っている。
+内容の要約を述べる。ggwaveは音でデータを送るための小さなライブラリであり、多周波の周波数偏移変調を用いる。周波数間隔は46.875ヘルツで、可聴用のプロトコルは1875.000ヘルツ、超音波用のプロトコルは15000.000ヘルツを基準周波数とし、4.5キロヘルツの帯域に96個の等間隔の周波数を並べる。データは4ビットずつに分割され、各片が特定の周波数に割り当てられ、6つの音を同時に鳴らして1回あたり3バイトを送る。全体の伝送速度は毎秒8バイトから16バイトであるとリポジトリの説明文に書かれている。復調の頑健性を上げるためにReed–Solomon符号を用い、訂正符号の長さは元データの長さに応じて決める。伝送の始まりと終わりは特別な音の目印で示し、受信側は目印にはさまれた区間を録音してフーリエ変換で周波数を求める。用途としては一対多の同報、機器組み込み、音のQRコード、機器のペアリングと連絡先の交換、認可の受け渡しなどが挙げられている。2025年2月に話題になったGibberLinkという、会話する人工知能どうしが音の通信に切り替える実演も、このライブラリを使っている。GibberLinkはAnton PidkuikoとBoris Starkovによるもので、リポジトリの説明文に「ggwaveライブラリに基づく」と明記されている。https://github.com/PennyroyalTea/gibberlink
 
 CipherFluteとの関係を述べる。CipherFluteの符号層、すなわち周波数のスロットに記号を割り当て、Reed–Solomon符号で訂正するという設計は、ggwaveの設計とほぼ同一である。異なるのは、ggwaveがスピーカーから任意の音列を出すのに対し、CipherFluteは造形された笛の並びが音列を固定している点である。
 
@@ -38,10 +41,12 @@ CipherFluteとの関係を述べる。CipherFluteの符号層、すなわち周�
 ### 3. HAPADEP: Human-Assisted Pure Audio Device Pairing
 
 - 著者: Claudio Soriente, Gene Tsudik, Ersin Uzun
-- 発表: Information Security (ISC 2008), Lecture Notes in Computer Science, pp. 385-400, 2008年
+- 発表: Information Security, 11th International Conference, ISC 2008, Taipei, Taiwan, September 15-18, 2008, Proceedings, Lecture Notes in Computer Science 5222, pp. 385-400, 2008年
 - 確認先: https://doi.org/10.1007/978-3-540-85886-7_27 （Crossrefのdoi登録レコードで題名、著者、書名、ページを確認した）
+- 予稿集の巻号は https://dblp.org/rec/conf/isw/2008.xml で確認した（Lecture Notes in Computer Science 第5222巻、ISBN 978-3-540-85884-3、開催地は台北、会期は2008年9月15日から18日）
+- 要旨の全文は著者版の公開原稿で確認した: https://eprint.iacr.org/2007/093
 
-内容の要約を述べる。この論文は、共通の鍵も既存の無線路も持たない二台の機器が、音だけを使って鍵素材を交換し、人間が聞いて確認することで中間者攻撃を排除する方式を提案している。鍵の転送そのものを音で行い、その正しさの検証も人間の聴覚に委ねる点が特徴である。前段の研究として同じグループのLoud and Clearがあり、そちらは音声化した検証文を人間に読ませて認証する。
+内容の要約を述べる。この論文は、共通の鍵も既存の無線路も持たない二台の機器が、音だけを使って鍵素材を交換し、人間が聞いて確認することで中間者攻撃を排除する方式を提案している。要旨は「HAPADEPは音の通路を使って、データと検証用の情報の双方を機器のあいだで交換する」と述べており、鍵の転送そのものを音で行い、その正しさの検証も人間の聴覚に委ねるという要約は原文どおりである。従来の安全なペアリング手法が赤外線や802.11やBluetoothといった人間には知覚できない共通のディジタル通路の存在を前提にしていた点を、要旨は明示的に批判している。前段の研究として同じグループのLoud and Clearがあり、そちらは音声化した検証文を人間に読ませて認証する。
 
 CipherFluteとの関係を述べる。CipherFluteは暗号資産の復元用情報という鍵素材を音で運ぶ。鍵素材を音の通路で運ぶこと自体はこの研究がすでに行っている。ただしHAPADEPは二台の電子機器のあいだの一時的な通路であり、秘密が物体の形として保管されるわけではない。
 
@@ -52,8 +57,9 @@ CipherFluteとの関係を述べる。CipherFluteは暗号資産の復元用情�
 - 著者: Vasilios Mavroudis, Shuang Hao, Yanick Fratantonio, Federico Maggi, Christopher Kruegel, Giovanni Vigna
 - 発表: Proceedings on Privacy Enhancing Technologies, vol. 2017, no. 2, pp. 95-112, 2017年
 - 確認先: https://doi.org/10.1515/popets-2017-0018 （Crossrefのdoi登録レコードで題名、著者、巻号ページ、年を確認した）
+- 本文の全文は出版元の公開版で確認した: https://petsymposium.org/popets/2017/popets-2017-0018.pdf
 
-内容の要約を述べる。この論文は、超音波を使って端末どうしや広告と端末を結びつける商用の生態系を体系的に調べ、その設計上の弱点を示している。超音波の信号は誰でも受信でき、記録して再生すれば容易に複製できるため、認証や課金の根拠にすると危険であることを実証的に述べている。あわせて、利用者の同意なしに視聴履歴を追跡できてしまう privacy の問題を扱っている。
+内容の要約を述べる。この論文は、超音波を使って端末どうしや広告と端末を結びつける商用の生態系を体系的に調べ、その設計上の弱点を示している。本文で確認できた最も重要な指摘は、攻撃者がビーコンを記録して再生するだけで攻撃が成立するという点である。論文は「再生されたビーコンは改変されておらず、認証の仕組みが何も置かれていないため、正当性の検査は必ず成功する」と述べている。実際に買い物のアプリで、来店を示す音を利用者どうしが録音して共有し、計算機のスピーカーから再生して報酬点を得た事例が観測されていたことも報告している。あわせて、利用者の同意なしに視聴履歴を追跡できてしまうというプライバシーの問題を扱い、マイクへの全面的な許可を要求せざるを得ないという最小権限の原則の破れも指摘している。
 
 CipherFluteとの関係を述べる。CipherFluteは「音や物体の層には暗号学的な秘匿の力はまったく無い」と宣言している。その宣言を裏づける先行研究として、この論文は最も的確である。音響の通路には秘匿も認証も期待できないという結論が独立に得られている。
 
@@ -63,34 +69,40 @@ CipherFluteとの関係を述べる。CipherFluteは「音や物体の層には�
 
 - 著者: L. Schenker
 - 発表: Bell System Technical Journal, vol. 39, no. 1, pp. 235-255, 1960年1月
-- 確認先: https://archive.org/details/bstj39-1-235 （原誌の走査版で題名、著者、巻号ページ、年を確認した）
+- 確認先: https://archive.org/details/bstj39-1-235 （原誌の走査版で題名、著者、巻号ページ、年を確認した。本文の翻刻は https://archive.org/download/bstj39-1-235/bstj39-1-235_djvu.txt で読める）
 - 関連する標準: ITU-T勧告 Q.23 "Technical features of push-button telephone sets"（現行版は1988年11月版）https://www.itu.int/rec/T-REC-Q.23/en
 
-内容の要約を述べる。この論文は、電話機の押しボタンから交換機へ数字を送るために、低群と高群それぞれから1つずつ周波数を選んで同時に鳴らす符号を提案している。可聴域のなかに離散的な周波数の集合を定め、その組み合わせに記号を割り当て、受信側は周波数の同定だけで記号を復元する。音声との誤検出を避けるために周波数の選び方が慎重に設計されている。この方式は後に世界中の電話網に採用され、ITU-T勧告Q.23として標準化された。
+内容の要約を述べる。本文に当たって確認した。この論文は、電話機の押しボタンから信号を送るために、低群と高群それぞれから1つずつ周波数を選んで同時に鳴らす符号を提案しており、著者はこれを「四かける四」の符号と呼んでいる。8つの周波数を2群に分け、群Aは697、770、852、941サイクル毎秒、群Bは1094、1209、1336、1477サイクル毎秒であって、群のなかの隣り合う周波数の比は21対19に固定されている。群と群のあいだはこの比の1.5倍の間隔を置く。全体は700サイクル毎秒から1700サイクル毎秒の範囲に収まり、有効な信号は16組である。音声による誤動作、すなわち著者が「トークオフ」と呼ぶ現象を避けるために、16組の比が低次の整数比にならないよう周波数が選ばれている。この方式は後に世界中の電話網に採用され、ITU-T勧告Q.23として標準化された。なお本文の周波数値は現行の押しボタン信号の高群の値（1209、1336、1477、1633）とは一部異なり、1960年時点の提案であることに注意が必要である。
 
-CipherFluteとの関係を述べる。CipherFluteは1480ヘルツから2960ヘルツまでを半音刻みで13のスロットに区切り、笛1本に1つの記号を割り当てる。周波数の離散集合を語彙とし、周波数の同定だけで復号するという構成は、この符号と本質的に同じである。相違は、CipherFluteが1回に1つの周波数だけを出す点と、周波数の選び方が音楽の半音階に従っている点である。
+CipherFluteとの関係を述べる。CipherFluteは1480ヘルツから2960ヘルツまでを半音刻みで13のスロットに区切り、笛1本に1つの記号を割り当てる。周波数の離散集合を語彙とし、周波数の同定だけで復号するという構成は、この符号と本質的に同じである。しかも周波数を一定の比で並べる、つまり対数の目盛の上で等間隔に置くという設計まで共通している。相違は、CipherFluteが1回に1つの周波数だけを出す点と、比が21対19ではなく半音すなわち100セントである点である。
 
 脅威の度合いは「中」と判定する。理由を述べる。周波数スロットによる符号化の原型として必ず引用すべき文献であり、これを引かずに「周波数を語彙にする」ことを新しく述べると、電話技術の常識を知らないと受け取られる。現在の論文はQ.23を挙げているが、その技術的な出典であるこの論文まで遡ると位置づけが明確になる。
 
 ### 6. 空中音波通信技術とその応用（解説）
 
 - 著者: 西村明（東京情報大学）
-- 発表: 日本音響学会誌, 第77巻, 第6号, pp. 390-395, 2021年
+- 発表: 日本音響学会誌, 第77巻, 第6号, pp. 390-395, 2021年（解説記事）
+- 英文題名: Aerial sonic communication technology and its application.
+- doi: 10.20697/jasj.77.6_390
 - 確認先: https://www.jstage.jst.go.jp/article/jasj/77/6/77_390/_article/-char/ja （J-STAGEの記事ページで題名、著者、巻号ページ、発行年、doiを確認した）
+- 本文の全文をJ-STAGEの公開PDFで読んで内容を確認した: https://www.jstage.jst.go.jp/article/jasj/77/6/77_390/_pdf/-char/ja
 
-内容の要約を述べる。この解説は、空気中を伝わる音でデータを送る技術を、音響電子透かしの系統と音響モデムの系統に分けて整理している。振幅偏移変調、周波数偏移変調、位相偏移変調、直交振幅変調、直交周波数分割多重、スペクトル拡散といった変調方式の使い分けを述べ、到達距離、伝送速度、雑音耐性、聴感上の目立たなさのあいだの折り合いを論じている。応用としては、放送や館内放送への情報重畳、多言語字幕、災害情報の伝達、来店の検知などを挙げる。参考文献の一覧が空中音響通信の主要文献をよく網羅しており、この分野の入口として使える。
+内容の要約を述べる。本文に当たって確認し、記述を正確なものに直した。この解説は、空気中を伝わる音でデータを送る技術を、音響情報秘匿（音響電子透かし）の系統と音響モデムの系統に分けて整理している。第2章で、振幅偏移変調、周波数偏移変調、位相偏移変調、直交振幅変調、直交周波数分割多重、直接スペクトル拡散という変調方式を列挙し、これらの搬送波や符号信号を可聴周波数の純音に置き換えたものが音響モデムであると定義している。長所として、既存のスピーカーとマイクロホンがそのまま使えること、音声と同時に同じ内容をディジタル情報でも伝えるバリアフリー利用ができること、音が届く範囲の多数の受信者へ同時に伝えられること、通信自体の録音と再生が比較的容易であること、センサを対象に向ける必要がないことを挙げる。短所として、伝送情報量が数ビット毎秒から数百ビット毎秒しかないこと、背景騒音でさらに下がること、基本的に一方向通信であることを挙げる。利用場面としては、映像コンテンツや演劇や展示施設の実時間字幕と多言語字幕、駅や病院のアナウンス音声の可視化、緊急放送のバリアフリー、そして店舗やイベントでのクーポン情報の配布を挙げている。当初の調査担当者が書いていた「来店の検知」は本文に見当たらなかったため、クーポン情報の配布に直した。参考文献の一覧が空中音響通信の主要文献をよく網羅しており、この分野の入口として使える。
 
-CipherFluteとの関係を述べる。CipherFluteは空中を伝わる音でデータを読む方式であるから、この分野の全体像を示す解説として引用する価値が高い。特に、既存の方式がすべて能動的なスピーカーを前提にしていることを、この解説を根拠に述べられる。
+なおこの解説には、CipherFluteの位置づけに直接効く2つの記述がある。第一に、第3.2節はLopesとAguiarの音響モデムについて「鳥やキリギリスの鳴く声、R2D2の声に聞こえるような符号化方式、全音階や五音階の音階に情報を割り当てて疑似旋律を生成する方法」を提案していると述べ、比較的静かな事務室ではエラー率が実質ゼロで毎秒800ビット程度を達成したと報告している。音階の音に記号を割り当てるという設計が2003年までに実装されていたことが、この解説によって日本語で裏づけられる。第二に、第5.4節にあたる部分で、水中音響通信では既知のパイロット信号をメッセージに挿入し、その振幅と位相の変化から遅延広がりとドップラ広がりを測って打ち消すと述べている。CipherFluteの基準笛はこの考え方の物体版であると位置づけられる。
 
-脅威の度合いは「中」と判定する。理由を述べる。日本語で書かれた数少ない体系的な解説であり、これを引かずに空中音響通信を語ると調査不足に見える。内容そのものはCipherFluteの主張を脅かさない。
+CipherFluteとの関係を述べる。CipherFluteは空中を伝わる音でデータを読む方式であるから、この分野の全体像を示す解説として引用する価値が高い。特に、既存の方式がすべて能動的なスピーカーを前提にしていることを、この解説を根拠に述べられる。あわせて、音響通信は「録音と再生が容易」であるという長所が、CipherFluteの脅威モデルにおいてはそのまま「音響層に秘匿の力はない」という前提になることを示せる。
+
+脅威の度合いは「中」と判定する。理由を述べる。日本語で書かれた数少ない体系的な解説であり、これを引かずに空中音響通信を語ると調査不足に見える。加えて、音階への記号割り当てとパイロット信号による正規化という2つの要素が既知であることをこの解説自身が述べているため、引かないと不誠実に見える危険がある。内容そのものはCipherFluteの中核の主張を脅かさない。
 
 ### 7. Aerial Acoustic Communication（書籍の章）
 
 - 著者: Rong Zheng, Chao Cai
 - 発表: Acoustic Sensing on Commodity Devices and its Applications, Wireless Networks シリーズ, Springer Nature Switzerland, pp. 63-76, 2025年
 - 確認先: https://doi.org/10.1007/978-3-031-96875-4_4 （Crossrefのdoi登録レコードで章題、著者、書名、シリーズ、出版社、ページ、年を確認した）
+- OpenAlexの登録レコードでも章題、著者、ページ63-76、2025年、シリーズ名Wireless Networksを確認した: https://api.openalex.org/works/doi:10.1007/978-3-031-96875-4_4
 
-内容の要約を述べる。市販の機器に載っているマイクとスピーカーを使った音響センシングと音響通信をまとめた書籍の一章であり、空中音響通信を扱っている。同じ著者らはチャープ信号を用いた空中音響通信の一連の論文をIEEE Transactions on Mobile ComputingやIEEE Transactions on Vehicular Technologyに発表しており、その知見を整理した位置づけと考えられる。なお出版社のページは認証の壁で取得できず、章の要旨の本文までは確認できていない。
+内容の要約を述べる。市販の機器に載っているマイクとスピーカーを使った音響センシングと音響通信をまとめた書籍の一章であり、空中音響通信を扱っている。同じ著者らはチャープ信号を用いた空中音響通信の一連の論文をIEEE Transactions on Mobile ComputingやIEEE Transactions on Vehicular Technologyに発表しており、その知見を整理した位置づけと考えられる。ここは書誌情報だけが確定している状態である。2026年7月30日の検証で、出版社のページは認証の壁で取得できず、OpenAlexにも要旨が登録されていないことを再確認した。したがって章の内容についての上の記述は題名とシリーズ名からの推測であり、本文で裏を取っていない。論文で内容に踏み込んで引用する場合は、必ず本文を入手してから書くべきである。
 
 CipherFluteとの関係を述べる。空中音響通信の最新の総説にあたるため、この分野の現在地を示すために引用できる。
 
@@ -101,8 +113,9 @@ CipherFluteとの関係を述べる。空中音響通信の最新の総説にあ
 - 著者: Akira Nishimura
 - 発表: 2014 Tenth International Conference on Intelligent Information Hiding and Multimedia Signal Processing (IIH-MSP), pp. 255-259, 2014年8月
 - 確認先: https://doi.org/10.1109/IIH-MSP.2014.70 （Crossrefのdoi登録レコードで題名、著者、会議名、ページ、年を確認した）
+- 要旨の全文はOpenAlexの登録レコードから取得した: https://api.openalex.org/works/doi:10.1109/IIH-MSP.2014.70
 
-内容の要約を述べる。この論文は、緊急車両が鳴らす高低二音のサイレンという既存の発音に、周波数変調でデータを重ねる方式を提案している。もともと社会的な意味を持って鳴っている音を、そのまま符号の担体として使うところに特徴がある。聞き手には従来どおりのサイレンに聞こえながら、受信機は付加情報を取り出せる。
+内容の要約を述べる。要旨に当たって確認した。この論文は、緊急車両が鳴らす高低二音のサイレンという既存の発音に、周波数変調でデータを埋め込む方式を提案している。動機は二つあり、一つは聴覚に障害のある人にとってサイレンの検知と対応が難しいという問題、もう一つは災害時の避難所の位置など別の情報もあわせて伝えたいという要求である。埋め込まれた情報、たとえば緊急車両の位置は、携帯端末やカーナビゲーション装置で取り出して使える。要旨は、この方式がサイレン周波数のドップラ変移、長い経路の反響、背景雑音に対して従来提案より頑健であると述べ、実装での積載情報量は毎秒12.3ビットであり、サイレン音の倍音を使えばこれを2倍以上にできるとしている。もともと社会的な意味を持って鳴っている音を、そのまま符号の担体として使うところに特徴がある。
 
 CipherFluteとの関係を述べる。CipherFluteも「笛の音」という、それ自体が用途を持つ音を符号の担体にしている。既存の発音体の音高を操作して情報を載せるという発想の先例として近い。ただしサイレンは電気的に駆動される能動的な発音装置である。
 
@@ -110,10 +123,10 @@ CipherFluteとの関係を述べる。CipherFluteも「笛の音」という、�
 
 ### 9. Kansas City標準（カセットテープへのデータ記録方式）
 
-- 制定: BYTE誌が招集した規格検討会（1975年11月7日から8日、アメリカ合衆国ミズーリ州カンザスシティ）、結果は同誌1976年2月号に掲載
-- 確認先: https://www.swtpc.com/mholley/AC30/KansasCityStandard.html （原文書を再録した頁で、招集の経緯、周波数、ビットレート、フレーム構成を確認した）
+- 制定: BYTE誌が招集した規格検討会（1975年11月7日から8日、アメリカ合衆国ミズーリ州カンザスシティ）、結果はManfred PeschkeとVirginia Peschkeの記事として同誌1976年2月号の72ページから73ページに掲載
+- 確認先: https://www.swtpc.com/mholley/AC30/KansasCityStandard.html （原文書を再録した頁で、招集の経緯、掲載号とページ、周波数、ビットレート、フレーム構成を確認した）
 
-内容の要約を述べる。この標準は、家庭用のカセットレコーダを計算機のデータ記録に使うための音の書式を定めている。論理の1は2400ヘルツを8周期、論理の0は1200ヘルツを4周期で表し、最大300ボーで送る。1文字はスタートビットとしての0、8ビットのデータ、2ビット以上のストップビットからなり、データブロックの前に5秒以上のマークを置く。テープの速度がふらついてもビットの時計が波形から取り出せるように、周波数が常にビットレートの整数倍になるよう設計されている。
+内容の要約を述べる。この標準は、家庭用のカセットレコーダを計算機のデータ記録に使うための音の書式を定めている。論理の1は2400ヘルツを8周期、論理の0は1200ヘルツを4周期で表し、最大300ボーで送る。1文字はスタートビットとしての0、8ビットのデータ、2ビット以上のストップビットからなり、データのビットは下位から順に並べる。データブロックの前に5秒以上のマークを置き、透明なリーダの先頭から最初のデータブロックまでは30秒以上あける。テープの速度がふらついてもビットの時計が波形から取り出せるように、周波数が常にビットレートの整数倍になるよう設計されている。
 
 CipherFluteとの関係を述べる。CipherFluteは物理的な物体に音の符号を固定して保存する。音の波形を物理媒体に固定して保管し、再生して読み出すという枠組みは、この標準がすでに大量に実用化している。CipherFluteとの相違は、媒体が磁性体ではなく造形物であり、書き換えができず、再生に機械も電源も要らないところにある。
 
@@ -123,9 +136,10 @@ CipherFluteとの関係を述べる。CipherFluteは物理的な物体に音の�
 
 - 著者: Rajalakshmi Nandakumar, Krishna Kant Chintalapudi, Venkat Padmanabhan, Ramarathnam Venkatesan
 - 発表: Proceedings of the ACM SIGCOMM 2013 conference, pp. 63-74, 2013年8月
-- 確認先: https://doi.org/10.1145/2486001.2486037 （Crossrefのdoi登録レコードで題名、著者、会議名、ページ、年を確認した）
+- 確認先: https://doi.org/10.1145/2486001.2486037 （Crossrefのdoi登録レコードで題名、著者、会議名、ページ、年を確認した。なおCrossrefの登録題名は副題を欠いた「Dhwani」である）
+- 要旨の全文はSemantic Scholarの登録レコードで確認した: https://api.semanticscholar.org/graph/v1/paper/DOI:10.1145/2486001.2486037
 
-内容の要約を述べる。この論文は、スマートフォンの標準的なスピーカーとマイクだけで近距離無線通信に相当する機能を実現する方式を示している。音響の到達範囲が短いことを利用し、さらに受信側が意図的に雑音を出して盗聴者だけを妨害する仕組みを組み込み、機密性を物理層で確保しようとする。数キロビット毎秒の伝送を達成している。
+内容の要約を述べる。要旨に当たって確認した。この論文は、スマートフォンの標準的なスピーカーとマイクだけで近距離無線通信に相当する機能を実現する方式を示している。近距離無線通信の専用回路の普及が進まないことが動機である。要となるのはJamSecureと名づけられた仕組みで、送信側が自ら妨害音を出し、受信側でその自分の妨害音だけを打ち消すことによって、情報理論的に安全な通路を作る。伝送速度は毎秒2.4キロビットまでであり、要旨は既存の近距離無線通信の応用の多くにはこれで足りると述べている。当初の調査担当者が書いていた「数キロビット毎秒」は、原典の「毎秒2.4キロビットまで」に直した。
 
 CipherFluteとの関係を述べる。音による近接通信の代表的な研究であり、CipherFluteが「音で秘密を渡す」という文脈で必ず参照される位置にある。とりわけDhwaniが物理層で機密性を作ろうとしたのに対し、CipherFluteは物理層に機密性を一切期待しないと宣言している点が対照的である。
 
@@ -133,22 +147,27 @@ CipherFluteとの関係を述べる。音による近接通信の代表的な研
 
 ### 11. Acoustic modems for ubiquitous computing / Audio Networking: The Forgotten Wireless Technology
 
-- 著者と発表: C. V. Lopes, P. M. Q. Aguiar, IEEE Pervasive Computing, vol. 2, no. 3, pp. 62-71, 2003年7月。ならびに A. Madhavapeddy, D. Scott, A. Tse, R. Sharp, IEEE Pervasive Computing, vol. 4, no. 3, pp. 55-60, 2005年7月
+- 著者と発表: C. V. Lopes, P. M. Q. Aguiar, "Acoustic modems for ubiquitous computing", IEEE Pervasive Computing, vol. 2, no. 3, pp. 62-71, 2003年7月。ならびに A. Madhavapeddy, D. Scott, A. Tse, R. Sharp, "Audio Networking: The Forgotten Wireless Technology", IEEE Pervasive Computing, vol. 4, no. 3, pp. 55-60, 2005年7月
 - 確認先: https://doi.org/10.1109/MPRV.2003.1228528 および https://doi.org/10.1109/MPRV.2005.50 （いずれもCrossrefのdoi登録レコードで題名、著者、巻号ページ、年を確認した）
+- 後者の本文は著者の公開版で全文を読んだ: http://anil.recoil.org/papers/2005-ieee-audio.pdf （著者の所属はAnil Madhavapeddy、David Scott、Alastair Tseがケンブリッジ大学、Richard SharpがIntel Research Cambridgeである）
+- 前者の内容については、西村明による2021年の日本語の解説が具体的に紹介しており、そちらでも裏を取った
 
-内容の要約を述べる。前者は空中音響通信を汎用の通信路として設計する立場から、変調方式、通信路の性質、到達距離、実装の要点を整理している。後者は、音による通信が無線技術の系譜のなかで忘れられてきたことを指摘し、機器の位置づけ、部屋の境界を越えないという性質、既存のスピーカーとマイクをそのまま使える利点を論じ、いくつかの応用を示す。CipherFluteの現行の参考文献では後者の著者が3名で書かれているが、正しくは Madhavapeddy, Scott, Tse, Sharp の4名であり、掲載は第4巻第3号の55ページから60ページである。
+内容の要約を述べる。ここは2026年7月30日の検証で内容を大きく補った。前者は空中音響通信を汎用の通信路として設計する立場から、変調方式、通信路の性質、到達距離、実装の要点を整理している。西村の解説によれば、この論文は符号化した信号が人に不快でないように、鳥やキリギリスの鳴く声、映画のロボットの声、そして全音階や五音階の音階に情報を割り当てて疑似的な旋律を作る方式を提案し、静かな事務室ではエラー率が実質ゼロで毎秒800ビット程度を達成したと報告している。
 
-CipherFluteとの関係を述べる。音を通信路として使う理由づけ、すなわち壁を越えない、ペアリングが要らない、既存の機器で読めるという議論は、この2本がすでに整理している。CipherFluteが音を選ぶ理由もここに含まれる。
+後者は、音による通信が無線技術の系譜のなかで忘れられてきたことを指摘し、既存のスピーカーとマイクをそのまま使えるという利点と、消費電力の小ささを論じる。本文で確認した実測値は次のとおりである。押しボタン信号を使った方式で3メートルの距離を毎秒20ビット、記号誤り率0.006パーセント。10キロヘルツの搬送波に対する断続キーイングで30センチメートルを毎秒251ビット、ビット誤り率4.4かける10のマイナス5乗。21.2キロヘルツの搬送波を使う非可聴の方式で3.4メートルを毎秒8ビット。携帯電話の通話路に押しボタン信号に似た音を10ミリ秒間隔で載せる方式で毎秒40ビット。そして本稿に決定的に重要なのが「旋律によるデータ伝送」の節であり、本文はこう述べている。4つの搬送周波数の集合を用意し、そのうち1つを一定時間鳴らすことで2ビットを表す。押しボタン信号のように2つの周波数を同時に鳴らすのではなく、1度に1つの搬送周波数だけを鳴らす。搬送周波数はハ長調（イオニア旋法）の音階から4音を選ぶ。時間とともに搬送周波数を変えることで旋律を作る。
 
-脅威の度合いは「中」と判定する。理由を述べる。音を選ぶ動機づけが先行研究にあるため、動機の新規性は主張できない。あわせて現行の書誌情報の誤りを直す必要がある。
+CipherFluteとの関係を述べる。当初の調査担当者はこの2本を「音を通信路に選ぶ動機づけの先行研究」として位置づけていたが、それは過小評価である。後者の旋律によるデータ伝送は、音階から選んだ1つの音を1度に1つだけ鳴らして記号を表すという構成であり、CipherFluteのスロット符号とほぼ同一の設計である。CipherFluteとの相違は、音階が半音階か長音階か、スロットが13個か4個か、そして発音体がスピーカーか造形された笛かという点に絞られる。あわせて前者は音階への記号割り当てを2003年に実装済みである。したがってCipherFluteは「音階の音を符号の語彙にする」という水準では新規性をまったく主張できない。
+
+脅威の度合いは「中」と判定する。理由を述べる。符号の語彙の作り方という点ではCipherFluteの設計をほぼ先取りしており、この2本を引かずにスロット設計を新しいものとして述べれば致命的な見落としと受け取られる。それでも「高」ではなく「中」に留めるのは、CipherFluteの主要な主張が符号ではなく、電源も可動部もない造形物が符号を保持し日用品に偽装するという物理層と運用にあるためである。引用して差分を明示すれば足りる。なお当初の調査担当者は「CipherFluteの現行の参考文献では後者の著者が3名で書かれている」と書いていたが、この検証では現行のCipherFlute原稿を参照していないため、その指摘の当否は確認していない。確かなのは、正しい著者が Madhavapeddy, Scott, Tse, Sharp の4名であり、掲載が第4巻第3号の55ページから60ページであることである。
 
 ### 12. Hermes: data transmission over unknown voice channels
 
 - 著者: Aditya Dhananjay, Ashlesh Sharma, Michael Paik, Jay Chen, Trishank Karthik Kuppusamy, Jinyang Li, Lakshminarayanan Subramanian
 - 発表: Proceedings of the 16th Annual International Conference on Mobile Computing and Networking (MobiCom 2010), pp. 113-124, 2010年9月
-- 確認先: https://doi.org/10.1145/1859995.1860010 （Crossrefのdoi登録レコードで題名、著者、会議名、ページ、年を確認した）
+- 確認先: https://doi.org/10.1145/1859995.1860010 （Crossrefのdoi登録レコードで題名、著者、会議名、ページ、年を確認した。なおCrossrefの登録題名は副題を欠いた「Hermes」である）
+- 要旨の全文はOpenAlexの登録レコードから取得した: https://api.openalex.org/works/doi:10.1145/1859995.1860010
 
-内容の要約を述べる。この論文は、音声符号化器が入った携帯電話網の音声通話路という、波形が保存されない厳しい経路の上でデータを通す方式を示している。通話路が何をするか事前に分からないという前提のもとで、通話路に耐える記号の設計と適応を行う。開発途上地域でデータ通信の代わりに音声通話を使うという動機がある。
+内容の要約を述べる。要旨に当たって確認した。この論文は、音声符号化器が入った携帯電話網の音声通話路という、波形が保存されない厳しい経路の上でデータを通す方式を示している。要旨は、約3キロヘルツというきわめて狭い帯域の音響搬送波にデータを載せ、しかも音声符号化器から見て音声らしく聞こえなければならないという強い制約のもとで動くと述べている。ビットの反転だけでなく挿入や欠落も起こるため、頑健なデータ変換と変調の組み合わせで検出と訂正を行い、実際の通話路で観測したビット誤り率に応じて変調のパラメータを適応させる。実測の実効速度は毎秒約1.2キロビットであり、短文メッセージに比べて処理量が5倍、1バイトあたりの費用が50分の1以下になると報告している。開発途上地域でデータ通信の代わりに音声通話を使うという動機がある。
 
 CipherFluteとの関係を述べる。CipherFluteは空気と部屋の残響と息の強さという未知の伝達特性の上で音高を読む。未知の非線形な通路の上で符号を成立させるという問題設定が共通する。CipherFluteの基準笛による正規化は、この系統の問題への素朴な対処にあたる。
 
@@ -160,7 +179,7 @@ CipherFluteとの関係を述べる。CipherFluteは空気と部屋の残響と�
 - 標準: ITU-T Recommendation T.30 "Procedures for document facsimile transmission in the general switched telephone network"（現行版は2005年9月版、初版は1988年11月版、2007年1月の追補1がある）
 - 標準: ITU-T Recommendation V.23 "600/1200-baud modem standardized for use in the general switched telephone network"（現行版は1988年11月版）
 - 標準: ITU-T Recommendation V.34 "A modem operating at data signalling rates of up to 33 600 bit/s for use on the general switched telephone network and on leased point-to-point 2-wire telephone-type circuits"（現行版は1998年2月版）
-- 確認先: https://www.itu.int/rec/T-REC-V.21/en 、 https://www.itu.int/rec/T-REC-T.30/en 、 https://www.itu.int/rec/T-REC-V.23/en 、 https://www.itu.int/rec/T-REC-V.34/en
+- 確認先: https://www.itu.int/rec/T-REC-V.21/en 、 https://www.itu.int/rec/T-REC-T.30/en 、 https://www.itu.int/rec/T-REC-V.23/en 、 https://www.itu.int/rec/T-REC-V.34/en 。2026年7月30日に4件すべての勧告ページを開き、正式題名の一字一句、版の日付、および現在も有効であることを確認した。T.30については1988年11月版から2005年9月版までの全13版と追補や正誤表の一覧が表示され、有効なのは2005年9月版と2007年1月の追補1であることを確認した。V.34については1994年9月版、1996年10月版、1998年2月版の3版が並び、有効なのは1998年2月版である。
 
 内容の要約を述べる。V.21は音声帯域の2つの周波数対によって毎秒300ビットの全二重通信を行う周波数偏移変調のモデムを定める。V.23は600ボーと1200ボーの非対称なモデムを定め、映像文字多重などに使われた。T.30はファクシミリの呼の確立から能力交換、訓練、画像伝送、終了までの手順を音声帯域の信号で定める。V.34は毎秒33600ビットまでの高速モデムを定め、通信路の測定と訓練の手順を含む。CipherFluteが現行の論文で挙げているV.21とT.30については、正式な題名と現行版の日付が上のとおりであることを確認した。
 
@@ -168,12 +187,13 @@ CipherFluteとの関係を述べる。音声帯域を汎用のデータ搬送路
 
 脅威の度合いは「低」と判定する。理由を述べる。いずれも背景として引くべき標準であって、CipherFluteの主張と競合しない。ただし勧告番号と正式題名と版の日付を正確に書く必要がある。
 
-### 14. SilverPushの音響ビーコンに対するアメリカ連邦取引委員会の警告書
+### 14. Silverpushの音響ビーコンに対するアメリカ連邦取引委員会の警告書
 
-- 発行: United States Federal Trade Commission, Bureau of Consumer Protection、2016年3月17日付の見本文書
-- 確認先: https://www.ftc.gov/system/files/attachments/press-releases/ftc-issues-warning-letters-app-developers-using-silverpush-code/160317samplesilverpushltr.pdf
+- 発行: United States Federal Trade Commission, Bureau of Consumer Protection、開発者に宛てた警告書の見本文書。署名者は Maneesha Mithal, Associate Director, Division of Privacy and Identity Protection である
+- 確認先（見本文書の本文）: https://www.ftc.gov/system/files/attachments/press-releases/ftc-issues-warning-letters-app-developers-using-silverpush-code/160317samplesilverpushltr.pdf
+- 確認先（報道発表）: https://www.ftc.gov/news-events/news/press-releases/2016/03/ftc-issues-warning-letters-app-developers-using-silverpush-code 題名は "FTC Issues Warning Letters to App Developers Using 'Silverpush' Code"、副題は "Letters Warn Companies of Privacy Risks In Audio Monitoring Technology"、日付は2016年3月17日である
 
-内容の要約を述べる。この文書は、Silverpushという企業が提供する「固有の音響ビーコン」の開発キットを組み込んだアプリケーションの開発者に宛てた警告書である。この技術は、テレビの音声に埋め込まれた固有の符号を携帯端末のマイクが常時聞き取り、近くのテレビでどの番組や広告が流れているかを判定する。利用者に開示のないまま背景で動作し、視聴履歴の詳細な記録を作れることを問題としている。
+内容の要約を述べる。本文に当たって確認した。この文書は、Silverpushという企業が提供する「固有の音響ビーコン（Unique Audio Beacon）」の開発キットを組み込んだアプリケーションの開発者に宛てた警告書の見本である。見本であるため宛先と日付は空欄になっており、2016年3月17日という日付は報道発表の側で確認した。この技術は、テレビの音声に埋め込まれた固有の符号を携帯端末のマイクが聞き取り、近くのテレビでどの番組や広告が流れているかを判定する。報道発表は、この音響ビーコンが人間には聞こえない音であると述べている。警告書は、この機能が利用者がアプリを使っていないときでも背景で静かに動作するように作られており、視聴した番組の詳細な記録を作れると指摘し、インストール前にマイクへの許可を求めながらマイクを必要とする機能が見当たらないこと、設定の流れやプライバシー方針のどこにも音響ビーコンについての開示がなかったことを問題としている。連邦取引委員会法第5条の不公正または欺瞞的な行為の禁止に触れる可能性があると述べている。
 
 CipherFluteとの関係を述べる。音響ビーコンによる符号の配布が実社会で稼働し、規制当局の関心を集めるところまで来ていたことを示す一次資料である。音の符号が誰にでも読まれてしまうという性質を、規制の観点から裏づける。
 
@@ -183,34 +203,35 @@ CipherFluteとの関係を述べる。音響ビーコンによる符号の配布
 
 以下は脅威の度合いを「低」と判定したものである。いずれも一次資料またはdoi登録レコードで書誌情報を確認した。
 
-- L. Schenkerの押しボタン符号を国際標準化した ITU-T Recommendation Q.23 "Technical features of push-button telephone sets"（1988年11月版）。https://www.itu.int/rec/T-REC-Q.23/en
-- C. V. Lopes, P. M. Q. Aguiar, "Aerial acoustic communications", IEEE Workshop on Applications of Signal Processing to Audio and Acoustics (WASPAA 2001), pp. 219-222。https://doi.org/10.1109/ASPAA.2001.969582
-- H. Matsuoka, Y. Nakashima, T. Yoshimura, "Acoustic OFDM System and Performance Analysis", IEICE Transactions on Fundamentals, vol. E91-A, no. 7, pp. 1652-1658, 2008年。音声に並行して直交周波数分割多重の搬送波を高域に重ね、毎秒数百ビットを約3メートル届ける。https://www.jstage.jst.go.jp/article/transfun/E91.A/7/E91.A_7_1652/_article/-char/en
-- H. Lee, T. H. Kim, J. W. Choi, S. Choi, "Chirp signal-based aerial acoustic communication for smart devices", IEEE INFOCOM 2015, pp. 2407-2415。https://doi.org/10.1109/INFOCOM.2015.7218629
-- K. Cho, J. Choi, N. S. Kim, "An acoustic data transmission system based on audio data hiding: method and performance evaluation", EURASIP Journal on Audio, Speech, and Music Processing, 2015年。https://doi.org/10.1186/s13636-015-0053-x
-- M. T. Goodrich, M. Sirivianos, J. Solis, G. Tsudik, E. Uzun, "Loud and Clear: Human-Verifiable Authentication Based on Audio", ICDCS 2006。https://doi.org/10.1109/ICDCS.2006.52
+- L. Schenkerの押しボタン符号を国際標準化した ITU-T Recommendation Q.23 "Technical features of push-button telephone sets"（1988年11月版、現在も有効）。https://www.itu.int/rec/T-REC-Q.23/en
+- C. V. Lopes, P. M. Q. Aguiar, "Aerial acoustic communications", Proceedings of the 2001 IEEE Workshop on the Applications of Signal Processing to Audio and Acoustics (WASPAA 2001), pp. 219-222, 2001年10月。要旨によれば、標準的な変調方式をそのまま音に適用すると耳障りな機械音になるため、データ速度と誤り率と計算量に効くパラメータが同時に聴感にも大きく効くことを利用し、振幅偏移変調、周波数偏移変調、スペクトル拡散のパラメータを調整して、メッセージが音楽その他の聞き慣れた音になる通信系を作る。試作の名称は Digital Voices である。https://doi.org/10.1109/ASPAA.2001.969582 および https://api.openalex.org/works/doi:10.1109/ASPAA.2001.969582
+- H. Matsuoka, Y. Nakashima, T. Yoshimura, "Acoustic OFDM System and Performance Analysis", IEICE Transactions on Fundamentals of Electronics, Communications and Computer Sciences, vol. E91-A, no. 7, pp. 1652-1658, 2008年7月。音響信号の高域を直交周波数分割多重の搬送波に置き換え、各搬送波の電力を元の音のスペクトル包絡に合わせて制御する。毎秒数百ビットを、スピーカーから携帯端末まで約3メートル届ける。要旨の記述で数値を確認した。https://www.jstage.jst.go.jp/article/transfun/E91.A/7/E91.A_7_1652/_article/-char/en
+- H. Lee, T. H. Kim, J. W. Choi, S. Choi, "Chirp signal-based aerial acoustic communication for smart devices", 2015 IEEE Conference on Computer Communications (INFOCOM), pp. 2407-2415, 2015年。https://doi.org/10.1109/INFOCOM.2015.7218629
+- K. Cho, J. Choi, N. S. Kim, "An acoustic data transmission system based on audio data hiding: method and performance evaluation", EURASIP Journal on Audio, Speech, and Music Processing, vol. 2015, no. 1, 2015年4月。https://doi.org/10.1186/s13636-015-0053-x
+- M. T. Goodrich, M. Sirivianos, J. Solis, G. Tsudik, E. Uzun, "Loud and Clear: Human-Verifiable Authentication Based on Audio", 26th IEEE International Conference on Distributed Computing Systems (ICDCS 2006), 2006年。doiの登録レコードのページ表記は10-10であって、通常の連続ページではないので引用の際は注意すること。https://doi.org/10.1109/ICDCS.2006.52
 - B. Zhang, Q. Zhan, S. Chen, M. Li, K. Ren, C. Wang, D. Ma, "PriWhisper: Enabling Keyless Secure Acoustic Communication for Smartphones", IEEE Internet of Things Journal, vol. 1, no. 1, pp. 33-45, 2014年。https://doi.org/10.1109/JIOT.2014.2297998
 - M. Hanspach, M. Goetz, "On Covert Acoustical Mesh Networks in Air", Journal of Communications, vol. 8, no. 11, pp. 758-767, 2013年。空気を伝わる超音波で隔離された計算機のあいだに秘密の網を作る。https://doi.org/10.12720/jcm.8.11.758-767
-- M. Guri, Y. Solewicz, Y. Elovici, "MOSQUITO: Covert Ultrasonic Transmissions Between Two Air-Gapped Computers Using Speaker-to-Speaker Communication", IEEE Conference on Dependable and Secure Computing 2018, pp. 1-8。https://doi.org/10.1109/DESEC.2018.8625124
-- N. Roy, H. Hassanieh, R. Roy Choudhury, "BackDoor", MobiSys 2017, pp. 2-14。可聴域外の音を通常のマイクに聞かせる非線形性の利用。https://doi.org/10.1145/3081333.3081366
-- C. Cilleruelo, J. Junquera-Sanchez, L. de-Marcos, N. Logghe, J.-J. Martinez-Herraiz, "Security and privacy issues of data-over-sound technologies used in IoT healthcare devices", IEEE Globecom Workshops 2021。https://doi.org/10.1109/GCWkshps52748.2021.9682007
-- H. Gupta, B. Nayak, A. Ashok, R. Pratap, "Data-Over-Sound With PMUTs", IEEE Open Journal of Ultrasonics, Ferroelectrics, and Frequency Control, vol. 2, pp. 152-161, 2022年。https://doi.org/10.1109/OJUFFC.2022.3197126
-- S. Kim, H. Mun, Y. Lee, "A Data-Over-Sound Application: Attendance Book", APNOMS 2019, pp. 1-4。https://doi.org/10.23919/APNOMS.2019.8892996
-- M. Stojanovic, "Recent advances in high-speed underwater acoustic communications", IEEE Journal of Oceanic Engineering, vol. 21, no. 2, pp. 125-136, 1996年。https://doi.org/10.1109/48.486787
+- M. Guri, Y. Solewicz, Y. Elovici, "MOSQUITO: Covert Ultrasonic Transmissions Between Two Air-Gapped Computers Using Speaker-to-Speaker Communication", 2018 IEEE Conference on Dependable and Secure Computing (DSC), pp. 1-8, 2018年12月。https://doi.org/10.1109/DESEC.2018.8625124
+- N. Roy, H. Hassanieh, R. Roy Choudhury, "BackDoor: Making Microphones Hear Inaudible Sounds", Proceedings of the 15th Annual International Conference on Mobile Systems, Applications, and Services (MobiSys 2017), pp. 2-14。可聴域外の音を通常のマイクに聞かせる非線形性の利用。Crossrefの登録題名は副題を欠いた「BackDoor」であり、副題はDBLPの書誌検索とSemantic Scholarの登録レコードで確認した。https://doi.org/10.1145/3081333.3081366 および https://api.semanticscholar.org/graph/v1/paper/DOI:10.1145/3081333.3081366
+- C. Cilleruelo, J. Junquera-Sanchez, L. de-Marcos, N. Logghe, J.-J. Martinez-Herraiz, "Security and privacy issues of data-over-sound technologies used in IoT healthcare devices", 2021 IEEE Globecom Workshops (GC Wkshps), 2021年12月。心電計として複数の病院で使われている医療機器の独自の音響プロトコルを、ブラックボックスの逆解析とSTRIDEの脅威分析で調べ、複数の脆弱性を確認したという内容である。要旨で確認した。https://doi.org/10.1109/GCWkshps52748.2021.9682007
+- H. Gupta, B. Nayak, A. Ashok, R. Pratap, "Data-Over-Sound With PMUTs", IEEE Open Journal of Ultrasonics, Ferroelectrics, and Frequency Control, vol. 2, pp. 152-161, 2022年。要旨は、データ・オーバー・サウンドが通常は15キロヘルツから25キロヘルツという可聴域の上端を使う技術であると定義し、17キロヘルツから21キロヘルツで動く圧電微細加工超音波振動子を作って、5センチメートルの距離で83デシベルの音圧を連続で出せたと報告している。https://doi.org/10.1109/OJUFFC.2022.3197126
+- S. Kim, H. Mun, Y. Lee, "A Data-Over-Sound Application: Attendance Book", 2019 20th Asia-Pacific Network Operations and Management Symposium (APNOMS), pp. 1-4, 2019年9月。データの順序制御と誤り訂正を組み合わせて高い周波数の音でJSON形式の文字データを同報し、少なくとも5台の携帯端末が同時に処理でき、スピーカーから3メートルまで動作したと報告している。https://doi.org/10.23919/APNOMS.2019.8892996
+- M. Stojanovic, "Recent advances in high-speed underwater acoustic communications", IEEE Journal of Oceanic Engineering, vol. 21, no. 2, pp. 125-136, 1996年4月。https://doi.org/10.1109/48.486787
 - I. F. Akyildiz, D. Pompili, T. Melodia, "Underwater acoustic sensor networks: research challenges", Ad Hoc Networks, vol. 3, no. 3, pp. 257-279, 2005年。https://doi.org/10.1016/j.adhoc.2005.01.004
 - A. X. Widmer, P. A. Franaszek, "A DC-Balanced, Partitioned-Block, 8B/10B Transmission Code", IBM Journal of Research and Development, vol. 27, no. 5, pp. 440-451, 1983年。隣り合う記号に制約を課して遷移を保証する符号の原典であり、現行の論文がすでに挙げている。https://doi.org/10.1147/rd.275.0440
-- 国際海上衝突予防規則（1972年の海上における衝突の予防のための国際規則）の第34条と第35条。短音1回で右転、2回で左転、3回で後進、5回以上で疑問の表明を示し、視界制限状態では2分を超えない間隔で長音の組み合わせを鳴らす。合図の意味は規約表で決まり、送信側は固定の音を鳴らすだけである。https://www.navcen.uscg.gov/navigation-rules-amalgamated
-- アメリカ連邦航空局の Aeronautical Information Manual における航法援助施設の識別。超短波全方向式無線標識や計器着陸装置の位置指示装置は、国際モールス符号による3文字の識別符号を音として送出し続ける。送信内容が固定されており、受信側は表と照合して局を同定する。https://www.faa.gov/air_traffic/publications/atpubs/aim_html/chap1_section_1.html
-- The Chip Shop（イギリス放送協会のRadio 4、1984年）。番組の枠で計算機のプログラムを音として放送し、聴取者が録音して計算機に読み込ませる方式であり、オランダのBasicodeの書式が使われた。https://www.computinghistory.org.uk/det/21276/The%20Chip%20Shop%20Basicode%202/
-- 日本語の音響カプラ関係の文献。岩原廉「音響カプラ」エレクトロニクス, 1973年5月（https://cir.nii.ac.jp/crid/1521699230884271488 ）、金沢真「高性能音響カプラ」National Technical Report, 1975年12月（https://cir.nii.ac.jp/crid/1520573330594441344 ）、荒木庸夫「音響カプラによるCAI遠隔端末」医学教育, 1977年（https://cir.nii.ac.jp/crid/1390282679076662528 ）。
-- 日本語の可聴音データ伝送の初期文献。「可聴音を用いた4値FSKデータ伝送方式における送波システムの回路構成について」信州短期大学研究紀要, 1992年12月（https://cir.nii.ac.jp/crid/1571135651784290560 ）ならびに受波側を扱った続報, 1993年7月（https://cir.nii.ac.jp/crid/1572824501630771200 ）。可聴音で4値の周波数偏移変調を行う点でCipherFluteのスロット符号に近い発想である。
-- 宮下慶多, 中原崇文, 串山久美子「物理的な発音媒体を用いた情報の可聴化システム」インタラクション2018論文集, 3A13, p. 909, 2018年。計算機の合成音ではなく物理的な発音体の振動で情報を可聴化する試みであり、造形物が音を出すことの意味を論じている。https://www.interaction-ipsj.org/proceedings/2018/data/pdf/3A13.pdf
-- ヤマハの音波によるデータ伝送技術INFOSOUNDの発表（2012年6月13日）。直接スペクトル拡散により、ほとんど聞こえない形で音響の識別子をスピーカーから送り、携帯端末のマイクで受けてURLに変換する。https://archive.yamaha.com/ja/news_release/2012/12061302.html
-- Googleの実験的な拡張機能Tone（2015年5月19日、Alex KauffmannとBoris Smus）。超音波の方式と押しボタン信号に基づく可聴の方式を併用して、現在のタブのURLを聞こえる範囲の計算機に配る。壁を越えず、ペアリングも宛先指定も要らないという性質を人の声にたとえて説明している。https://research.google/blog/tone-an-experimental-chrome-extension-for-instant-sharing-over-audio/
-- Chirp（2011年にユニヴァーシティ・カレッジ・ロンドンの計算機科学科から独立、2020年2月にSonosが買収）。機器の初期設定、近接の検知、音響による近距離通信、電波が使えない環境での遠隔測定を用途としていた。https://audioxpress.com/news/data-over-sound-pioneer-chirp-acquired-by-sonos
-- LISNR。超音波によるデータ・オーバー・サウンドを、非接触の認証と決済に使う商用サービスを提供している。https://lisnr.com/
-- エヴィクサー株式会社。音響電子透かしと音響フィンガープリントを用いて、放送や館内放送から携帯端末へ情報を渡す事業を日本で行っている。劇場の多言語字幕、球団アプリ、防災放送などの導入事例がある。https://www.evixar.com/applications/
-- PhonoPaper（Alexander Zolotov作）。音を画像として紙に印刷し、携帯端末のカメラで走査して音に戻す。符号が連続量であるため画像の劣化に強い。読み取りが光学である点で音響通信ではないが、「音を物の模様として固定する」系譜に属する。http://warmplace.ru/soft/phonopaper/
+- 国際海上衝突予防規則（1972年の海上における衝突の予防のための国際規則）の第34条と第35条。原文に当たって確認した。短音1回で「針路を右に転じている」、2回で「針路を左に転じている」、3回で「機関を後進にかけている」を示し、相手の意図や動作が分からないときは短く急速な汽笛を5回以上鳴らして疑問を表明する。視界制限状態では2分を超えない間隔で長音の組み合わせを鳴らす。合図の意味は規約表で決まり、送信側は固定の音を鳴らすだけである。https://www.navcen.uscg.gov/navigation-rules-amalgamated
+- アメリカ連邦航空局の Aeronautical Information Manual における航法援助施設の識別。原文に当たって確認した。超短波全方向式無線標識について同書は「全方向式無線標識を確実に同定する唯一の方法は、そのモールス符号による識別、または録音による自動音声識別である」と述べる。計器着陸装置の進路指示装置（ローカライザ）については「識別は国際モールス符号によるものであり、文字Iを先頭に付した3文字の識別符号を進路指示装置の周波数で送出する」と述べる。簡易方向設備についても同様に3文字の識別符号をモールス符号で送出する。送信内容が固定されており、受信側は表と照合して局を同定する。当初の調査担当者はローカライザを「位置指示装置」と書いていたが、進路を示す設備であるため「進路指示装置」に直した。https://www.faa.gov/air_traffic/publications/atpubs/aim_html/chap1_section_1.html
+- The Chip Shop（イギリス放送協会のRadio 4、1984年、司会はBarry Norman）。番組の枠で計算機のプログラムを音として放送し、聴取者が録音して計算機に読み込ませる方式である。博物館の記録は「一連の耳障りな音に聞こえるが、録音して計算機に流し込むとゲームや実用のソフトウェアになる」と述べている。この資料はBasicode 2による第2集にあたる。https://www.computinghistory.org.uk/det/21276/The%20Chip%20Shop%20Basicode%202/
+- 日本語の音響カプラ関係の文献。CiNii Researchの書誌レコードで巻号とページまで確認した。岩原廉「音響カプラ」エレクトロニクス, 第18巻第5号, pp. 582-586, 1973年5月（https://cir.nii.ac.jp/crid/1521699230884271488 ）、金沢真「高性能音響カプラ」National Technical Report, 第21巻第6号, pp. 728-742, 1975年12月（https://cir.nii.ac.jp/crid/1520573330594441344 ）、荒木庸夫「音響カプラによるCAI遠隔端末」医学教育, 第8巻第4号, pp. 219-221, 1977年、doi 10.11307/mededjapan1970.8.219（https://cir.nii.ac.jp/crid/1390282679076662528 ）。
+- 日本語の可聴音データ伝送の初期文献。いずれも著者は高畑一夫（信州短期大学）である。当初の調査担当者は著者名を書いていなかったため補った。高畑一夫「可聴音を用いた4値FSKデータ伝送方式における送波システムの回路構成について」信州短期大学研究紀要, 第4巻第2号, pp. 25-31, 1992年12月（https://cir.nii.ac.jp/crid/1571135651784290560 ）ならびに高畑一夫「可聴音を用いた4値FSKデータ伝送システムにおける受波システムの回路構成について」信州短期大学研究紀要, 第5巻第1号, pp. 31-40, 1993年7月（https://cir.nii.ac.jp/crid/1572824501630771200 ）。続報の題名は「方式」ではなく「システム」であるので注意すること。英文要旨によれば、建物のなかでデータを伝えるのに可聴音は有効な手段の一つであるという立場から、4値の周波数偏移変調の送波側と受波側の回路構成をそれぞれ提案し、PSPICEによる回路模擬で性能を評価している。可聴音で4値の周波数偏移変調を行う点でCipherFluteのスロット符号に近い発想である。
+- 宮下恵太, 中原貴文, 串山久美子「物理的な発音媒体を用いた情報の可聴化システム」インタラクション2018論文集, 3A13, pp. 909-912, 2018年。英文題名は "Information Sonification System Using Physical Sound Device"、所属は首都大学東京大学院システムデザイン研究科である。当初の調査担当者は著者名を「宮下慶多, 中原崇文」と書いていたが、原稿の本文で「宮下恵太」「中原貴文」であることを確認したので直した。掲載ページも909ページのみとあったのを909ページから912ページに直した。内容は、計算機の合成音ではなく物理的な発音体の振動で情報を可聴化する試みである。ただし本文に当たって分かったのは、発音体はワイングラスをステッピングモータで回して湿らせた綿を押し当てるもの、およびガラスコップをソレノイドで叩くものであって、いずれもArduinoで制御される能動的な装置だという点である。可聴化される情報は鑑賞者が入力した性別、身長、体重、生年月日、氏名であり、通信路符号を伴う荷を運ぶ設計ではない。作品としてのサウンドインスタレーションであり、2017年12月に先端芸術音楽創造学会主催のインターカレッジ・ソニックアーツ・フェスティバルで展示された。https://www.interaction-ipsj.org/proceedings/2018/data/pdf/3A13.pdf
+- ヤマハの音波によるデータ伝送技術INFOSOUNDの発表（2012年6月13日、フジテレビとの業務提携の合意）。原文に当たって確認した。直接スペクトラム拡散を用い、人間にはほとんど聞こえないようにデータを伝送する。用途としては店舗や公共施設での利用、看板や音楽CDへの組み込み、クーポンの配信や電子商取引の頁への誘導を挙げている。原文の表記は「スペクトラム拡散」である。https://archive.yamaha.com/ja/news_release/2012/12061302.html
+- Googleの実験的な拡張機能Tone（2015年5月19日、Alex KauffmannとBoris Smus）。原文に当たって確認した。最初の試作は効率のよい音響伝送方式を使ったが音がひどかったため人間の可聴域の外で鳴らしており、のちに信頼性を大きく上げるために押しボタン信号に基づく最小限の可聴の符号器も併用した。この組み合わせは短距離であれば大半の音響環境で小さな音量でも確実に働き、通話越しでも動くとしている。現在のタブのURLを聞こえる範囲の計算機に配る仕組みである。https://research.google/blog/tone-an-experimental-chrome-extension-for-instant-sharing-over-audio/
+- Chirp（2011年にユニヴァーシティ・カレッジ・ロンドンの計算機科学科の研究から独立、2020年2月にSonosが買収）。記事の題名は "Data-Over-Sound Pioneer Chirp Acquired by Sonos"、日付は2020年2月13日である。記事は用途として機器の初期設定、近接の検知、双方向の音響による近距離通信、電波が使えない環境での遠隔測定を挙げている。https://audioxpress.com/news/data-over-sound-pioneer-chirp-acquired-by-sonos
+- LISNR。超音波によるデータ・オーバー・サウンドを、非接触の認証と決済に使う商用サービスを提供している。中心の製品はRadius SDKで、スピーカーとマイクだけで近接の検知と安全な入場を実現すると述べ、インターネット接続、Bluetooth、近距離無線通信、二次元コードのいずれにも依存しないと主張している。到達距離は数センチメートルから9メートル以上まで調整できるとする。https://lisnr.com/ （自動取得は拒まれることがあるが、閲覧はできる）
+- エヴィクサー株式会社。音響電子透かし（EAW）と音響フィンガープリント（EFP）、自動コンテンツ認識を用いて、放送や館内放送から携帯端末へ情報を渡す事業を日本で行っている。導入事例として、歌舞伎や能や狂言の多言語字幕アプリ、劇団四季公演の多言語字幕、映画のバリアフリー上映アプリ、千葉ロッテマリーンズの球団公式アプリ、美術館や水族館の多言語ガイド、防災放送への応用などが挙げられている。https://www.evixar.com/applications/
+- PhonoPaper（Alexander Zolotov作）。音を画像として紙に印刷し、携帯端末のカメラで走査して音に戻す。最長10秒の音を画像に変換でき、上下の黒い目印が画面に入るように左から右へ走査する。作者の説明は「PhonoPaperの符号はアナログであるため、各種の画像の劣化、たとえば粗いカメラ、暗い画像、しわの寄った紙などに対してあまり敏感でない」と述べている。ロシアの合成器ANSの模擬器であるVirtual ANSの機構の上に作られている。読み取りが光学である点で音響通信ではないが、「音を物の模様として固定する」系譜に属する。http://warmplace.ru/soft/phonopaper/
+- Cap'n Crunchの景品の笛による2600ヘルツの送出。Ron Rosenbaum, "Secrets of the Little Blue Box", Esquire, 1971年10月号（誌面は117ページから125ページおよび222ページから225ページにまたがる）。2026年7月30日の検証で本文に到達したため、未検証の節からこちらへ移した。記事は次のように述べている。長距離接続の中継装置は、使われていないあいだ、自分に接続された各家庭の電話へ向けて毎秒2600サイクルの音を吹き続けており、それによって呼び出しに応じられる状態であることを伝えている。そして「数年前、Cap'n Crunchという朝食用シリアルの製造元が、おまけの笛を箱ごとに景品として付けた。ある電話いじりの者が、その玩具の笛がたまたま完全な2600サイクルの音を出すことを発見した」と述べ、空軍の部隊でイングランドに転属したその人物が、友人からの呼び出しを笛を吹くことで無料にしていたと記す。あわせて、絶対音感を持つ盲目の少年Joe Engressiaが口笛で同じことをしていたという記述もあり、交換機の回路は人の口笛と電子的な発振器の音を区別できないと述べている。物理的な笛が固定の音を出して機械を動かした実例であり、CipherFluteの導入として使える。一次資料の走査版: https://www.historyofphonephreaking.org/docs/rosenbaum1971.pdf 誌面の書誌: https://classic.esquire.com/article/1971/10/1/secrets-of-the-little-blue-box
 
 ## 未検証のまま残ったもの
 
@@ -221,21 +242,23 @@ CipherFluteとの関係を述べる。音響ビーコンによる符号の配布
 - インドのGoogle Pay（旧Tez）のCash Modeにおける音響による近接決済。Googleの公式ブログの想定していたURLが404を返した。存在は強く疑われるが確認できていない。
 - ToneTag（インドの音波決済事業者）、株式会社スマート・ソリューション・テクノロジーのTrustSound、Cotofure株式会社の非可聴音ソリューション。検索結果に企業サイトが現れたところまでで、各社の技術説明ページの本文を取得していない。
 - 日本のマイコン雑誌の付録ソノシートによるプログラム配布。『PiO』1986年9月号の付録として「パソコンDJソノシート」が存在したという中古販売の記録は見たが、雑誌そのものや国立国会図書館の書誌に当たっていない。音をレコード盤の溝という形状として固定して配布した例であり、CipherFluteの位置づけに効くので確認する価値が高い。
-- Cap'n Crunchの景品の笛が2600ヘルツを出し、電話網の制御に使われたという逸話。Ron Rosenbaumの記事（Esquire誌1971年10月号）とPhil Lapsleyの著書が一次資料にあたるが、いずれも本文に到達できなかった。物理的な笛が固定の音を出して機械を動かした唯一に近い実例であり、確認できればCipherFluteの導入として非常に強い。
+- Phil Lapsleyの著書『Exploding the Phone』（2013年）。Open Libraryの書誌検索で著者名と初版年までは確認したが（https://openlibrary.org/search.json?q=Exploding+the+Phone+Lapsley ）、出版社、副題、ISBN、本文の該当箇所は確認していない。Cap'n Crunchの笛については上のRosenbaumの記事で一次資料に到達できたため、この著書は補強の資料としてのみ残す。引用する場合は書誌情報を改めて確認すること。
 - 潜水信号会社（Submarine Signal Company）による水中の鐘を使った船舶の信号（20世紀初頭）。存在は広く知られているが一次資料に当たっていない。
 - 日本のポケットベルにおける押しボタン信号による文字入力。CiNii Researchで「ポケットベル 文字入力」を検索したが該当がなく、別の語での再検索が必要である。
 - Bell 103型データセット（1962年）の一次仕様。ITU-T V.21に相当するアメリカの方式であるが、Bell Systemの技術参考資料に到達できていない。
 - Basicodeの規格そのものの一次資料。The Chip Shopについては博物館の記録で確認できたが、オランダの放送局が定めた書式の原文は確認していない。
-- 京急のKQスタンプラリーにおける音波の利用。西村の解説が参考文献として挙げているURLを開いたが403が返り、内容を確認できなかった。
-- Aerial communications using piano, clarinet, and bells の要旨と技術的な細部。書誌情報はCrossrefで確定したが、変調方式、記号の設計、達成した伝送速度は確認できていない。最重要の文献であるから、図書館経由での本文入手を強く勧める。
+- 京浜急行電鉄の「KQスタんぽ」における音波の利用。当初の調査担当者は「KQスタンプラリー」と書いていたが、西村の2021年の解説の参考文献一覧で正しい名称が「KQスタんぽ」であること、およびURLが https://www.keikyu.co.jp/information/kqstampo/ であることを確認した。ただし2026年7月30日の再取得でも403が返り、内容そのものは確認できていない。
+- ZhengとCaiによる書籍の章 Aerial Acoustic Communication の要旨と本文。書誌情報はCrossrefとOpenAlexで確定したが、出版社のページが認証の壁で取得できず、要旨もOpenAlexに登録されていないため、章の内容は確認できていない。内容に踏み込んで引用する場合は本文の入手が必須である。
 
 ## この切り口で見つからなかったこと
 
 丁寧に述べる。以下はCipherFluteの新規性の主張の根拠になる。
 
-第一に、送信機が電源も可動部も持たない受動的な造形物であり、なおかつ複数の記号からなる意味のある長さの荷を運ぶ、という音響通信の方式は見つからなかった。空中音響通信の文献はLopesとAguiarの2001年の論文から2025年のZhengとCaiの総説に至るまで、例外なくスピーカーを送信機として前提している。楽器を使うDominguesらの2002年の論文でさえ、楽器は任意の音列を出せる能動的な送信機として扱われている。受動的な造形物が音を出す研究は、HCIの分野でAcoustic BarcodesやLamelloやBlowholeとして存在するが、それらは物体の同一性を示す短い識別子を扱うものであって、通信路符号を伴う多記号の荷を運ぶ設計ではない。この二つの系譜のあいだが空いている。
+第一に、送信機が電源も可動部も持たない受動的な造形物であり、なおかつ複数の記号からなる意味のある長さの荷を運ぶ、という音響通信の方式は見つからなかった。空中音響通信の文献はLopesとAguiarの2001年の論文から2025年のZhengとCaiの書籍の章に至るまで、例外なくスピーカーを送信機として前提している。題名に楽器が現れるDominguesらの2002年の論文についても、2026年7月30日の検証で要旨に当たった結果、実物の楽器ではなく楽器の音を単純なモデルで合成した音片をスピーカーから鳴らすものであることが確認できた。日本語の文献でも、宮下らの2018年の可聴化システムは物理的な発音体を使うものの、ステッピングモータとソレノイドで駆動する能動的な装置である。受動的な造形物が音を出す研究は、HCIの分野でAcoustic BarcodesやLamelloやBlowholeとして存在するが、それらは物体の同一性を示す短い識別子を扱うものであって、通信路符号を伴う多記号の荷を運ぶ設計ではない。この二つの系譜のあいだが空いている。なお唯一の例外に近いのはCap'n Crunchの景品の笛であり、これは電源も可動部も持たない造形物が固定の1音を出して機械を動かした実例である。ただし記号は1つだけで、荷を運ぶ設計ではない。
 
-第二に、通信の分野で標準的な道具立て、すなわち既知の信号による通信路の正規化、誤り訂正符号、隣接記号への制約を、受動的な造形物の側に持ち込んだ例は見つからなかった。パイロット信号に相当する基準音を同じ物体のなかに造形として同居させ、温度と息の強さによる全体のずれをその比で打ち消すという設計は、既存のどの文献にも見当たらなかった。音響タグの研究では、環境の変動に対しては機械学習による分類か、事前の較正で対処しており、物体の内部に基準を埋め込むという発想は確認できなかった。
+第二に、通信の分野で標準的な道具立て、すなわち既知の信号による通信路の正規化、誤り訂正符号、隣接記号への制約を、受動的な造形物の側に持ち込んだ例は見つからなかった。ここは慎重に述べる必要がある。既知の信号によって通信路のひずみを測ってから打ち消すという考え方そのものは、西村の2021年の解説が水中音響通信のパイロット信号として明確に紹介しており、まったく新しいものではない。ITU-T勧告T.30のファクシミリの訓練手順も同じ考え方である。新しいのは、そのパイロット信号に相当する基準音を同じ物体のなかに造形として同居させ、温度と息の強さによる全体のずれをその比で打ち消すという実装である。この形の設計は既存のどの文献にも見当たらなかった。音響タグの研究では、環境の変動に対しては機械学習による分類か、事前の較正で対処しており、物体の内部に基準を埋め込むという発想は確認できなかった。
+
+なお符号の語彙の作り方については、CipherFluteはまったく新規性を主張できない。周波数を対数の目盛の上に等間隔に並べて記号を割り当てるという設計はSchenkerが1960年に確立しており、その音を音楽の音階の音にするという設計はLopesとAguiarが2003年までに、そして音階から1度に1音だけを選んで記号にするという設計はMadhavapeddyらが2005年までに実装している。誤り訂正符号との組み合わせもggwaveが実装済みである。この4点は論文で明示的に譲るべきである。
 
 第三に、暗号資産の復元用情報のような、失えば取り返しのつかない秘密を、音として読み出す物理媒体に保管するという提案は見つからなかった。音で鍵素材を運ぶ研究はHAPADEPをはじめとして存在するが、それらはいずれも機器のあいだの一時的な通路であって、保管の媒体ではない。保管の側では金属板への刻印などが実用されているが、読み出しは目視であって音ではない。
 
@@ -245,10 +268,26 @@ CipherFluteとの関係を述べる。音響ビーコンによる符号の配布
 
 ## 調べ残した穴
 
-- IEEE XploreとACM Digital Libraryが自動取得を拒むため、要旨の本文まで読めた文献が限られた。特にDominguesらの2002年の論文は、CipherFluteにとって最大の脅威候補でありながら題名と書誌情報しか確認できていない。図書館経由で本文を入手し、記号の設計と伝送速度を確かめることを強く勧める。
+- IEEE XploreとACM Digital Libraryが自動取得を拒むため、査読済み論文の本文そのものを読めたものは限られた。ただし2026年7月30日の検証で、OpenAlexとSemantic Scholarの登録レコードから要旨の全文を機械的に取得する経路が使えることが分かり、Dominguesらの2002年、Nishimuraの2014年、Dhwani、Hermes、Lopesらの2001年など主要な文献の要旨は確定できた。残っているのは、要旨より細かい記号の設計や実測値である。Dominguesらの2002年の論文については、記号を和声でどう組むのか、達成した伝送速度が具体的に何ビット毎秒なのかがまだ分からないので、図書館経由での本文入手を勧める。
 - 特許の調査をまったく行えなかった。受動的な発音体で符号を出す装置、たとえば音で開く錠や音響式の鍵の特許が存在する可能性がある。Google PatentsやJ-PlatPatでの検索が残っている。
 - 音による機器設定という分野を十分に掘れなかった。Amazon Dash Button、Chromecastのゲストモード、補聴器や計測器の設定転送など、実在が疑われる事例に一次資料で到達できていない。
 - 船舶と航空の音響信号については、海上衝突予防規則と航法援助施設のモールス識別までは確認したが、潜水艦の水中電話や水中鐘の歴史、霧鐘や霧笛の符号体系の歴史に踏み込めなかった。
 - アマチュア無線の音声帯域データ通信、たとえば低速度走査テレビジョン、RTTY、PSK31、および気象図の無線ファクシミリは、音声帯域を記号の語彙として使う長い実践の系譜であるが、時間の都合で標準文書に当たれなかった。
 - 蓄音機のレコード、オルゴールの櫛と円筒、自動ピアノのロール、映画フィルムの光学サウンドトラックといった、形状が波形を固定する古典的な媒体を体系的に押さえられなかった。CipherFluteを「形が信号を保持する媒体」の系譜に置く議論には、これらの一次資料があると強くなる。
-- Chirpが公開していた技術文書、およびLISNRの技術白書の本文を取得していない。商用の方式が可聴音と超音波のどちらをどう使い分け、どの程度の情報量を運ぶのかという数字を、CipherFluteの1本あたり約3.7ビットと並べて示せると比較が具体的になる。
+- Chirpが公開していた技術文書、およびLISNRの技術白書の本文を取得していない。商用の方式が可聴音と超音波のどちらをどう使い分け、どの程度の情報量を運ぶのかという数字を、CipherFluteの1本あたり約3.7ビットと並べて示せると比較が具体的になる。なお2026年7月30日の検証で、比較に使える実測値がいくつか確定した。ggwaveは毎秒8バイトから16バイト、Madhavapeddyらの押しボタン信号方式は3メートルで毎秒20ビット、同じ研究の断続キーイングは30センチメートルで毎秒251ビット、非可聴方式は3.4メートルで毎秒8ビット、Dhwaniは毎秒2.4キロビットまで、Hermesは携帯電話の通話路で毎秒約1.2キロビット、Nishimuraのサイレンへの埋め込みは毎秒12.3ビット、Matsuokaらの音響OFDMは3メートルで毎秒数百ビット、Lopesらの音響モデムは静かな事務室で毎秒約800ビットである。これらと並べれば、CipherFluteの1本あたり約3.7ビットという値が、通信路の性能の話ではなく物体の情報密度の話であることを明確に示せる。
+
+## 検証で削除したもの
+
+この節には、実在しない文献であると判断して削除したものを記録する。2026年7月30日の検証では、削除に至った項目は1件もなかった。この文書に挙がっていた査読論文、書籍の章、標準、公的文書、企業の発表、ソフトウェアリポジトリのすべてについて、一次情報またはdoiの登録レコードで実在を確認できた。存在は確かめられたが内容の裏が取れなかったものは、削除せずに該当箇所へその旨を書き添え、確認できなかった項目は「未検証のまま残ったもの」の節に置いた。
+
+## 検証の記録
+
+2026年7月30日、この文書に書かれた書誌情報を、最初の調査担当者とは別の担当者が独立に検証した。検証した項目は、箇条の単位で数えて、脅威の度合いを判定した14項目と、背景として挙げられていた28項目、および未検証として挙げられていた12項目の合計54項目である。うち書誌情報を一次情報またはdoiの登録レコードで確定できたものは43項目であった。すなわち脅威を判定した14項目と背景の28項目のすべて、および未検証から昇格した1項目である。なお背景の箇条のいくつかは複数の文献をまとめて挙げているので、文献の本数で数えれば項目数より多くなる。
+
+確認の手段は次のとおりである。doiを持つ23件についてはCrossrefのAPIで題名、著者名の綴り、掲載誌名または会議名、巻号、ページ、年を1件ずつ突き合わせた。要旨や本文の内容を確かめるため、OpenAlexとSemantic Scholarの登録レコードから要旨の全文を取得し、加えてSchenkerの1960年の論文、Madhavapeddyらの2005年の記事、Mavroudisらの2017年の論文、西村の2021年の解説、宮下らの2018年の予稿、Rosenbaumの1971年の記事については本文のPDFを入手して読んだ。ITU-Tの5つの勧告については勧告の公式ページで正式題名と版の日付と現行かどうかを確認した。日本語の6件についてはCiNii Researchの書誌レコードのJSON形式を直接取得し、巻号とページと発行年月を確定した。J-STAGEの2件は記事ページとPDFの双方に当たった。企業と公的機関の発表8件は原文のページを取得した。URLについては、この文書に書かれた全リンクにHTTPで到達を試み、生きていることを1件ずつ確かめた。
+
+訂正した箇所は9件である。内訳を述べる。第一に、最重要とされていたDominguesらの2002年の論文について、内容の記述を全面的に書き換えた。当初は「実際の楽器の楽音を伝送の媒体として使う」と書かれていたが、要旨は楽器の音を単純なモデルで合成した音片を用いると述べており、実物の楽器ではなかった。あわせて脅威の度合いを「高」から「中」に引き下げた。第二に、Madhavapeddyらの2005年の記事について、本文にある「旋律によるデータ伝送」がハ長調の音階から4音を選び1度に1音だけ鳴らして2ビットを表す方式であることを見つけ、これがCipherFluteのスロット符号をほぼ先取りしていることを書き加えた。当初の「音を選ぶ動機づけの先行研究」という位置づけは過小評価であった。第三に、Dhwaniの伝送速度を「数キロビット毎秒」から原典どおりの「毎秒2.4キロビットまで」に直した。第四に、宮下らの2018年の予稿の著者名を「宮下慶多, 中原崇文」から原稿本文どおりの「宮下恵太, 中原貴文」に直し、ページを909ページのみから909ページから912ページに直した。第五に、信州短期大学の2件について、抜けていた著者名「高畑一夫」を補い、巻号とページを加え、続報の題名が「方式」ではなく「システム」であることを直した。第六に、アメリカ連邦航空局の資料についての記述で、計器着陸装置の「位置指示装置」を「進路指示装置」に直した。第七に、西村の2021年の解説の応用の記述から、本文に見当たらない「来店の検知」を除き、本文どおりの「クーポン情報の配布」に直した。第八に、「SilverPush」という表記を、警告書と報道発表の原文どおりの「Silverpush」に直した。第九に、要約の節でSchenkerの符号をCipherFluteの「直接の先祖」と述べていた箇所を、2音同時方式と1音方式の違いを明示する記述に改めた。
+
+書誌情報の誤りが見つからなかった代わりに、内容の裏づけを大幅に補った。ggwaveの周波数間隔と基準周波数と伝送速度、Schenkerの8つの周波数の実際の値と21対19という比、Kansas City標準の掲載号とページと執筆者、Nishimuraのサイレン論文の毎秒12.3ビットという実測値、Mavroudisらが実証したビーコンの録音と再生による攻撃、Hermesの毎秒約1.2キロビットという実効速度、HAPADEPの予稿集の巻号と会期、Rosenbaumの記事におけるCap'n Crunchの笛の記述などは、いずれも今回の検証で原典から取り出したものである。
+
+未検証のまま残った項目は12件である。移動と入れ替えの内訳を述べる。Cap'n Crunchの景品の笛による2600ヘルツの送出については、Ron Rosenbaumの1971年のEsquire誌の記事の本文に到達できたため、未検証の節から背景の節へ移した。京浜急行電鉄の事例については、正しい名称が「KQスタんぽ」であることを西村の解説の参考文献一覧で確認したうえで、ページ本文への到達が依然できていない旨を書き添えた。新たに未検証として加えたのは、ZhengとCaiによる書籍の章の内容である。これは書誌情報は確定しているが、要旨も本文も入手できておらず、当初の記述が題名からの推測にとどまることが判明したためである。実在が確認できず削除に至った項目は1件もない。

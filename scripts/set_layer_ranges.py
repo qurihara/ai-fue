@@ -38,7 +38,8 @@ import zipfile
 BS = "/Applications/BambuStudio.app/Contents/MacOS/BambuStudio"
 
 
-def ranges_xml(fine_until, fine, coarse, top, object_id=1, coarse_infill=None, coarse_walls=None):
+def ranges_xml(fine_until, fine, coarse, top, object_id=1, coarse_infill=None, coarse_walls=None,
+               fine_from=0.0):
     """粗い側には層厚のほかに、インフィル密度と壁の数も指定できる。
 
     速度（outer_wall_speed など）は範囲では効かないことを実験で確かめた（2026-07-30）。
@@ -49,14 +50,21 @@ def ranges_xml(fine_until, fine, coarse, top, object_id=1, coarse_infill=None, c
         extra += '   <option opt_key="sparse_infill_density">%s</option>\n' % coarse_infill
     if coarse_walls:
         extra += '   <option opt_key="wall_loops">%d</option>\n' % coarse_walls
+    # 笛より下（fine_from まで）も粗くできる。底の広い面を細かく刷るとgcodeが大きくなり、
+    # A1 miniの解凍サイズの上限（4MB前後）に当たりやすい。
+    head = ""
+    if fine_from > 0:
+        head = ('  <range min_z="0" max_z="%.4f">\n'
+                '   <option opt_key="layer_height">%.3f</option>\n  </range>\n'
+                % (fine_from, coarse))
     return (
-        '<?xml version="1.0" encoding="UTF-8"?>\n<objects>\n <object id="%d">\n'
-        '  <range min_z="0" max_z="%.4f">\n'
+        '<?xml version="1.0" encoding="UTF-8"?>\n<objects>\n <object id="%d">\n%s'
+        '  <range min_z="%.4f" max_z="%.4f">\n'
         '   <option opt_key="layer_height">%.3f</option>\n  </range>\n'
         '  <range min_z="%.4f" max_z="%.4f">\n'
         '   <option opt_key="layer_height">%.3f</option>\n%s  </range>\n'
         ' </object>\n</objects>\n'
-        % (object_id, fine_until, fine, fine_until, top, coarse, extra))
+        % (object_id, head, fine_from, fine_until, fine, fine_until, top, coarse, extra))
 
 
 def gcode_info(path):
@@ -78,6 +86,8 @@ def main(argv=None):
     ap.add_argument("--fine", type=float, default=0.08, help="細かい側の層厚[mm]")
     ap.add_argument("--coarse", type=float, default=0.24, help="粗い側の層厚[mm]")
     ap.add_argument("--top", type=float, default=400.0, help="範囲の上端[mm]")
+    ap.add_argument("--fine-from", type=float, default=0.0,
+                    help="この高さから細かく刷る[mm]。笛より下の広い面を粗くしてgcodeを小さくする")
     ap.add_argument("--coarse-infill", default=None, help='粗い側のインフィル密度（例 8%%）')
     ap.add_argument("--coarse-walls", type=int, default=None, help="粗い側の壁の数（既定はそのまま）")
     ap.add_argument("--object-id", type=int, default=1, help="通し番号（既定1）")
@@ -92,7 +102,8 @@ def main(argv=None):
         with zipfile.ZipFile(staged, "a", zipfile.ZIP_DEFLATED) as z:
             z.writestr("Metadata/layer_config_ranges.xml",
                        ranges_xml(args.fine_until, args.fine, args.coarse, args.top,
-                                  args.object_id, args.coarse_infill, args.coarse_walls))
+                                  args.object_id, args.coarse_infill, args.coarse_walls,
+                                  args.fine_from))
         outdir = os.path.dirname(os.path.abspath(args.dst)) or "."
         os.makedirs(outdir, exist_ok=True)
         r = subprocess.run([args.bambu_studio, "--slice", "0", "--outputdir", outdir,

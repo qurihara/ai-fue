@@ -4,6 +4,8 @@
 
 書誌情報の確認方法について先に断っておく。ACM Digital Library と IEEE Xplore と AIP Publishing と Wiley Online Library は自動取得を拒否したため、これらに掲載された文献については、著者本人が公開している論文PDF、学会の予稿集ページ、または DOI 登録機関である Crossref が保持する書誌レコード（`https://api.crossref.org/works/<DOI>`）で確認した。Crossref の書誌レコードは出版社が DOI 登録時に届け出た一次的な書誌情報であり、題名・著者・掲載誌・巻号ページ・年をそこで確認できたものは「確認済み」として扱った。本文の技術的内容まで一次資料で読めたものと、書誌だけ確認できたものは、本文中で区別して書いた。
 
+本稿は2026年7月30日に、初稿とは別の担当者による独立した検証を受けている。検証では、記載されたすべての文献について Crossref の書誌レコードに一件ずつ照会し、論文番号や号の欠落は計算機科学の書誌データベースである dblp（`https://dblp.org/search/publ/api`）で補い、要旨は OpenAlex（`https://api.openalex.org/works/`）と Semantic Scholar（`https://api.semanticscholar.org/graph/v1/paper/`）から取得した。加えて、著者や学会が公開している本文PDFを8件ダウンロードして全文を読み、数値の主張を原典と突き合わせた。その結果として訂正した箇所は、どこをどう直したかが分かるように本文中に明示してある。詳細は末尾の「検証の記録」の節に書いた。
+
 ---
 
 ## この切り口の要約
@@ -224,13 +226,14 @@ CipherFlute との関係を述べる。共振構造の設計によって物理�
 - Shohei Katakura, Keita Watanabe, "ProtoHole: Prototyping Interactive 3D Printed Objects Using Holes and Acoustic Sensing", CHI EA '18, pp. 1–6, 2018年。<https://doi.org/10.1145/3170427.3188471> 造形物の内部に掃引信号を出し、穴をふさいだときの共鳴変化を機械学習で分類する。穴をボタンとして使う点が興味深いが、内部に電子回路を要する。
 - Jan Rod, David Collins, Daniel Wessolek, Thavishi Ilandara, Ye Ai, Hyowon Lee, Suranga Nanayakkara, "UTAP - Unique Topographies for Acoustic Propagation: Designing Algorithmic Waveguides for Sensing in Interactive Malleable Interfaces", TEI '17, pp. 141–152, 2017年。<https://doi.org/10.1145/3024969.3024987> 音響導波路の形状を設計して伝搬特性を作り込む。
 - Yasha Iravantchi, Yi Zhao, Kenrick Kin, Alanson P. Sample, "SAWSense: Using Surface Acoustic Waves for Surface-bound Event Recognition", CHI '23, pp. 1–18, 2023年。<https://doi.org/10.1145/3544548.3580991>
-- 八田将志, 村尾和哉, 「音響と振動のセンシングによる充填率の異なる3Dプリンタ生成物の識別手法」, マルチメディア，分散協調とモバイルシンポジウム2020論文集, pp. 382–391, 2020年。<https://cir.nii.ac.jp/crid/1050292572093342336> 充填率の違う造形物を音響と振動で識別する日本語の先行研究である。
+- Ethan Kepros, Premjeet Chahal, "Ultralow Power Wireless Ultrasonic Sensor Tag With ID", IEEE Sensors Journal, 第25巻第5号, pp. 8823–8827, 2025年。<https://doi.org/10.1109/jsen.2025.3529891> 確認先は Crossref の書誌レコード <https://api.crossref.org/works/10.1109/jsen.2025.3529891> である。超音波タグに識別子を載せる最新の研究であり、Acoustic Barcodes の被引用一覧から拾った。ただし題名が示すとおり「超低消費電力」であって完全な受動素子ではないので、電源も電子部品も持たない CipherFlute とは前提が異なる。本文は IEEE Xplore が自動取得を拒否するため未確認であり、内容の要約はここには書かない。
+- 八田将志, 村尾和哉, 「音響と振動のセンシングによる充填率の異なる3Dプリンタ生成物の識別手法」, マルチメディア，分散協調とモバイルシンポジウム2077論文集, 第2020巻, pp. 382–391, 2020年6月17日, 情報処理学会。確認先: 情報処理学会電子図書館のレコード <https://ipsj.ixsq.nii.ac.jp/records/210771> および CiNii Research のレコード <https://cir.nii.ac.jp/crid/1050292572093342336>。収録刊行物名の表記について注意しておく。この「2077」は本調査の誤記ではなく、情報処理学会電子図書館と CiNii Research の双方が同じ文字列で登録している。実体は DICOMO2020 のシンポジウム論文集であるから、論文に引くときは一次レコードの表記をそのまま写すか、あるいは「マルチメディア，分散，協調とモバイル（DICOMO2020）シンポジウム論文集」と正した表記に注記を添えるかを、投稿先の作法に合わせて選ぶべきである。内容は、音響と振動の特性が異なる3Dプリンタ生成物をスマートフォンで叩き、特性の違いから認識して対応するアプリケーションを起動する手法である。11種類の生成物を1,100回叩いて、全体で約81パーセント、最大96パーセントの精度を得たと報告している。この一件は、物体側に電子部品を要さず市販のスマートフォンだけで読めるという点で、この背景群のなかでは CipherFlute にいちばん近い。ただし読み出しは叩打による分類であって、任意のビット列を復元するものではない。
 
 **空気の流れや管を使う3Dプリント物の入力**
 
 - Liang He, Gierad Laput, Eric Brockmeyer, Jon E. Froehlich, "SqueezaPulse: Adding Interactive Input to Fabricated Objects Using Corrugated Tubes and Air Pulses", TEI '17, pp. 341–350, 2017年。<https://doi.org/10.1145/3024969.3024976>
 - Valkyrie Savage, Ryan Schmidt, Tovi Grossman, George Fitzmaurice, Björn Hartmann, "A series of tubes: adding interactivity to 3D prints using internal pipes", UIST '14, pp. 3–12, 2014年。<https://doi.org/10.1145/2642918.2647374>
-- Carlos E. Tejada, Raf Ramakers, Sebastian Boring, Daniel Ashbrook, "AirTouch: 3D-printed Touch-Sensitive Objects Using Pneumatic Sensing", CHI '20, 2020年。<https://doi.org/10.1145/3313831.3376136>
+- Carlos E. Tejada, Raf Ramakers, Sebastian Boring, Daniel Ashbrook, "AirTouch: 3D-printed Touch-Sensitive Objects Using Pneumatic Sensing", CHI '20, pp. 1–10, 2020年。<https://doi.org/10.1145/3313831.3376136>
 - Valkyrie Savage, Carlos Tejada, Mengyu Zhong, Raf Ramakers, Daniel Ashbrook, Hyunyoung Kim, "AirLogic: Embedding Pneumatic Computation and I/O in 3D Models to Fabricate Electronics-Free Interactive Objects", UIST '22, pp. 1–12, 2022年。<https://doi.org/10.1145/3526113.3545642> 電子部品を使わない対話物体という方向性で Blowhole の系譜に連なる。
 - Carlos E. Tejada, Jess McIntosh, Klaes Alexander Bergen, Sebastian Boring, Daniel Ashbrook, Asier Marzo, "EchoTube: Robust Touch Sensing along Flexible Tubes using Waveguided Ultrasound", ISS '19, pp. 147–155, 2019年。<https://doi.org/10.1145/3343055.3359712>
 
@@ -238,35 +241,36 @@ CipherFlute との関係を述べる。共振構造の設計によって物理�
 
 - Roderick Murray-Smith, John Williamson, Stephen Hughes, Torben Quaade, "Stane: synthesized surfaces for tactile input", CHI '08, pp. 1299–1302, 2008年。<https://doi.org/10.1145/1357054.1357257> 表面のテクスチャをこすった振動を分類する。Acoustic Barcodes が直接の先行研究として挙げている。
 - Ryosuke Kawakatsu, Shigeyuki Hirai, "Rubbinput: An Interaction Technique for Wet Environments Utilizing Squeak Sounds Caused by Finger-Rubbing", PerCom Workshops 2018。<https://doi.org/10.1109/percomw.2018.8480335>
-- Taesik Gong, Hyunsung Cho, Bowon Lee, Sung-Ju Lee, "Knocker: Vibroacoustic-based Object Recognition with Smartphones", Proceedings of the ACM on IMWUT, 第3巻, pp. 1–21, 2019年。<https://doi.org/10.1145/3351240> 同じ著者らの短報として "Identifying Everyday Objects with a Smartphone Knock", CHI EA '18, pp. 1–6, 2018年、<https://doi.org/10.1145/3170427.3188514> がある。既存の物体を叩いて識別する研究であり、タグを設計する研究ではない。
-- Chang Xiao, Karl Bayer, Changxi Zheng, Shree K. Nayar, "Vidgets: modular mechanical widgets for mobile devices", ACM Transactions on Graphics, 第38巻, pp. 1–12, 2019年。<https://doi.org/10.1145/3306346.3322943> 機械式部品の非線形応答を加速度センサで読む。音ではないが、受動的な機械式タグの近縁である。
+- Taesik Gong, Hyunsung Cho, Bowon Lee, Sung-Ju Lee, "Knocker: Vibroacoustic-based Object Recognition with Smartphones", Proceedings of the ACM on Interactive, Mobile, Wearable and Ubiquitous Technologies, 第3巻第3号, 論文番号82, pp. 82:1–82:21, 2019年。<https://doi.org/10.1145/3351240> 同じ著者らの短報として "Identifying Everyday Objects with a Smartphone Knock", CHI EA '18, pp. 1–6, 2018年、<https://doi.org/10.1145/3170427.3188514> がある。既存の物体を叩いて識別する研究であり、タグを設計する研究ではない。
+- Chang Xiao, Karl Bayer, Changxi Zheng, Shree K. Nayar, "Vidgets: modular mechanical widgets for mobile devices", ACM Transactions on Graphics, 第38巻第4号, 論文番号100, pp. 100:1–100:12, 2019年。<https://doi.org/10.1145/3306346.3322943> 機械式部品の非線形応答を加速度センサで読む。音ではないが、受動的な機械式タグの近縁である。
 - Aakar Gupta, Jiushan Yang, Ravin Balakrishnan, "Asterisk and Obelisk: Motion Codes for Passive Tagging", UIST '18, pp. 725–736, 2018年。<https://doi.org/10.1145/3242587.3242637> 受動タグに動きの符号を持たせる。音響ではないが「受動タグに符号を設計する」という発想の近縁である。
 - Xin Li, Yilin Yang, Zhengkun Ye, Yan Wang, Yingying Chen, "EarCase: Sound Source Localization Leveraging Mini Acoustic Structure Equipped Phone Cases for Hearing-challenged People", MobiHoc '23, pp. 240–249, 2023年。<https://doi.org/10.1145/3565287.3610270> 受動的な音響構造をスマートフォンのケースに付ける点が FluteCase に近い。
 
 **安全性の文脈で音を扱う研究**
 
-- Girish Vaidya, T. V. Prabhakar, Nithish Gnani, Ryan Shah, Shishir Nagaraja, "Sensor Identification via Acoustic Physically Unclonable Function", Digital Threats: Research and Practice, 第4巻, pp. 1–25, 2022年。<https://doi.org/10.1145/3488306> 製造ばらつきに由来する音響的な個体差を複製困難な指紋として使う。CipherFlute が「物理層に秘匿の力はない」と宣言していることの対極にあり、脅威モデルの議論で対比材料になる。
+- Girish Vaidya, T. V. Prabhakar, Nithish Gnani, Ryan Shah, Shishir Nagaraja, "Sensor Identification via Acoustic Physically Unclonable Function", Digital Threats: Research and Practice, 第4巻第2号, 論文番号20, pp. 20:1–20:25, 2023年（オンライン先行公開は2022年3月15日）。<https://doi.org/10.1145/3488306> 年について注意する。Crossref の書誌レコードはオンライン先行公開の2022年3月15日を発行日として持つが、第4巻第2号という号は2023年のものであり、dblp も2023年として記録している。論文に引くときは2023年とし、必要ならオンライン先行公開の年を添えるのが正確である。製造ばらつきに由来する音響的な個体差を複製困難な指紋として使う。CipherFlute が「物理層に秘匿の力はない」と宣言していることの対極にあり、脅威モデルの議論で対比材料になる。
 - Soundarya Ramesh, Harini Ramprasad, Jun Han, "Listen to Your Key: Towards Acoustics-based Physical Key Inference", HotMobile '20, pp. 3–8, 2020年。<https://doi.org/10.1145/3376897.3377853> 鍵を差し込むときの音から鍵山の形状を推定する攻撃である。物理的な秘密が音として漏れるという事実を示しており、CipherFlute の脅威モデル（形状を計測されれば無音で読める、複製も容易）を裏打ちする。
+- Soundarya Ramesh, Rui Xiao, Anindya Maiti, Jong Taek Lee, Harini Ramprasad, Ananda Kumar, Murtuza Jadliwala, Jun Han, "Acoustics to the Rescue: Physical Key Inference Attack Revisited", Proceedings of the 30th USENIX Security Symposium (USENIX Security '21), pp. 3255–3272, 2021年。確認先: dblp のレコード <https://dblp.org/search/publ/api?q=Acoustics+to+the+Rescue+Physical+Key+Inference+Attack+Revisited> および USENIX の発表ページ <https://www.usenix.org/conference/usenixsecurity21/presentation/ramesh>。上記 HotMobile 2020 の短報を本格的な攻撃実装へ発展させた続報である。DOI は付与されていない。この続報の存在は、「物理的な秘密は音として漏れる」という CipherFlute の脅威モデルの前提が、査読付きの安全性会議で確立した知見であることを示すので、脅威モデルの節で引くとよい。
 
 ---
 
 ## 未検証のまま残ったもの
 
-以下は、実在または詳細を確認しきれなかったものである。憶測で書かないために、どこまで確認できたかを明示する。
+以下は、実在または詳細を確認しきれなかったものである。憶測で書かないために、どこまで確認できたかを明示する。2026年7月30日の検証で決着したものは、この節から外して本文の該当箇所へ移した。
 
-1. **Semantic Scholar 上に "Encoding data into physical objects with digitally fabricated textures"（2013年）という記録がある。** Acoustic Barcodes の被引用一覧に現れたが、掲載誌や会議名も DOI も付いておらず、Crossref で該当する書誌を見つけられなかった。学位論文か未公刊の報告である可能性が高い。実在を確認できていないため、論文には引用すべきでない。
+1. **Semantic Scholar 上に "Encoding data into physical objects with digitally fabricated textures"（2013年）という記録がある。** Acoustic Barcodes の被引用一覧に現れたが、掲載誌や会議名も DOI も付いていない。2026年7月30日の検証で、Crossref に該当する書誌が無いことに加えて、計算機科学の書誌データベースである dblp にも該当する記録が1件も無いことを確かめた（`https://dblp.org/search/publ/api?q=Encoding+data+into+physical+objects+with+digitally+fabricated+textures` が0件を返す）。査読を経た公刊文献であればこの二つのどちらかには載るはずなので、学位論文か未公刊の報告である可能性がさらに高まった。実在と書誌を確認できていないため、論文には引用すべきでない。
 
-2. **Semantic Scholar 上に "EchoTube: Modular and Robust Press Sensing along Flexible Tubes using Waveguided Ultrasound"（2019年）という別記録がある。** ISS 2019 版の重複記録である可能性が高いが、独立した文献として実在するかは確認できなかった。
+2. **Semantic Scholar 上に "EchoTube: Modular and Robust Press Sensing along Flexible Tubes using Waveguided Ultrasound"（2019年）という別記録がある。** 2026年7月30日の検証で、dblp には EchoTube という題名の記録が ISS 2019 の "EchoTube: Robust Touch Sensing along Flexible Tubes using Waveguided Ultrasound"（pp. 147–155, DOI 10.1145/3343055.3359712）の1件しか無いことを確かめた。したがってこの "Modular and Robust Press Sensing" 版は Semantic Scholar 側の重複ないし誤登録であると判断してよい。独立した文献としては存在しないものとして扱い、引用しない。
 
-3. **Journal of the Acoustical Society of America の水中受動音響識別タグ（2020年、2024年）について、本文の技術的細部を確認できていない。** 題名、著者、巻号ページ、年は DOI 書誌レコードで確認したが、出版社サイトが自動取得を拒否したため、識別可能なタグの個数、ビット容量、符号設計の有無、誤り訂正の有無は未確認である。
+3. **The Journal of the Acoustical Society of America と JASA Express Letters の水中受動音響識別タグ（2020年、2024年）について、本文の技術的細部を確認できていない。** 題名、著者、巻号、頁または論文番号、年は Crossref の書誌レコードで確認したが、出版社サイトが自動取得を拒否したため、識別可能なタグの個数、ビット容量、符号設計の有無、誤り訂正の有無は未確認である。なお同じ系列のうち Journal of Applied Physics の論文（Zhou ら, 2022年）については、著者版の全文が arXiv で公開されていたため本調査で本文まで読み、符号設計を確認して本文の該当箇所に書き足した。
 
-4. **Applied Acoustics の水中音響バーコード（2022年）についても同様である。** 書誌は確認したが、本文の符号設計は未確認である。
+4. **Applied Acoustics の水中音響バーコード（2022年）についても同様である。** 書誌は Crossref で確認したが、本文の符号設計は未確認である。
 
-5. **Advanced Functional Materials の EMIT 論文について、ビット容量と識別可能タグ数と誤り訂正の有無は未確認である。** 題名、著者、掲載誌、年、要旨は DOI に紐づく書誌情報として確認したが、本文は購読が必要であり読めていない。
+5. **Advanced Functional Materials の EMIT 論文について、ビット容量と識別可能タグ数と誤り訂正の有無は未確認である。** 題名、著者、掲載誌、巻号、論文番号、年は Crossref の書誌レコードで確認し、要旨の全文は Semantic Scholar 経由で取得して読んだが、本文は購読が必要であり読めていない。要旨には識別可能なタグ数もビット数も誤り訂正の記述も現れない。
 
-6. **IEEE Sensors Journal の "Ultralow Power Wireless Ultrasonic Sensor Tag With ID"（2025年）は書誌を確認していない。** Acoustic Barcodes の被引用一覧に現れたが、追跡する前に検索の予算を使い切った。超音波タグに識別子を載せる研究であり、追加調査の価値がある。
+6. **Proceedings of the ACM on Interactive, Mobile, Wearable and Ubiquitous Technologies の SoundOff（2025年）について、発音機構の細部が未確認である。** 書誌（第9巻第4号、論文番号174、pp. 174:1–174:32）と要旨は確認したが、片持ち梁が金属円板を弾くという機構や部品数は要旨に現れず、本文は ACM Digital Library が自動取得を拒否するため読めていない。
 
-7. **鍵の音響推定攻撃について、HotMobile 2020 版は確認したが、USENIX Security 2021 の "Acoustics to the Rescue: Physical Key Inference Attack Revisited" は書誌を確認できていない。** 被引用一覧に題名が現れたのみである。
+7. **Extended Abstracts of the CHI Conference の FabAuth（2019年）について、加振に用いる素子の種類が未確認である。** 要旨には「振動」「センサ」とあるだけで、圧電素子とは書かれていない。本文は ACM Digital Library が自動取得を拒否するため読めていない。
 
 ---
 
@@ -274,21 +278,21 @@ CipherFlute との関係を述べる。共振構造の設計によって物理�
 
 CipherFlute の新規性の根拠になる事項を、丁寧に書き出す。以下はいずれも、上記の調査範囲では該当する先行研究を見つけられなかった。
 
-**その一、100ビットを超える秘密の値そのものを、電源を持たない音響読み出し物体に格納した例が見つからなかった。** 確認できた最大容量を並べると、Acoustic Voxels が実証4ビット、Acoustic Barcodes が誤り訂正込みで12ビットから30ビット（1ミリメートル単位間隔なら60ビットまで拡張可能と述べるにとどまる）、表面弾性波タグが32ビットから128ビット（ただし無線送受信機を要し圧電結晶製である）、Blowhole が1物体あたり9通り、Lamello がスライダ位置、SoundOff が1タグ1識別子である。CipherFlute の「128ビットのリカバリーシードを40本から49本の笛で運ぶ」という規模は、家庭用3Dプリンタで作れる可聴音の受動タグとしては前例がない。
+**その一、100ビットを超える秘密の値そのものを、電源を持たない音響読み出し物体に格納した例が見つからなかった。** 確認できた最大容量を並べると、Acoustic Voxels が実証4ビット、Acoustic Barcodes が誤り訂正込みで12ビットから30ビット（1ミリメートル単位間隔なら約6センチメートルに60ビットまで拡張可能と述べるにとどまる）、水中の受動音響バーコードが実証3ビット（球の組み合わせ7通り）、Blowhole が1物体あたり最大9個のタグ、Lamello がスライダ位置、SoundOff が1タグ1識別子である。表面弾性波タグについては注意が要る。32ビットから128ビットという数字は目標値として語られているものであって、章が書かれた時点の実用品の容量は約1万通り、およそ13ビットにとどまる。しかも無線送受信機を要し、素子は圧電結晶である。CipherFlute の「128ビットのリカバリーシードを40本から49本の笛で運ぶ」という規模は、家庭用3Dプリンタで作れる可聴音の受動タグとしては前例がない。
 
-**その二、音高を半音格子で量子化して符号語彙とした例が見つからなかった。** Whoosh の FluteCase は管長を半音比の等比数列で決めているが、それは8個のイベントを区別しやすくするためであって、半音を符号の単位（スロット）として定義したものではない。Lamello の櫛歯の周波数は音楽的な格子上にはない。Blowhole はヘルムホルツ式の予測値に最も近い空洞を選ぶ最近傍判定であって、等間隔のセント格子ではない。CipherFlute の「100セント刻みで13スロット、1本あたり約3.7ビット」という語彙定義は、この分野に前例がない。
+**その二、音の高さを対数格子（セント等分）で量子化し、多元アルファベットの符号語彙とした例が見つからなかった。** ここは本調査で表現を狭めた項目である。「周波数軸を等間隔の小帯域に区切り、各小帯域を符号の1桁として使う」という設計そのものは、水中の受動音響バーコード（Zhou ら, Journal of Applied Physics, 2022年）に明確に存在する。その論文は帯域幅を m 個の等幅の小帯域に区切り、共鳴ピークがあれば1、無ければ0として白黒のバーコードを作ると述べており、実験では6キロヘルツから10.5キロヘルツを1.5キロヘルツ幅の3小帯域に区切っている。したがって「周波数の格子を符号語彙にした」ことは新規と主張できない。残る新しさは二点である。第一に、格子が線形等間隔ではなく100セント刻みの対数格子であり、音楽の半音と一致していること。第二に、各スロットが共鳴ピークの在無を表す2値ではなく13元のアルファベットの1文字であり、1本あたり約3.7ビットを運ぶことである。Whoosh の FluteCase は管長を半音比の等比数列で決めているが、それは8個のイベントを区別しやすくするためであって、半音を符号の単位（スロット）として定義したものではない。Lamello の櫛歯の周波数は音楽的な格子上にはない。Blowhole はヘルムホルツ式の予測値に最も近い空洞を選ぶ最近傍判定であって、等間隔のセント格子ではない。
 
-**その三、物体の中に基準となる既知の音高を混ぜて、環境変動を比で打ち消す設計が見つからなかった。** 最も近いのは Acoustic Barcodes のガード列であり、これは3本の溝を単位間隔で並べて、こする速度のばらつきを吸収するための基準を与える。ただし打ち消す対象は速度であって温度や息の強さではなく、また基準は時間軸のスケールであって周波数軸のスケールではない。表面弾性波タグにも基準用の反射器があるが、これも遅延の基準である。周波数軸に基準を置いて全体のずれを比で正規化するという通信のパイロット信号に相当する設計は、受動音響タグの文献には見当たらなかった。
+**その三、物体の中に基準となる既知の音高を混ぜて、環境変動を「周波数の比」で打ち消す設計が見つからなかった。** ここも本調査で表現を狭めた項目である。「既知の基準要素をタグ自身に混ぜて温度変動を打ち消す」という発想そのものには、はっきりした先行例がある。表面弾性波タグの校正用反射器について、Härmä と Plessky の章は「校正用反射器は、温度、製造ばらつき、その他の変動に由来する位置の誤差を吸収するのに役立つ」と明記している。したがって基準要素という考え方の新規性は主張できない。Acoustic Barcodes のガード列も、3本の溝を単位間隔で並べて、こする速度のばらつきを吸収するための基準を与える。残る差分は二点である。第一に、これらの先行例が打ち消す量は時間軸のスケール（遅延や速度）であるのに対し、CipherFlute が打ち消すのは周波数軸のスケールであること。第二に、打ち消す対象が製造ばらつきと温度だけでなく、吹く息の強さという人間側の変動まで含むことである。周波数軸に基準を置いて全体のずれを比で正規化するという通信のパイロット信号に相当する設計は、受動音響タグの文献には見当たらなかった。
 
 **その四、フィップル（エッジトーン）方式の笛を受動音響タグに使った例が見つからなかった。** 確認できた励起方式は、ヘルムホルツ共鳴器に吹き込む方式（Blowhole）、閉管の開口を横切って吹く方式（Whoosh の FluteCase）、櫛歯をはじく方式（Lamello）、突起を打つ方式（Tickers and Talker）、切り欠きをこする方式（Acoustic Barcodes）、面ファスナーを剥がす方式（Let It Rip!）、片持ち梁が金属円板を弾く方式（SoundOff）、音響フィルタに雑音を通すか叩く方式（Acoustic Voxels）である。フィップル笛は音量が大きく音高が安定するという利点があるが、これを識別タグに使った先行研究は見つからなかった。あわせて、円筒を軸方向に半分に割った断面の笛を、サポート材なしで平置き印刷し複数本を融合するという造形手法にも先行例が見つからなかった。
 
-**その五、Reed–Solomon 符号を実装した受動音響タグの動作系が見つからなかった。** Acoustic Barcodes は Hamming 符号、BCH 符号、Reed–Solomon 符号を「使ってよい」と述べ、事後解析としてどれだけの検査ビットが要るかを計算しているが、実験に使ったタグ自体には誤り訂正を入れていない（比較を単純にするため固定物理長方式のみを使ったと明記している）。表面弾性波タグにはチェックサム用の反射器があるが、これは誤り検出であって誤り訂正ではない。誤り訂正符号を実装して動く受動音響タグは見つからなかった。
+**その五、Reed–Solomon 符号を実装した受動音響タグの動作系が見つからなかった。** Acoustic Barcodes はハミング符号、BCH 符号、拡張ゴレイ符号、Reed–Solomon 符号を「使ってよい」と述べ、事後解析としてどれだけの検査ビットが要るか、また訂正込みならどれだけ精度が上がるかを計算しているが、実験に使ったタグ自体には誤り訂正を入れていない（実験に用いた符号はすべて固定物理長方式であり、その理由をスワイプ距離のばらつきによる交絡を避けるためと明記している）。表面弾性波タグにはチェックサム用の反射器があるが、これは誤り検出であって誤り訂正ではない。水中の受動音響バーコードは誤り訂正にまったく触れていない。誤り訂正符号を実装して動く受動音響タグは見つからなかった。
 
 **その六、受動音響タグの文献に、暗号学的な脅威モデルを明示した例が見つからなかった。** 「音や物体の層には秘匿の力がまったく無い」と宣言し、秘匿性を秘密分散にのみ負わせ、物理層の役割を偽装による探索コストの引き上げと正当利用者の手軽さに限定する、という構成の議論は一件も見つからなかった。Blowhole は構造の大半を表面下に隠すが、それは外観を損なわないためであって、攻撃者の探索を難しくするためではない。FabAuth は真正性を扱うが、複製困難性の主張であって秘匿性の議論ではない。音響物理的複製困難関数（acoustic physically unclonable function）は複製困難性を主張する方向であり、CipherFlute の「複製は容易だと認める」という立場と正反対である。
 
 **その七、暗号資産の復元用情報の保管という用途を、受動音響タグで扱った例が見つからなかった。** 音響タグの応用として挙げられているのは、教育用模型の注釈（Blowhole、Tickers and Talker）、視覚障害者向けのラベル（Tickers and Talker）、機器の入力（Lamello、Whoosh、SqueezaPulse）、物品の識別と著作権情報（Acoustic Voxels、Acoustic Barcodes）、家庭内の行動センシング（SoundOff）、水中航法（水中識別タグ）、所有者識別（EMIT）である。秘密情報の物理的な保管という用途は、この系譜には存在しない。
 
-**その八、日用品への偽装を目的として受動音響タグを設計した例が見つからなかった。** Acoustic Barcodes は「表面によっては見えなくできる」と述べ、Blowhole は「目立たない開口」と述べているが、いずれも美観と実装の都合であって、第三者に秘密の存在を悟らせないという安全上の目的ではない。
+**その八、日用品への偽装を目的として受動音響タグを設計した例が見つからなかった。** Acoustic Barcodes は「表面によっては見えなくできる」と述べ、Blowhole は「目立たない開口」と述べているが、いずれも美観と実装の都合であって、第三者に秘密の存在を悟らせないという安全上の目的ではない。ただしこの項目には一件、留保が必要である。水中の受動音響バーコード（Zhou ら, 2022年）は「情報が対象の音響散乱特性に変調されるので、秘匿的な情報伝送（covert information transmission）と目標識別が実現できる」と明記している。すなわち隠蔽を目的として語る受動音響タグは存在する。もっともその隠蔽は、敵のソナーに標識の存在を悟らせないという軍事寄りの文脈であって、CipherFlute のように「日用品に見せかけて第三者の探索コストを上げる」という設計ではない。査読で偽装の新規性を問われた場合は、この一件を認めたうえで日用品への擬装という設計目標との違いを述べるのが誠実である。
 
 ---
 
@@ -298,16 +302,68 @@ CipherFlute の新規性の根拠になる事項を、丁寧に書き出す。�
 
 1. **Blowhole の被引用は Semantic Scholar 上で17件しか登録されていない。** Google Scholar の被引用一覧は本調査では参照できなかったため、実際にはもっと多い可能性がある。とくに2023年以降の造形分野の論文で Blowhole を引く新しい研究を取りこぼしているおそれがある。
 
-2. **Acoustic Barcodes の被引用99件のうち、題名から明らかに無関係と判断したものを個別には確認していない。** 一覧そのものは取得済みなので、必要なら追跡できる。とくに "Splitcode: Voronoi-Based Error Exaggeration for Authentication of Manufactured Parts"（2022年）、"Secure Information Embedding in Forensic 3D Fingerprinting"（USENIX Security 2024）、"All-in-one encoder/decoder approach for non-destructive identification of 3D-printed objects"（2022年）は、造形物への情報埋め込みと安全性を扱っており、別の切り口の担当者と重なる可能性がある。
+2. **Acoustic Barcodes の被引用99件のうち、題名から明らかに無関係と判断したものを個別には確認していない。** 一覧そのものは取得済みなので、必要なら追跡できる。とくに次の3件は造形物への情報埋め込みと安全性を扱っており、別の切り口の担当者と重なる可能性がある。2026年7月30日の検証で、いずれも書誌情報を一次情報で確定させたので、正確な形で書き留めておく。本文は未読であるから、内容の要約はここには書かない。
+
+   - Riddhi R. Adhikari, Karim A. ElSayed, Ergun Akleman, Jitesh H. Panchal, Vinayak Krishnamurthy, "SplitCode: Voronoi-based error exaggeration for authentication of manufactured parts", Journal of Manufacturing Systems, 第65巻, pp. 605–621, 2022年。<https://doi.org/10.1016/j.jmsy.2022.10.005> 確認先は Crossref の書誌レコードである。題名の綴りは "SplitCode" であって "Splitcode" ではない。なお同名の先行版が SSRN に2021年付で登録されている（DOI 10.2139/ssrn.3993045）ので、引くときは査読誌版のほうを指すべきである。
+   - Canran Wang, Jinwen Wang, Mi Zhou, Vinh Pham, Senyue Hao, Chao Zhou, Ning Zhang, Netanel Raviv, "Secure Information Embedding in Forensic 3D Fingerprinting", Proceedings of the 34th USENIX Security Symposium (USENIX Security '25), pp. 1887–1906, 2025年。確認先は dblp のレコード <https://dblp.org/search/publ/api?q=Secure+Information+Embedding+Forensic+3D+Fingerprinting> および USENIX の発表ページ <https://www.usenix.org/conference/usenixsecurity25/presentation/wang-canran> である。年について訂正しておく。本調査の前に書かれていた「USENIX Security 2024」は誤りで、正しくは2025年である。2024年付で存在するのは題名の異なる arXiv のプレプリント "Secure Information Embedding and Extraction in Forensic 3D Fingerprinting"（arXiv:2403.04918, DOI 10.48550/arXiv.2403.04918）であり、これと会議版を混同したものと考えられる。
+   - Choonsung Shin, Sunghee Hong, Hieyong Jeong, Hyoseok Yoon, Byoungsoo Koh, "All-in-one encoder/decoder approach for non-destructive identification of 3D-printed objects", Mathematical Biosciences and Engineering, 2022年。<https://doi.org/10.3934/mbe.2022657> 確認先は Semantic Scholar のレコード（要旨全文を取得した）である。要旨によれば、識別用の一次元符号から三次元バーコードを生成して造形物の STL ファイルの底部の空き領域に埋め込み、テラヘルツ波で検出して符号を取り出す手法である。すなわち読み出しは音響ではなくテラヘルツ波であり、AirCode や InfraStructs の系譜に属する。この切り口ではなく、電磁波で読む埋め込み符号を扱う切り口の担当者に渡すのが適切である。
 
 3. **特許を体系的に検索していない。** 音を使った識別タグは玩具や包装の分野で特許が多い領域と予想される。とくに「吹くと音が出る識別子」に関する特許は、学術文献より先行している可能性がある。
 
 4. **中国語と韓国語の文献を調べていない。** 水中音響バーコードや音響メタマテリアル識別タグの分野は中国と韓国の研究機関が活発であり、英語で発表されていない関連研究がある可能性が高い。
 
-5. **日本語の文献の調査が浅い。** CiNii Research では「音響タグ」「受動的音響センシング」「3Dプリンタ 音響 識別」の3語で検索したにとどまる。情報処理学会電子図書館、電子情報通信学会の技術研究報告、WISS とインタラクションの各年の予稿集を直接めくる作業は行えていない。とくにヒューマンインタフェース学会と情報処理学会のヒューマンコンピュータインタラクション研究会には、音で読む物体の未発掘の研究がある可能性がある。
+5. **日本語の文献の調査が浅い。** CiNii Research では「音響タグ」「受動的音響センシング」「3Dプリンタ 音響 識別」の3語で検索したにとどまる。2026年7月30日の検証では、八田と村尾の論文について情報処理学会電子図書館のレコードまで当たって書誌を確定させたが、電子情報通信学会の技術研究報告、WISS とインタラクションの各年の予稿集を直接めくる作業は依然として行えていない。とくにヒューマンインタフェース学会と情報処理学会のヒューマンコンピュータインタラクション研究会には、音で読む物体の未発掘の研究がある可能性がある。
 
 6. **玩具、楽器、鳥笛、汽笛といった実用品の先行技術を調べていない。** 「複数の音高を出す受動的な吹奏具」は工業製品として長い歴史があり、学術文献より前に存在する事例があるはずである。とくに犬笛や救難笛の規格、鉄道の汽笛による信号（音高で意味を伝える運用）は、CipherFlute の位置づけを述べるうえで参照価値がある。
 
 7. **超音波の受動タグのうち、医療用インプラントに埋め込む音響識別子の文献を調べていない。** 体内に埋め込んだ受動共振体を超音波で読む研究は医用工学の分野に存在すると予想されるが、今回は探索できなかった。
 
-8. **検索の予算を使い切ったため、最後に予定していた2件の確認ができなかった。** 一つは物理鍵の音響推定攻撃の最新版であり、もう一つは「音で読める秘密の物理バックアップ」という直球の検索である。後者は CipherFlute の新規性の中心に関わるため、優先して埋めるべき穴である。
+8. **検索の予算を使い切ったため、最後に予定していた2件の確認ができなかった。** 一つは物理鍵の音響推定攻撃の最新版であり、もう一つは「音で読める秘密の物理バックアップ」という直球の検索である。前者は2026年7月30日の検証で決着し、"Acoustics to the Rescue: Physical Key Inference Attack Revisited"（USENIX Security 2021, pp. 3255–3272）として背景の節に加えた。後者は依然として穴のまま残っている。CipherFlute の新規性の中心に関わるため、優先して埋めるべき穴である。なお本検証の担当者も、この直球の検索に着手する前に Web 検索の予算を使い切ったため、同じ穴を埋められなかった。次に取り組む者は、この検索を最初に回すことを勧める。
+
+---
+
+## 検証の記録
+
+2026年7月30日に、この文書の初稿を書いた調査担当者とは別の担当者が、記載されているすべての書誌情報の実在を独立に確かめ直した。以下にその作業の内容と結果を書く。
+
+確かめた件数は次のとおりである。「新規性への脅威が大きい文献」の節に挙げられた15項目（うち第11項は4件の論文を束ねたもの、第9項と第10項はそれぞれ2件を束ねたものなので、論文の数では20件になる）、「背景として押さえるべき文献」の節に初稿の時点で挙げられていた19件、「未検証のまま残ったもの」の節に挙げられた7項目、「調べ残した穴」の節で名前だけ挙げられていた3件、合わせて49件の書誌を確認の対象とした。
+
+このうち47件については、題名・著者・掲載誌または会議名・巻号・頁または論文番号・年のすべてを一次情報で確定させることができた。確定できなかったのは2件で、いずれも初稿が「未検証のまま残ったもの」の節に置いていたものである（第1項と第2項）。この2件については、公刊文献として実在しない可能性が高いと判定を強めたうえで、同じ節に残した。
+
+なお「書誌を確定できた」ことと「本文の主張を裏づけられた」ことは別である。書誌は確定できても本文が読めず、要旨より細かい技術的主張の裏を取れなかったものが6件ある。SoundOff の発音機構、FabAuth の加振素子、EMIT のビット容量、そして水中タグのうち JASA 系列の2件と Applied Acoustics の1件の符号設計である。これらは何が確認できなかったかを「未検証のまま残ったもの」の節に書き分けた。
+
+確認に用いた一次情報は次のものである。Crossref の書誌レコードには DOI を持つ全件を照会した。ACM の会議録に特有の論文番号や、雑誌の号の情報が Crossref に無い場合は dblp のレコードで補った。要旨は OpenAlex と Semantic Scholar から取得した。さらに、Blowhole（Graphics Interface 2018）、Whoosh（ISWC 2016）、Acoustic Barcodes（UIST 2012）、Lamello（CHI 2015）、Acoustic Voxels（SIGGRAPH 2016）、表面弾性波タグの書籍章（InTech 2009）、Let It Rip!（UIST 2020 Adjunct）、そして水中の受動音響バーコード（Journal of Applied Physics 2022）の著者版という8件については、本文PDFを取得して全文を読み、書かれている数値を一つずつ突き合わせた。日本語の文献については、CiNii Research のレコードと情報処理学会電子図書館のレコードの両方に当たった。
+
+実在しないと判断して削除した文献は一件も無い。したがって「検証で削除したもの」という節は設けていない。ただし「未検証のまま残ったもの」の第1項と第2項の2件については、Crossref と dblp の両方に記録が無いことを確かめたので、公刊文献としては存在しない可能性が高いと判定を強めた。とくに第2項の EchoTube の別題名版は、dblp に EchoTube という題名の記録が ISS 2019 版の1件しか無いことから、書誌データベース側の重複登録であると結論した。
+
+訂正した箇所は次の12件である。
+
+第一に、Acoustic Barcodes の認識精度の読み違いを直した。初稿は「最良の入力方法で87.4パーセント、全体平均で66.4パーセント」と書いていたが、原典を読むと66.4パーセントは3つの入力方法のうち最下位である白板用マーカーの数値であって、全体平均ではない。携帯電話が87.4パーセント、爪が77.9パーセント、白板用マーカーが66.4パーセントである。誤り訂正を含めた場合の推定値93.1パーセント、87.4パーセント、77.3パーセントも書き足した。
+
+第二に、Acoustic Barcodes の誤り訂正符号の対応を直した。24ビット符号に使うと述べられているのは拡張ゴレイ符号であって BCH 符号ではない。6ビット符号に切り詰めた(7,4)ハミング符号の記述も抜けていたので補った。
+
+第三に、Acoustic Voxels の「各個体は10個以上のピークを持つ」という記述を訂正した。10個を超えるピークを最適化したと書かれているのは、アヒル型の浮き輪 BOB についてであって、音響タグの実例である豚の置物3体ではない。豚の置物のピークは各3本であり、その周波数も本文から書き写した。
+
+第四に、表面弾性波タグの反射器の役割を直した。初稿は「10個の反射器を符号に使い、最初と最後の反射器は基準とチェックサムの作成に充てている」と書いていたが、原典は反射器14個のうち10個を符号に、最初と最後の1個ずつを校正に、最後の1個の手前に並ぶ2個をチェックサムに充てると述べている。校正用とチェックサム用は別の反射器である。
+
+第五に、表面弾性波タグの「反射器1個あたり4つの位置」という記述を直した。時間位置符号化で1個の反射器が取りうる位置は十進法の10通りであり、4つの状態を取るのは位相符号化のほうである。あわせて、市販品の容量が約1万通り（およそ13ビット）にとどまり、32ビットから128ビットは目標値であることを明記した。この訂正は「その一」の容量の一覧にも反映した。
+
+第六に、Printone の「歌口や指孔の配置も自動で行える」という記述を削除した。要旨にそのような主張は無く、むしろ歌口からの結合振動の励起は明示的に無視すると書かれている。かわりに、境界要素法と最小固有値問題による共鳴周波数の推定という実際の手法を書いた。
+
+第七に、Lamello の名称の由来から「親指ピアノなど」という語を落とした。原典は「長さの異なる舌状の部品が振動して音を出すラメロフォン族の楽器から採った」と書いているだけで、個々の楽器名は挙げていない。
+
+第八に、Whoosh の着想の由来を弱めた。初稿は「ギリシャのパンフルートに着想を得たと明記している」と書いていたが、原典は閉管楽器の構造に着想を得たと述べ、その例としてパンフルートを挙げているにすぎない。あわせて、管長の式を半音比の等比数列と読むと8本の管長は約1.5倍しか動かないので、8つの音高は2キロヘルツから10キロヘルツの帯域を張るのではなく帯域の内側に収まると読むべきであることを、数値の根拠とともに書き添えた。
+
+第九に、Digital Threats: Research and Practice の音響的複製困難関数の論文の年を2022年から2023年に直した。第4巻第2号という号は2023年のものであり、2022年3月15日はオンライン先行公開の日付である。あわせて論文番号20と号の情報を補った。
+
+第十に、日本語の文献の収録刊行物名を、情報処理学会電子図書館と CiNii Research が実際に登録している表記に合わせた。両者は揃って「マルチメディア，分散協調とモバイルシンポジウム2077論文集」と記録している。実体は DICOMO2020 の論文集であるから、この「2077」が一次レコード側の異常であることを注記として添えた。査読者が確認しに行ったときに食い違わないようにするためである。
+
+第十一に、水中の受動音響識別タグの項を大きく書き足した。Journal of Applied Physics の論文は著者版の全文が arXiv で公開されていたので本文まで読むことができ、初稿が「符号語彙の設計や誤り訂正は見当たらない」と書いていた部分のうち、符号語彙については事実と異なることが分かった。この論文は帯域幅を等幅の小帯域に区切り、共鳴ピークの在無で1と0を表す二進バーコードを明確に設計しており、実験では6キロヘルツから10.5キロヘルツを1.5キロヘルツ幅の3小帯域に区切って7通りの組み合わせ、すなわち3ビットを実証している。この事実は CipherFlute の新規性の主張に直接影響するので、「その二」の項目を「周波数の格子を符号語彙にしたこと」から「セント等分の対数格子と13元アルファベットであること」へと狭めて書き直した。同じ論文が「秘匿的な情報伝送」を目的として挙げていることも、「その八」の項目に留保として書き加えた。
+
+第十二に、「調べ残した穴」の節で名前だけ挙げられていた文献のうち、"Secure Information Embedding in Forensic 3D Fingerprinting" の発表年を USENIX Security 2024 から2025年に直した。2024年付で存在するのは題名の異なる arXiv のプレプリントである。あわせて SplitCode の綴りと掲載誌、および "All-in-one encoder/decoder approach" の掲載誌を確定させ、後者が音響ではなくテラヘルツ波で読む手法であることを明記した。
+
+このほか、実在の可否には関わらないが査読での照合のしやすさに関わる補いとして、次の作業を行った。Acoustic Voxels、Printone、Vidgets、Knocker、SoundOff、Nature Communications の論文、Advanced Functional Materials の論文について、欠けていた論文番号または号を dblp と Crossref から補った。Blowhole については、初稿が挙げていた予稿集ページの URL が現在は ACM Digital Library へ転送されて内容を返さないこと、また DOI が Crossref に登録されていないことを確かめ、書誌の裏取りは学会が公開している本文PDFで行ったことを明記した。表面弾性波タグの書籍章については、出版社の頁が表示する DOI 10.5772/6032 が別の章に解決してしまうことを確かめたので、この DOI を引かないよう警告を書いた。書籍の編者名と ISBN と頁範囲は本文PDF末尾の引用案内から採った。
+
+最後に、検証で新たに確定させた文献を2件、背景の節に加えた。一つは "Acoustics to the Rescue: Physical Key Inference Attack Revisited"（USENIX Security 2021, pp. 3255–3272）であり、これは「未検証のまま残ったもの」の第7項として挙げられていたものである。もう一つは "Ultralow Power Wireless Ultrasonic Sensor Tag With ID"（IEEE Sensors Journal, 第25巻第5号, pp. 8823–8827, 2025年）であり、これは第6項として挙げられていたものである。後者は完全な受動素子ではなく超低消費電力の能動素子であるから、脅威の度合いは低いと判断した。
+
+残る不確かさを正直に書いておく。第一に、ACM Digital Library と IEEE Xplore と Wiley Online Library と AIP Publishing は自動取得を拒否するので、これらにしか本文が無い文献については、要旨より細かい技術的主張を独立に裏づけられていない。具体的には SoundOff の発音機構、FabAuth の加振素子、EMIT のビット容量、JASA と Applied Acoustics の水中タグの符号設計である。これらは「未検証のまま残ったもの」の節に列挙した。第二に、Whoosh の管長の式は本文PDFから抽出した文字列が指数表記を失っているため、半音比の等比数列という読み方には一段の解釈が入っている。組版された数式そのものを目で見て確認する作業は、この環境に PDF を画像として描き出す手段が無かったためできなかった。第三に、表面弾性波タグの章の著者 S. Härmä の given name が Sanna であることを一次資料で確認できなかったので、頭文字のままにした。第四に、本検証でも Web 検索の予算を使い切ったため、「音で読める秘密の物理バックアップ」という直球の検索は行えていない。これは CipherFlute の新規性の中心に関わる穴であり、次に取り組む者が最初に埋めるべきである。
