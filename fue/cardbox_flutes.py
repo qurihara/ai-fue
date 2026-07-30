@@ -183,22 +183,35 @@ def build(notes, index=None, carve=True, fill_front=True):
     return sc, info
 
 
-def engrave_index(box, index, outer_w, outer_l, height, size=4.0, depth=0.8):
-    """断片の番号を、吸込口が並ぶ短辺の外面に彫る（吹く側から見える位置）。"""
-    poly, (w, th) = stencil.text_holes(str(index), height=size, bridge_w=0.9)
+def engrave_index(box, index, outer_w, outer_l, height, size=18.0, depth=1.5):
+    """断片の番号を、吸込口が並ぶ短辺の外面に彫る（吹く側から見える位置）。
+
+    v2までは文字高さ4mm・深さ0.8mmで、しかも向き付けを誤って[* 90度倒れた鏡文字]に
+    なっていた。実物では読めなかったので、v3で大きさと向きを直した（2026-07-30）。
+
+    向きの決め方。この面は箱の外向きが −x なので、外に立って見ると[* 右手は −y、上は +z]
+    である。文字のローカル座標（x=右、y=上、z=押し出し）をそこへ移す回転を直に書く。
+    行列式は +1 で、鏡映は入らない。
+    """
+    poly, (w, th) = stencil.text_holes(str(index), height=size,
+                                       width_max=outer_l * 0.55,
+                                       bridge_w=max(0.9, size * 0.12))
     from shapely.geometry import MultiPolygon
     geoms = list(poly.geoms) if isinstance(poly, MultiPolygon) else [poly]
-    M = trimesh.transformations.rotation_matrix(np.pi / 2, (0, 1, 0))
+    M = np.eye(4)
+    M[:3, :3] = np.array([[0.0, 0.0, -1.0],      # 押し出し(+z) → −x（面から外へ）
+                          [-1.0, 0.0, 0.0],      # 文字の右(+x) → −y
+                          [0.0, 1.0, 0.0]])      # 文字の上(+y) → +z
     for g in geoms:
         if g.is_empty or g.area <= 0:
             continue
         t = trimesh.creation.extrude_polygon(g, height=depth + 0.5)
         t.apply_transform(M)
         b = t.bounds
-        # 短辺の外面（x=0）に、上寄りの高さで置く
+        # 短辺の外面（x=0）をまたぐように置き、内側へ depth だけ彫る。高さは面の中ほど。
         t.apply_translation([depth - b[1][0],
                              (outer_l - (b[1][1] - b[0][1])) / 2.0 - b[0][1],
-                             height - 8.0 - b[0][2]])
+                             (height - (b[1][2] - b[0][2])) / 2.0 - b[0][2]])
         box = trimesh.boolean.difference([box, t], engine="manifold")
     return box
 
