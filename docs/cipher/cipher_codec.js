@@ -419,7 +419,56 @@
             digits: _toBase(total, base, n)};
   }
 
-  return {noteToMidi, midiToNote, noteToFreq, slots, decode, bytesToHex, combineShares,
+  function _invMod(a, p) {
+    /* GF(p) での逆数（pは素数）。フェルマーの小定理で a^(p-2) を求める。 */
+    let base = ((a % p) + p) % p;
+    if (base === 0) throw new Error("0の逆数は無い");
+    let result = 1, exp = p - 2;
+    while (exp > 0) {
+      if (exp & 1) result = (result * base) % p;
+      base = (base * base) % p;
+      exp >>= 1;
+    }
+    return result;
+  }
+
+  function combineThreshold(shares, base) {
+    /* しきい値秘密分散（Shamir）の断片から秘密を戻す。
+       shares は [{x: 断片の番号, symbols: 記号列}, ...] で、必要な数以上あればよい。
+       ラグランジュ補間を x=0 で評価する（多項式の定数項が秘密である）。
+       Python版 fue/threshold.py の combine と同じ規則。 */
+    if (!Array.isArray(shares) || shares.length < 2) throw new Error("断片が2つ以上必要です");
+    const xs = shares.map(s => s.x);
+    if (new Set(xs).size !== xs.length) throw new Error("同じ番号の断片が混ざっています");
+    if (xs.some(x => !Number.isInteger(x) || x <= 0 || x >= base)) {
+      throw new Error("断片の番号は1から" + (base - 1) + "の整数です");
+    }
+    const width = shares[0].symbols.length;
+    if (shares.some(s => s.symbols.length !== width)) throw new Error("断片の記号数がそろっていません");
+    shares.forEach(s => s.symbols.forEach(v => {
+      if (!Number.isInteger(v) || v < 0 || v >= base) throw new Error("記号が範囲外です");
+    }));
+
+    const digits = [];
+    for (let i = 0; i < width; i++) {
+      let total = 0;
+      for (let a = 0; a < shares.length; a++) {
+        let num = 1, den = 1;
+        for (let b = 0; b < shares.length; b++) {
+          if (a === b) continue;
+          num = (num * (((-shares[b].x) % base) + base)) % base;
+          den = (den * ((((shares[a].x - shares[b].x) % base) + base) % base)) % base;
+        }
+        total = (total + shares[a].symbols[i] * num % base * _invMod(den, base)) % base;
+      }
+      digits.push(((total % base) + base) % base);
+    }
+    let value = 0n;
+    for (const d of digits) value = value * BigInt(base) + BigInt(d);
+    return {value: Number(value) <= Number.MAX_SAFE_INTEGER ? Number(value) : value, digits: digits};
+  }
+
+  return {noteToMidi, midiToNote, noteToFreq, slots, decode, bytesToHex, combineShares, combineThreshold,
     _generator, _rsEncode, _rsDecode, _syndromes, _solve, _toBase, _fromBase,
     _prime, _width, _payloadWidth, _widthToBytes,
     _primeBelow, _wireParams, _diffDecode, _interleaveOrder, _blockLayout, _root};

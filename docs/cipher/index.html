@@ -228,6 +228,24 @@
     <div class="muted big" style="margin-top:4px">照合: <b id="shareVerdict">–</b></div>
   </div>
 
+  <h2>5. 3つのうち2つで開く（2-of-3）</h2>
+  <div class="card">
+    <div class="muted">秘密を3つに分けてある場合の読み方です。<b>どの2つがそろっても開き、1つだけでは何も分かりません</b>。1つを失っても残り2つで復元できます。<br>
+      担体（カード・箱・本立てなど）には<b>番号が彫ってあります</b>。番号は復元の計算に必要なので、吹く前に選んでください。読み方は「2. 続けて吹く」と同じです。</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0">
+      <label class="muted" for="thIndex">いま吹く担体の番号：</label>
+      <select id="thIndex" style="font:inherit;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.4em">
+        <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+      </select>
+      <button id="thBtn">この担体を吹く（開始）</button>
+      <button class="sec" id="thClearBtn">やり直す</button>
+    </div>
+    <div class="seq" id="thSeq"></div>
+    <span class="status" id="thStatus"></span>
+    <div class="muted big" style="margin-top:8px">合わせた秘密: <b id="thSecret" style="color:var(--ok);word-break:break-all">–</b></div>
+    <div class="muted big" style="margin-top:4px">照合: <b id="thVerdict">–</b></div>
+  </div>
+
   <p class="muted">復号ロジックは <a href="cipher_codec.js">cipher_codec.js</a>（Python版 fue/cipher_codec.py と一致）。設定は <a href="cipher_config.json">cipher_config.json</a>。音程検出は <a href="https://github.com/ianprime0509/pitchy" target="_blank">pitchy</a>。測定・較正ツールは <a href="../">こちら</a>。</p>
 </div>
 
@@ -529,8 +547,9 @@ function autoEnd(){
   logMeasurements(auto.seq, "続けて吹く");
   el("autoStatus").textContent = auto.seq.length + "本を記録しました"
     + (skipped ? "（うち" + skipped + "本は鳴らないものとして空けました）" : "") + "。復号します。";
-  // 2-of-2 の途中なら、通常の照合ではなく断片として受け取る
+  // 2-of-2 / 2-of-3 の途中なら、通常の照合ではなく断片として受け取る
   if(share.capturing){ shareCapture(); return; }
+  if(thr.capturing){ thrCapture(); return; }
   doDecode();
 }
 function autoToggle(){ auto.active ? autoEnd() : autoStart(); }
@@ -633,6 +652,89 @@ function shareClear(){
   el("shareVerdict").textContent = "–";
   autoClear();
   shareRender();
+}
+
+// --- 2-of-3（しきい値秘密分散） ---
+/* 3つのうち2つで開く分け方。担体には番号が彫ってあり、その番号が復元の計算に要る
+ * （ラグランジュ補間のどの点かを決めるため）。番号を取り違えると別の値が出るので、
+ * 吹く前に画面で選んでもらう。読み取りそのものは「2. 続けて吹く」と同じ仕組みを使う。 */
+const thr = {capturing:false, picked:[], index:1};
+function thrRender(){
+  const box = el("thSeq"); box.innerHTML = "";
+  thr.picked.forEach(c => {
+    const d = document.createElement("div");
+    d.className = "chip";
+    d.innerHTML = '<div class="idx">番号' + c.x + '</div>'
+      + '<div class="nm" style="font-size:.95rem">' + c.symbols.join(",") + '</div>'
+      + '<div class="fz">' + c.count + '本</div>';
+    box.appendChild(d);
+  });
+  const b = el("thBtn");
+  b.textContent = thr.capturing ? "終了し読む" : "この担体を吹く（開始）";
+  b.classList.toggle("ok", thr.capturing);
+  b.disabled = thr.picked.length >= 3;
+  el("thIndex").disabled = thr.capturing;
+}
+async function thrToggle(){
+  if(thr.picked.length >= 3) return;
+  if(thr.capturing){ autoEnd(); return; }
+  thr.index = parseInt(el("thIndex").value, 10);
+  if(thr.picked.some(c => c.x === thr.index)){
+    el("thStatus").textContent = "番号" + thr.index + "はすでに読み取っています。別の番号を選んでください。";
+    return;
+  }
+  el("thStatus").textContent = "番号" + thr.index + "の担体を、最初の笛から順に吹いてください。";
+  thr.capturing = await autoStart() === true;
+  if(!thr.capturing) el("thStatus").textContent = "マイクを開始できませんでした。上のマイク開始を押してから、もう一度試してください。";
+  thrRender();
+}
+async function thrCapture(){
+  thr.capturing = false;
+  const result = window.CipherCodec.decode(cipherFreqs, cipherConfig, true);
+  if(result.status.startsWith("error:")){
+    el("thStatus").textContent = "番号" + thr.index + "を読めませんでした（" + result.status + "）。もう一度吹いてください。";
+    thrRender();
+    return;
+  }
+  thr.picked.push({x: thr.index, symbols: result.symbols || [], count: cipherFreqs.length});
+  el("thStatus").textContent = "番号" + thr.index + "を読み取りました（" + result.status + "）。"
+    + (thr.picked.length < 2 ? "もう1つ、別の番号の担体を吹いてください。" : "");
+  thrRender();
+  if(thr.picked.length >= 2) await thrCombine();
+}
+async function thrCombine(){
+  try{
+    const m = window.CipherCodec.slots(cipherConfig).length;
+    const base = window.CipherCodec._wireParams(cipherConfig, m).mb;
+    const got = window.CipherCodec.combineThreshold(
+      thr.picked.map(c => ({x: c.x, symbols: c.symbols})), base);
+    el("thSecret").textContent = got.value + "（記号 " + got.digits.join(",") + "）";
+    const canonical = Uint8Array.from(got.digits);
+    const configured = !!(packEnc || gotoEnc || el("cipherHash").value.trim());
+    if(configured){
+      await verifyCanonical(canonical, "thVerdict");
+    }else{
+      el("thVerdict").innerHTML = '<span class="okmark">2つがそろい、秘密を復元しました</span>'
+        + ' <span class="muted">（照合用の値が無いので、値そのものを表示しています）</span>';
+      el("successSub").textContent = "2つを合わせた秘密は " + got.value + " です";
+      el("successGo").style.display = "none";
+      el("successOverlay").classList.add("show");
+    }
+    el("thStatus").textContent = "2つそろいました。3つ目も足せます（値は変わりません）。";
+  }catch(e){
+    el("thSecret").textContent = "–";
+    el("thVerdict").innerHTML = '<span class="ngmark">合わせられません（' + e.message + '）</span>';
+  }
+}
+function thrClear(){
+  if(thr.capturing) autoStop();
+  thr.capturing = false;
+  thr.picked = [];
+  el("thStatus").textContent = "";
+  el("thSecret").textContent = "–";
+  el("thVerdict").textContent = "–";
+  autoClear();
+  thrRender();
 }
 
 // --- 1文字ずつモード ---
@@ -896,7 +998,10 @@ el("autoUndoBtn").onclick = autoUndo;
 el("autoClearBtn").onclick = autoClear;
 el("shareBtn").onclick = shareToggle;
 el("shareClearBtn").onclick = shareClear;
+el("thBtn").onclick = thrToggle;
+el("thClearBtn").onclick = thrClear;
 shareRender();
+thrRender();
 el("successClose").onclick = ()=>{ el("successOverlay").classList.remove("show"); };
 // 区切りの長さのつまみ。吹いている最中でも効くように、動かしたその場で反映する。
 el("gapRange").oninput = ()=>{
