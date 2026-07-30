@@ -164,13 +164,35 @@ def engrave_star(host, fl, R, r=None, depth=0.8, gap=None, margin=0.5):
     return trimesh.boolean.difference([host, tool], engine="manifold")
 
 
-def layout(notes, host, geom):
+def layout(notes, host, geom, base_only=False):
     """左の壁（上から下）→底板（左から右）→右の壁（下から上）の順に置く。
 
     コの字を一筆でなぞる順になるので、吹く順番が物の形から分かる。
+
+    base_only=True なら[* 底板だけに置き、壁の縁には置かない]（v3）。壁の縁に垂直に並べた
+    笛は、実機で造形不良が多く復号できなかった（2026-07-30、栗原さんの判断）。窓が真上に
+    開く底板の笛だけを使い、足りないビット数は本立てを複数刷って足す。
     """
     l_max = mini10.uniform_body_length(
         [mini10.length_for_note(n) for n in mini10.CALIB12])
+    if base_only:
+        span_base = (geom["right"][0] - MARGIN_X) - (geom["left"][1] + MARGIN_X)
+        n_base = len(notes)
+        gap_b = (span_base - 7.0 * n_base) / max(1, n_base - 1)
+        if gap_b < 0.8:
+            raise ValueError("笛%d本は底板（幅%.1fmm）に入らない。隙間が%.2fmmになる"
+                             % (n_base, span_base, gap_b))
+        xs = np.linspace(geom["left"][1] + MARGIN_X,
+                         geom["right"][0] - MARGIN_X - 7.0, n_base) + 3.5
+        print("  底板だけに%d本。隣どうしの隙間 %.2fmm（幅 %.1fmm）" % (n_base, gap_b, span_base))
+        placed, infos = [], []
+        for note, x in zip(notes, xs):
+            R, win = R_BASE, [0.0, 0.0, geom["base_top"] + PROUD]
+            fl, w = place(note, R, win, l_max)
+            fl.apply_translation([x - (fl.bounds[0][0] + fl.bounds[1][0]) / 2, 0, 0])
+            placed.append(fl)
+            infos.append(dict(note=note, where="base", R=R))
+        return placed, infos
     # 壁と底板に何本ずつ置くかは、隣どうしの隙間ができるだけ均等になるように決める。
     span_wall = (geom["wall_top"] - MARGIN_TOP) - MARGIN_Z
     span_base = (geom["right"][0] - MARGIN_X) - (geom["left"][1] + MARGIN_X)
@@ -235,13 +257,46 @@ def carve_tool(fl, R, ahead=0.6, out=0.4):
     return trimesh.Trimesh(vertices=pts).convex_hull
 
 
-def build(notes, carve=True, engine="manifold", scale_y=1.0):
+def engrave_index(host, geom, index, height=3.0, depth=0.8):
+    """断片の番号（1〜3）を、正面（吸込口が並ぶ面）の底板の端に彫る。
+
+    2-of-3 のような分け方では「これが何番の断片か」が分からないと復元できない。開始笛の＊は
+    「どこから吹くか」を示すためのもので、番号はそれとは別に、正面から読める位置へ数字で入れる。
+    底板の前面（厚さ約5mm・幅105mm）は本にも笛にも隠れないので、ここが読みやすい。
+    """
+    if not index:
+        return host
+    poly, (w, th) = stencil.text_holes(str(index), height=height, bridge_w=0.9)
+    # 文字は複数の島に分かれることがある（MultiPolygon）ので、島ごとに押し出して束ねる
+    from shapely.geometry import MultiPolygon
+    geoms = list(poly.geoms) if isinstance(poly, MultiPolygon) else [poly]
+    parts = [trimesh.creation.extrude_polygon(g, height=depth + 0.5)
+             for g in geoms if not g.is_empty and g.area > 0]
+    if not parts:
+        return host
+    tool = trimesh.util.concatenate(parts)
+    # 押し出しは +z 方向なので、前面（-y を向く面）へ向けて倒す
+    M = _rot([1.0, 0.0, 0.0], -90.0)
+    tool.apply_transform(M)
+    b = tool.bounds
+    # 正面の左端から6mm、底板の厚みの中央へ置く
+    shift = np.array([6.0 - b[0][0],
+                      depth - b[1][1],
+                      (geom["base_top"] - (b[1][2] - b[0][2])) / 2.0 - b[0][2]])
+    for part in parts:
+        part.apply_transform(M)
+        part.apply_translation(shift)
+        host = host.difference(part, engine="manifold")
+    return host
+
+
+def build(notes, carve=True, engine="manifold", scale_y=1.0, base_only=False, index=None):
     host = trimesh.load(HOST, force="mesh")
     if scale_y != 1.0:
         host.apply_scale([1.0, scale_y, 1.0])     # 奥行きだけを縮める
     host.apply_translation(-host.bounds[0])
     geom = measure_host(host)
-    placed, infos = layout(notes, host, geom)
+    placed, infos = layout(notes, host, geom, base_only=base_only)
 
     # 向きの検査（必須）。本立ては使う向き（壁が立った姿勢）のまま刷る。
     for it, fl in zip(infos, placed):
@@ -253,6 +308,7 @@ def build(notes, carve=True, engine="manifold", scale_y=1.0):
                              % (it["note"], it["where"], res.verdict, res.message))
 
     body = engrave_star(host, placed[0], infos[0]["R"])
+    body = engrave_index(body, geom, index)
     if carve:
         for fl, it in zip(placed, infos):
             body = body.difference(carve_tool(fl, it["R"]), engine=engine)
@@ -271,33 +327,56 @@ def main(argv=None):
     ap.add_argument("--scale-y", type=float, default=1.0,
                     help="本立ての奥行きの倍率（v2は0.7＝30%%縮小）")
     ap.add_argument("--out", default=os.path.join(OUT, "bookstand_pass26.3mf"))
+    ap.add_argument("--base-only", action="store_true",
+                    help="底板だけに笛を置く（v3）。壁の縁は造形が不安定なので使わない")
+    ap.add_argument("--symbols", default=None,
+                    help="記号列を直接載せる（例 0,7,8,2,0,10）。秘密分散の断片を入れるときに使う")
+    ap.add_argument("--index", type=int, default=None,
+                    help="断片の番号（1〜3）。正面の底板に数字を彫る")
     args = ap.parse_args(argv)
 
     payload = args.payload.encode() if args.payload else DEMO_PAYLOAD
     with open(CONFIG, encoding="utf-8") as fp:
         base = json.load(fp)
-    cfg = cd.CodecConfig(**{**base, **SLOT12, "ecc_parity": args.parity,
-                            "mode": "sequential", "no_repeat": True})
-    notes = list(cd.encode(payload, cfg).notes)
+    if args.symbols:
+        cfg = cd.CodecConfig(**{**base, **SLOT12, "ecc_parity": args.parity,
+                                "mode": "symbols", "no_repeat": True})
+        syms = [int(x) for x in args.symbols.replace(",", " ").split()]
+        notes = list(cd.encode_symbols(syms, cfg).notes)
+        print("記号列 %s（%d個）を載せる" % (",".join(map(str, syms)), len(syms)))
+    else:
+        cfg = cd.CodecConfig(**{**base, **SLOT12, "ecc_parity": args.parity,
+                                "mode": "sequential", "no_repeat": True})
+        notes = list(cd.encode(payload, cfg).notes)
+        print("秘密 %r（%dbit）" % (payload, len(payload) * 8))
     for i in range(len(notes) - 1):
         assert notes[i] != notes[i + 1], "隣り合う笛が同じ音になっている"
-    print("秘密 %r（%dbit）" % (payload, len(payload) * 8))
     print("符号化: 12スロット・隣接同音禁止・パリティ%d記号/ブロック → 笛%d本"
           % (args.parity, len(notes)))
+    if args.index:
+        print("断片の番号 %d を正面の底板に彫る" % args.index)
 
-    sc, infos, geom = build(notes, carve=not args.no_carve, scale_y=args.scale_y)
+    if os.path.exists(args.out):
+        raise SystemExit("すでにある版を上書きしようとしている: %s（--out を新しくする）" % args.out)
+    sc, infos, geom = build(notes, carve=not args.no_carve, scale_y=args.scale_y,
+                            base_only=args.base_only, index=args.index)
     os.makedirs(OUT, exist_ok=True)
     sc.export(args.out)
     n = {}
     for it in infos:
         n[it["where"]] = n.get(it["where"], 0) + 1
-    print("配置: 左の壁%d本・底板%d本・右の壁%d本（この順に吹く）"
-          % (n.get("left", 0), n.get("base", 0), n.get("right", 0)))
-    print("向きの検査: %d本すべて ok（壁は窓%+.0f度／%+.0f度、底板は窓%+.0f度、傾きは全部0度）"
-          % (len(infos),
-             [i["window_deg"] for i in infos if i["where"] == "left"][0],
-             [i["window_deg"] for i in infos if i["where"] == "right"][0],
-             [i["window_deg"] for i in infos if i["where"] == "base"][0]))
+    if args.base_only:
+        print("配置: 底板だけに%d本（左から右へこの順に吹く）" % n.get("base", 0))
+        print("向きの検査: %d本すべて ok（窓は%+.0f度＝真上、傾きは全部0度）"
+              % (len(infos), infos[0]["window_deg"]))
+    else:
+        print("配置: 左の壁%d本・底板%d本・右の壁%d本（この順に吹く）"
+              % (n.get("left", 0), n.get("base", 0), n.get("right", 0)))
+        print("向きの検査: %d本すべて ok（壁は窓%+.0f度／%+.0f度、底板は窓%+.0f度、傾きは全部0度）"
+              % (len(infos),
+                 [i["window_deg"] for i in infos if i["where"] == "left"][0],
+                 [i["window_deg"] for i in infos if i["where"] == "right"][0],
+                 [i["window_deg"] for i in infos if i["where"] == "base"][0]))
     print("外形 %s mm -> %s" % (np.round(sc.bounds[1] - sc.bounds[0], 1),
                                os.path.relpath(args.out, ROOT)))
     return 0

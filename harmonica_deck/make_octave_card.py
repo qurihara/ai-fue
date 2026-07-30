@@ -13,13 +13,16 @@ Chordikaが和音のカードなのに対し、これは[* 音階のカード]�
     新規に確かめる必要があるのは最高音のG#7＝38.4mmだけで、危険が1点に絞られる。
  ドをCにした C7〜C8 は最高音が4186Hzで帯を大きく外れる。この音域では移調が避けられない。
 
-[名前] Recoca（recorder＋card）。和音のChordikaに対して、音階のRecoca という対にする。
+[名前] Recorika（recorder＋-ika）＝[* リコリカ]。和音の Chordika（[* コーディカ]）に対して、音階の Recorika という対。
+ 英語の recorder は /rɪ/ で始まるので Re-co-ri-ka → リ・コ・リ・カ と読む。頭の「リコ」がリコーダーを想起させる。
+ 語尾を -ika で揃えたのは、k が「Chordica にできなかった代用」ではなく[* 一族共通の綴り]だと示すため。
+ なお Chordica は同分野で先行使用がある（移調に強い和音演奏アプリ CHORDiCA）。k はその区別のためでもある。
 
 [作り]
  ・8本のmini10パイプを0.3mm重ねて融合し、名刺プレート(85.6×53.98)と厚み CZ=0.5mm で一体化する。
    ★CZ=0.5 は笛の床厚と一致させること。1.0にするとボアを侵食して鳴らなくなる。
  ・[* 左端が最低音]。y の大きい側に低音を置く（yの昇順では高音から低音へ並ぶ）。
- ・刻印は足側の余白帯にy方向読みで2行。外側にブランド名 Recoca を大きく、その内側に調名を小さく。
+ ・刻印は足側の余白帯にy方向読みで2行。外側にブランド名 Recorika を大きく、その内側に調名を小さく。
  ・管ごとの番号と触覚の切り欠きは設けない（Chordikaと違い、音階カードは1種類しかないため）。
 
 実行: /Users/kurihara/Desktop/claude_work/mesh_venv/bin/python harmonica_deck/make_octave_card.py
@@ -44,7 +47,7 @@ CX, CY, CZ = CK.CX, CK.CY, CK.CZ
 OVER = CK.OVER
 MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11, 12]   # ど れ み ふぁ そ ら し ど
 ROOT_MIDI = 92                              # G#6＝A♭6。上の docstring の理由で選定
-BRAND = "Recoca"                            # recorder＋card。この音階カードの名前
+BRAND = "Recorika"                          # recorder＋-ika。Chordikaと語尾を揃えた対の名前
 KEY_LABEL = "Ab major"                      # 調名。G#ではなくA♭が正式な綴り（G#majorは重嬰記号を要する）
 
 
@@ -96,7 +99,11 @@ def build_card(root_midi=ROOT_MIDI, label=KEY_LABEL, brand=BRAND):
     depth = bx1 - bx0
     # ★読む向き: 文字はy方向に流れるので、カードを反時計回りに90度回すと読める。このとき +x が上になる。
     #   したがって[* 高x側が読み手から見て上]。ブランド名を高x（上）、調名を低x（下）に置く。
-    bh, kh, gap = 5.5, 3.5, 1.2                  # ブランド高さ・調名高さ・行間
+    # ★高さの上限はストラップ穴(y=45〜51, x=76.6〜82.6)で決まる。ブランド行は高x側なので穴とx範囲が
+    #   重なり、y方向の終端が45に達すると干渉する。"Recorika"は高さ5.5で終端y=40.3（余裕4.7mm）、
+    #   6.0だと43.6で危ない。調名は低x側なので穴とx範囲が重ならず、長さの制約はゆるい。
+    #   調名は3.5だと実機で潰れたため5.0へ拡大した（ブランドより小さいことは保つ）。
+    bh, kh, gap = 5.5, 5.0, 1.2                  # ブランド高さ・調名高さ・行間
     mgn = (depth - bh - kh - gap) / 2.0
     lines = [(label, bx0 + mgn + kh / 2.0, kh),                    # 内側(低x)＝下＝調名
              (brand, bx0 + mgn + kh + gap + bh / 2.0, bh)]         # 外側(高x)＝上＝ブランド名
@@ -131,7 +138,7 @@ if __name__ == "__main__":
     midis = scale_midis()
     report(midis)
     card, feet, yshift = build_card()
-    fn = os.path.join(OUT, "recoca_Ab_Gs6_Gs7.stl")
+    fn = os.path.join(OUT, "recorika_Ab_Gs6_Gs7.stl")
     card.export(fn)
 
     # 検証: 総厚・水密・ボア無傷（x=30断面のボア穴面積が素の笛=9.808と一致するか）
