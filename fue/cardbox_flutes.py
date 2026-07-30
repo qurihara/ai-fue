@@ -57,6 +57,7 @@ FLOOR_UNDER = 1.0      # 笛の下に残す材料の厚み
 OVER = 0.3             # 隣り合う笛の重なり（Chordikaのカードと同じ）
 PROUD = 0.3            # 窓を床の面からどれだけ出すか
 N_FLUTES = 8
+FILL_FRONT = 2.0       # 吸込口の面を、この奥行きぶん埋める（v2）
 
 
 def _box(w, l, h):
@@ -79,7 +80,50 @@ def build_comb(notes, l_max):
     return comb, w + step * (len(notes) - 1)
 
 
-def build(notes, index=None, carve=True):
+def front_filler(comb, depth=FILL_FRONT):
+    """吸込口の面の「吹き込み口以外の隙間」を埋める板を作る（v2）。
+
+    笛は7mm幅の半割で、隣どうしは0.3mmしか重ねていないので、[* 笛と笛のあいだに谷が残る]。
+    彫り抜きは笛の凸包で行うため、その谷はそのまま箱の前面に開口として現れる。実物では
+    「吹き込み口が8つ」ではなく「大きな溝の中に8つの穴がある」ように見えてしまう。
+
+    そこで、笛の口元の断面から[* ボア（吹き込み口）の穴だけを抜き出し]、それ以外を板で埋める。
+    窓は吸込口から11.5mm奥から開くので、前面2mmを埋めても窓には触らない。
+    """
+    # 板は笛の外形より少し大きく取る。上側は彫り抜きの逃げ（窓の向きへ0.5mm広げた分）まで
+    # 覆わないと、笛の上に 0.3mm の細い隙間が1本残る（実際に残った）。
+    b = comb.bounds
+    y0, y1 = b[0][1] - 0.2, b[1][1] + 0.2
+    z0, z1 = b[0][2] - 0.2, b[1][2] + 0.7
+    slab = trimesh.creation.box(extents=[depth + 0.2, y1 - y0, z1 - z0])
+    slab.apply_translation([(depth + 0.2) / 2.0 - 0.1,
+                            (y0 + y1) / 2.0, (z0 + z1) / 2.0])
+
+    # 口元の断面を取り、内側の輪（＝ボア）の位置と大きさを読む
+    sec = comb.section(plane_origin=[min(depth / 2.0, 1.0), 0, 0], plane_normal=[1, 0, 0])
+    if sec is None:
+        raise ValueError("笛の口元で断面が取れない")
+    p2d, to3d = sec.to_planar()
+    to3d = np.asarray(to3d)
+    bores = []
+    for poly in p2d.polygons_full:
+        for ring in poly.interiors:
+            uv = np.array(ring.coords)
+            pts = np.column_stack([uv, np.zeros(len(uv)), np.ones(len(uv))]) @ to3d.T
+            y0, y1 = pts[:, 1].min(), pts[:, 1].max()
+            z0, z1 = pts[:, 2].min(), pts[:, 2].max()
+            hole = trimesh.creation.box(extents=[depth + 1.0, y1 - y0, z1 - z0])
+            hole.apply_translation([(depth + 1.0) / 2.0 - 0.5,
+                                    (y0 + y1) / 2.0, (z0 + z1) / 2.0])
+            bores.append(hole)
+    if len(bores) != N_FLUTES:
+        raise ValueError("吹き込み口が%d個しか見つからない（%d個のはず）" % (len(bores), N_FLUTES))
+    for hole in bores:
+        slab = trimesh.boolean.difference([slab, hole], engine="manifold")
+    return slab, len(bores)
+
+
+def build(notes, index=None, carve=True, fill_front=True):
     """笛を床に仕込んだ枡箱の本体を作る。戻り値 (scene, info)。"""
     l_max = mini10.uniform_body_length(
         [mini10.length_for_note(n) for n in mini10.CALIB12])
@@ -122,6 +166,12 @@ def build(notes, index=None, carve=True):
         tool = trimesh.Trimesh(vertices=pts).convex_hull
         box = trimesh.boolean.difference([box, tool], engine="manifold")
 
+    n_bores = 0
+    if fill_front:
+        # 吸込口以外を埋める板を足す（v2）。笛の材料と重なるが、和なので問題ない。
+        filler, n_bores = front_filler(placed)
+        box = trimesh.boolean.union([box, filler], engine="manifold")
+
     if index:
         box = engrave_index(box, index, outer_w, outer_l, height)
 
@@ -129,7 +179,7 @@ def build(notes, index=None, carve=True):
     sc.add_geometry(box, geom_name="cardbox_0.28fast")
     sc.add_geometry(placed, geom_name="flutes_0.08careful")
     info = dict(outer=(outer_w, outer_l, height), inner_depth=height - FLOOR_THICK,
-                comb_w=comb_w, notes=list(notes))
+                comb_w=comb_w, notes=list(notes), n_bores=n_bores)
     return sc, info
 
 
@@ -159,6 +209,8 @@ def main(argv=None):
     ap.add_argument("--parity", type=int, default=2, help="RSブロックあたりのパリティ記号数")
     ap.add_argument("--index", type=int, default=None, help="断片の番号（短辺の外面に彫る）")
     ap.add_argument("--no-carve", action="store_true")
+    ap.add_argument("--no-fill-front", action="store_true",
+                    help="吸込口の面を埋めない（v1の挙動）")
     ap.add_argument("--out", required=True, help="出力する3mf（版を含む名前にする）")
     args = ap.parse_args(argv)
 
@@ -180,7 +232,8 @@ def main(argv=None):
     print("記号列 %s（%d個）→ 笛%d本: %s"
           % (",".join(map(str, syms)), len(syms), len(notes), " ".join(notes)))
 
-    sc, info = build(notes, index=args.index, carve=not args.no_carve)
+    sc, info = build(notes, index=args.index, carve=not args.no_carve,
+                     fill_front=not args.no_fill_front)
 
     res = orient_check.check_orientation(R=np.eye(3))
     print("向きの検査: 窓%+.0f度（真上）・長軸の傾き%.0f度 → %s"
@@ -193,6 +246,8 @@ def main(argv=None):
     print("箱の外形 %.1f×%.1f×%.1fmm（内部の深さ %.1fmm・床 %.1fmm）"
           % (*info["outer"], info["inner_depth"], FLOOR_THICK))
     print("笛8本の幅 %.1fmm（内寸 %.1fmm に収まる）" % (info["comb_w"], info["outer"][1] - 2 * WALL))
+    if info["n_bores"]:
+        print("吸込口の面を前から%.1fmm埋め、吹き込み口%d個だけを残した" % (FILL_FRONT, info["n_bores"]))
     print("-> %s" % os.path.relpath(args.out, ROOT))
     if args.index:
         print("断片の番号 %d を、吸込口が並ぶ短辺の外面に彫った" % args.index)
