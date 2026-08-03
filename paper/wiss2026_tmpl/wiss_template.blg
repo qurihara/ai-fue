@@ -1,0 +1,58 @@
+This is upBibTeX, Version 0.99e-j0.36-u2.02 (utf8.euc) (TeX Live 2026)
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: wiss_template.aux
+The style file: jwiss.bst
+writeln is an unknown function---line 311 of file jwiss.bst
+writeln is an unknown function---line 312 of file jwiss.bst
+writeln is an unknown function---line 314 of file jwiss.bst
+lastaccessed is an unknown function---line 315 of file jwiss.bst
+empty.or.unknown is an unknown function---line 315 of file jwiss.bst
+lastaccessed is an unknown function---line 317 of file jwiss.bst
+writeln is an unknown function---line 319 of file jwiss.bst
+Database file #1: sample.bib
+Warning--entry type for "wiss" isn't style-file defined
+--line 25 of file sample.bib
+Warning--to sort, need author or key in IEEE2014
+You've used 3 entries,
+            2620 wiz_defined-function locations,
+            614 strings with 4544 characters,
+and the built_in function-call counts, 874 in all, are:
+= -- 72
+> -- 15
+< -- 1
++ -- 7
+- -- 4
+* -- 28
+:= -- 116
+add.period$ -- 9
+call.type$ -- 3
+change.case$ -- 8
+chr.to.int$ -- 0
+cite$ -- 4
+duplicate$ -- 52
+empty$ -- 102
+format.name$ -- 6
+if$ -- 212
+int.to.chr$ -- 0
+int.to.str$ -- 3
+missing$ -- 1
+newline$ -- 17
+num.names$ -- 4
+pop$ -- 37
+preamble$ -- 1
+purify$ -- 8
+quote$ -- 0
+skip$ -- 49
+stack$ -- 0
+substring$ -- 30
+swap$ -- 8
+text.length$ -- 1
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 12
+warning$ -- 1
+while$ -- 6
+width$ -- 4
+write$ -- 31
+is.kanji.str$ -- 22
+(There were 7 error messages)
