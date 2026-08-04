@@ -112,18 +112,21 @@ def estimate_delay(xa, xb):
 
 
 def build(a, b, delay, out, layout):
-    """a(和音)を delay 秒遅らせて b(旋律)と並べる。文字は入れない。"""
+    """拍を合わせて a(和音)と b(旋律)を並べる。文字は入れない。
+
+    和音側を黒で待たせるのではなく、旋律側の頭を delay 秒だけ切り落とす。こうすれば
+    1フレーム目から両方に映像が出る。終わりは短いほうに合わせて切る。
+    """
     W, H = 960, 540
     stack = "vstack" if layout == "vertical" else "hstack"
-    ms = int(round(delay * 1000))
     fc = (
-        "[0:v]scale={W}:{H},tpad=start_duration={d:.4f}:color=black[a];"
-        "[1:v]scale={W}:{H}[b];"
-        "[a][b]{stack}[v];"
-        "[0:a]adelay={ms}|{ms},volume=1.0[aa];"
-        "[1:a]volume=1.6[bb];"
-        "[aa][bb]amix=inputs=2:duration=longest:normalize=0,alimiter=limit=0.95[aout]"
-    ).format(W=W, H=H, d=delay, stack=stack, ms=ms)
+        "[0:v]scale={W}:{H},setpts=PTS-STARTPTS[a];"
+        "[1:v]trim=start={d:.4f},setpts=PTS-STARTPTS,scale={W}:{H}[b];"
+        "[a][b]{stack}=shortest=1[v];"
+        "[0:a]volume=1.0,asetpts=PTS-STARTPTS[aa];"
+        "[1:a]atrim=start={d:.4f},asetpts=PTS-STARTPTS,volume=1.6[bb];"
+        "[aa][bb]amix=inputs=2:duration=shortest:normalize=0,alimiter=limit=0.95[aout]"
+    ).format(W=W, H=H, d=delay, stack=stack)
     cmd = ["ffmpeg", "-v", "error", "-y", "-i", a, "-i", b,
            "-filter_complex", fc, "-map", "[v]", "-map", "[aout]",
            "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
