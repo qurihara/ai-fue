@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CipherFlute 復号</title>
+<title>CipherFlute 復号 v2</title>
 <style>
   :root{
     --bg:#0f1220; --card:#1a1f36; --fg:#e8ecf5; --muted:#98a2c0;
@@ -72,11 +72,15 @@
   .checkring::after{content:"✓"}
   #successOverlay h3{font-size:1.5rem;margin:.6em 0 .2em}
   #successOverlay .sub{color:var(--muted)}
+  .ver{font-size:.55em;vertical-align:middle;background:#2b6cb0;color:#fff;
+       padding:2px 8px;border-radius:10px;letter-spacing:.02em}
+  .verNote{font-size:.82em;color:#555;margin:-6px 0 14px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>CipherFlute 復号</h1>
+  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v2</span></h1>
+  <p class="verNote">v2（2026-08-06）… 音名を基準笛で補正して表示するようにし、倍音の取り違えをオクターブ単位で引き戻すようにしました。</p>
   <p class="lead">3Dプリントした笛の並び（コーム）を、先頭の基準笛から順に1本ずつ吹くと、検出した音から秘密を復号します。マイクだけで動きます。</p>
 
   <div class="notice">
