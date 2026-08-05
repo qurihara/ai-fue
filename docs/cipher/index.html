@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CipherFlute 復号 v2</title>
+<title>CipherFlute 復号 v3</title>
 <style>
   :root{
     --bg:#0f1220; --card:#1a1f36; --fg:#e8ecf5; --muted:#98a2c0;
@@ -79,8 +79,9 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v2</span></h1>
-  <p class="verNote">v2（2026-08-06）… 音名を基準笛で補正して表示するようにし、倍音の取り違えをオクターブ単位で引き戻すようにしました。</p>
+  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v3</span></h1>
+  <p class="verNote">v3（2026-08-06）… 符号の音域から外れた音を、列にも入れないようにしました（v2では音名だけ捨てて周波数が残り、雑音が復号へ渡っていました）。<br>
+  v2 … 音名を基準笛で補正して表示するようにし、倍音の取り違えをオクターブ単位で引き戻すようにしました。</p>
   <p class="lead">3Dプリントした笛の並び（コーム）を、先頭の基準笛から順に1本ずつ吹くと、検出した音から秘密を復号します。マイクだけで動きます。</p>
 
   <div class="notice">
@@ -466,8 +467,16 @@ function windowFund(){
 }
 function finalizeWindow(){
   const f = windowFund();
+  const nt = f ? freqToNote(f) : null;
+  // [* 符号の音域へ引き戻せない音は、列にも入れない]。音名だけ捨てて周波数を残すと、
+  // 雑音がそのまま復号へ渡ってしまう（2026-08-06、栗原さんの指摘で気づいた）。
+  if(f && !nt){
+    el("capStatus").textContent = "いまの音は符号の音域から外れていたので、数えませんでした（" + Math.round(f) + "Hz）。";
+    cap.fs = []; cap.ps = [];
+    return;
+  }
   if(f && cap.seq.length === 0) refMeasuredHz = f;   // 1本目＝基準笛。以後の表示の物差し
-  cap.seq.push({freq: f, note: f ? freqToNote(f) : null});
+  cap.seq.push({freq: f, note: nt});
   cap.fs = []; cap.ps = [];
   renderSeq();
   if(navigator.vibrate) navigator.vibrate(25);
@@ -877,7 +886,11 @@ function loop(){
   // 1文字モード: 最新の安定音を候補として上書き
   if(one.active){
     const f = live.freq || live.peak;
-    if(f){ one.cand = {freq:f, note:freqToNote(f)}; el("oneCand").textContent = one.cand.note.disp; }
+    if(f){
+      const nt3 = freqToNote(f);
+      if(nt3){ one.cand = {freq:f, note:nt3}; el("oneCand").textContent = nt3.disp; }
+      else { one.cand = null; el("oneCand").textContent = "音域外 " + Math.round(f) + "Hz"; }
+    }
   }
 
   // 無音区切りの自動送り中
@@ -896,8 +909,16 @@ function loop(){
       el("autoDot").classList.add("on");
     } else if(ev.type === "note"){
       el("autoDot").classList.remove("on");
+      const nt2 = ev.freq ? freqToNote(ev.freq) : null;
+      if(ev.freq && !nt2){
+        // 符号の音域へ引き戻せない＝雑音。数えずに読み飛ばす（本数がずれない）
+        el("autoHint").textContent = "符号の音域から外れた音（" + Math.round(ev.freq)
+          + "Hz）だったので数えませんでした。そのまま次の笛を吹いてください。";
+        el("autoDot").classList.remove("on");
+        return;
+      }
       if(ev.freq && auto.seq.length === 0) refMeasuredHz = ev.freq;   // 1本目＝基準笛
-      auto.seq.push({freq: ev.freq, note: freqToNote(ev.freq)});
+      auto.seq.push({freq: ev.freq, note: nt2});
       renderAutoSeq();
       autoSetButton();
       el("autoDot").textContent = String(auto.seq.length);
