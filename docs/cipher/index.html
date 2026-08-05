@@ -350,11 +350,78 @@ fetch("cipher_config.json").then(r=>{
 
 function freqToNote(f){
   if(!f) return null;
+  const folded = foldIntoRange(f);
+  if(!folded) return null;                    // 符号の音域へ引き戻せない＝雑音として捨てる
+  const raw = f; f = folded;
   const midiFloat = 69 + 12*Math.log2(f/440);
   const midi = Math.round(midiFloat);
   const cents = Math.round((midiFloat - midi)*100);
   const name = NOTE_NAMES[(midi%12+12)%12] + (Math.floor(midi/12)-1);
-  return {midi, cents, name};
+  const rel = relativeRead(f);
+  // name は絶対音高で読んだ名前。判定は基準笛との比で行うので、両者は食い違うことがある。
+  // 画面には rel（基準笛で補正した読み）を主に出し、abs は参考として添える。
+  return {midi, cents, name, abs:name, rel, raw, folded: raw !== f,
+          disp: rel ? rel.note : name,
+          dispCents: rel ? rel.cents : cents};
+}
+
+/* 基準笛との比で読む。復号の判定とまったく同じ計算をして、画面表示に使う。
+ *
+ * なぜ要るか。判定は「基準笛との周波数比」で行うのに、表示だけ絶対音高だと食い違う。
+ * 実例（2026-07-31、箱の実測）。2本目の3041Hzは絶対音高ではF#7寄りだが、
+ * 基準笛（C7が2077Hz＝公称より13セント低い）との比で読むとG7から−40セントで、
+ * 判定境界±50セントの内側に入る。内部はG7として正しく復号しているのに、
+ * 画面はF#7と表示していた。目視での確認ができないので、表示も相対に揃える。 */
+function refFreqHz(){
+  // 実測した基準笛。無ければ公称値を使う。
+  if(refMeasuredHz) return refMeasuredHz;
+  try{ return window.CipherCodec.noteToFreq(cipherConfig.reference_note); }catch{ return null; }
+}
+function relativeRead(f){
+  if(!f || !cipherConfig || !window.CipherCodec) return null;
+  let table;
+  try{ table = window.CipherCodec.slots(cipherConfig); }catch{ return null; }
+  if(!table || !table.length) return null;
+  const ref = refFreqHz();
+  if(!ref) return null;
+  let nominal;
+  try{ nominal = window.CipherCodec.noteToFreq(cipherConfig.reference_note); }catch{ return null; }
+  let best=null;
+  for(const s of table){
+    const ratio = s.freq_hz / nominal;
+    const c = 1200*Math.log2((f/ref)/ratio);
+    if(!best || Math.abs(c) < Math.abs(best.cents)) best = {note: s.nearest_note, cents: Math.round(c), slot: s.index};
+  }
+  return best;
+}
+let refMeasuredHz = null;   // 実際に吹いた基準笛の周波数（1本目）
+
+/* 符号に使う音域へ引き戻す（倍音の取り違えを救う）。
+ *
+ * 笛が不調だと、基本波ではなく2倍・3倍の倍音を拾って「とんでもない高音」と読むことがある。
+ * 符号のスロットは公開情報（URLに hi=G7 と書いてある）なので、音域の外に出た値を
+ * オクターブ単位で引き戻しても、隠しているものは減らない。デモの通りやすさが上がる。
+ *
+ * 引き戻せないほど離れている値は null を返し、雑音として捨てる。 */
+function foldIntoRange(f){
+  if(!f || !cipherConfig || !window.CipherCodec) return f;
+  let lo, hi;
+  try{
+    lo = window.CipherCodec.noteToFreq(cipherConfig.lo_note);
+    hi = window.CipherCodec.noteToFreq(cipherConfig.hi_note);
+  }catch{ return f; }
+  const margin = Math.pow(2, 1/12);          // 上下に半音の余裕を見る
+  const loEdge = lo/margin, hiEdge = hi*margin;
+  if(f >= loEdge && f <= hiEdge) return f;
+  // [* オクターブ（2倍・半分）だけに限る]。3倍などまで許すと、6231Hz（C7の3倍音）を
+  // 半分の3116Hzと読み違えたり、440Hzや12000Hzのような無関係な音まで
+  // 4倍・1/4して音域へ引き込んでしまう（2026-07-31、検証で両方とも起きた）。
+  // 笛の倍音でいちばん強く出るのはオクターブなので、これで実用上は足りる。
+  for(const k of [0.5, 2]){
+    const g = f * k;
+    if(g >= loEdge && g <= hiEdge) return g;
+  }
+  return null;                                // 引き戻せない＝雑音
 }
 
 async function start(){
@@ -395,6 +462,7 @@ function windowFund(){
 }
 function finalizeWindow(){
   const f = windowFund();
+  if(f && cap.seq.length === 0) refMeasuredHz = f;   // 1本目＝基準笛。以後の表示の物差し
   cap.seq.push({freq: f, note: f ? freqToNote(f) : null});
   cap.fs = []; cap.ps = [];
   renderSeq();
@@ -434,7 +502,7 @@ function renderSeq(){
     const div = document.createElement("div");
     div.className = "chip" + (i===0?" ref":"") + (s.freq==null?" empty":"");
     div.innerHTML = `<div class="idx">${i+1}${i===0?" 基準":""}</div>`+
-      `<div class="nm">${s.note?s.note.name:"—"}</div>`+
+      `<div class="nm">${s.note?s.note.disp:"—"}${s.note&&s.note.abs!==s.note.disp?`<span class="cents"> (絶${s.note.abs})</span>`:""}</div>`+
       `<div class="fz">${s.freq?Math.round(s.freq)+"Hz":"無音"}</div>`;
     box.appendChild(div);
   });
@@ -453,7 +521,7 @@ function renderAutoSeq(){
     const div=document.createElement("div");
     div.className="chip"+(i===0?" ref":"")+(s.skipped?" empty":"");
     div.innerHTML=`<div class="idx">${i+1}${i===0?" 基準":""}</div>`+
-      `<div class="nm">${s.skipped?"飛":(s.note?s.note.name:"—")}</div>`+
+      `<div class="nm">${s.skipped?"飛":(s.note?s.note.disp:"—")}${!s.skipped&&s.note&&s.note.abs!==s.note.disp?`<span class="cents"> (絶${s.note.abs})</span>`:""}</div>`+
       `<div class="fz">${s.skipped?"鳴らず":Math.round(s.freq)+"Hz"}</div>`;
     box.appendChild(div);
   });
@@ -745,7 +813,7 @@ function renderOneSeq(){
     const div=document.createElement("div");
     div.className="chip"+(i===0?" ref":"");
     div.innerHTML=`<div class="idx">${i+1}${i===0?" 基準":""}</div>`+
-      `<div class="nm">${s.note?s.note.name:"—"}</div>`+
+      `<div class="nm">${s.note?s.note.disp:"—"}${s.note&&s.note.abs!==s.note.disp?`<span class="cents"> (絶${s.note.abs})</span>`:""}</div>`+
       `<div class="fz">${s.freq?Math.round(s.freq)+"Hz":""}</div>`;
     box.appendChild(div);
   });
@@ -789,7 +857,7 @@ function loop(){
   live.clarity = clarity;
   const info = live.freq ? freqToNote(live.freq) : null;
   el("hz").textContent = live.freq ? live.freq.toFixed(1) : "–";
-  el("noteName").textContent = info ? info.name : "–";
+  el("noteName").textContent = info ? info.disp : "–";
   el("cents").textContent = info ? (info.cents>=0?"+":"")+info.cents+" c" : "";
   el("clarBar").style.width = Math.round(clarity*100)+"%";
 
@@ -805,7 +873,7 @@ function loop(){
   // 1文字モード: 最新の安定音を候補として上書き
   if(one.active){
     const f = live.freq || live.peak;
-    if(f){ one.cand = {freq:f, note:freqToNote(f)}; el("oneCand").textContent = one.cand.note.name; }
+    if(f){ one.cand = {freq:f, note:freqToNote(f)}; el("oneCand").textContent = one.cand.note.disp; }
   }
 
   // 無音区切りの自動送り中
@@ -824,6 +892,7 @@ function loop(){
       el("autoDot").classList.add("on");
     } else if(ev.type === "note"){
       el("autoDot").classList.remove("on");
+      if(ev.freq && auto.seq.length === 0) refMeasuredHz = ev.freq;   // 1本目＝基準笛
       auto.seq.push({freq: ev.freq, note: freqToNote(ev.freq)});
       renderAutoSeq();
       autoSetButton();
