@@ -39,7 +39,7 @@ BS = "/Applications/BambuStudio.app/Contents/MacOS/BambuStudio"
 
 
 def ranges_xml(fine_until, fine, coarse, top, object_id=1, coarse_infill=None, coarse_walls=None,
-               fine_from=0.0):
+               fine_from=0.0, fine_infill=None, fine_walls=None):
     """粗い側には層厚のほかに、インフィル密度と壁の数も指定できる。
 
     速度（outer_wall_speed など）は範囲では効かないことを実験で確かめた（2026-07-30）。
@@ -50,6 +50,15 @@ def ranges_xml(fine_until, fine, coarse, top, object_id=1, coarse_infill=None, c
         extra += '   <option opt_key="sparse_infill_density">%s</option>\n' % coarse_infill
     if coarse_walls:
         extra += '   <option opt_key="wall_loops">%d</option>\n' % coarse_walls
+    # 細かい側（笛のある高さ）にも充填密度と壁数を指定できる。
+    # 厚い板の中に笛が埋まると、笛の周りと下がすかすかになり、ボアの下面や窓の天井が
+    # 「宙に浮いた垂直な殻」として扱われて造形が荒れる（2026-07-31に実機とgcodeで確認）。
+    # 下地を密にすると、この浮きが減る。
+    fextra = ""
+    if fine_infill:
+        fextra += '   <option opt_key="sparse_infill_density">%s</option>\n' % fine_infill
+    if fine_walls:
+        fextra += '   <option opt_key="wall_loops">%d</option>\n' % fine_walls
     # 笛より下（fine_from まで）も粗くできる。底の広い面を細かく刷るとgcodeが大きくなり、
     # A1 miniの解凍サイズの上限（4MB前後）に当たりやすい。
     head = ""
@@ -60,11 +69,12 @@ def ranges_xml(fine_until, fine, coarse, top, object_id=1, coarse_infill=None, c
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n<objects>\n <object id="%d">\n%s'
         '  <range min_z="%.4f" max_z="%.4f">\n'
-        '   <option opt_key="layer_height">%.3f</option>\n  </range>\n'
+        '   <option opt_key="layer_height">%.3f</option>\n%s  </range>\n'
         '  <range min_z="%.4f" max_z="%.4f">\n'
         '   <option opt_key="layer_height">%.3f</option>\n%s  </range>\n'
         ' </object>\n</objects>\n'
-        % (object_id, head, fine_from, fine_until, fine, fine_until, top, coarse, extra))
+        % (object_id, head, fine_from, fine_until, fine, fextra,
+           fine_until, top, coarse, extra))
 
 
 def gcode_info(path):
@@ -90,6 +100,10 @@ def main(argv=None):
                     help="この高さから細かく刷る[mm]。笛より下の広い面を粗くしてgcodeを小さくする")
     ap.add_argument("--coarse-infill", default=None, help='粗い側のインフィル密度（例 8%%）')
     ap.add_argument("--coarse-walls", type=int, default=None, help="粗い側の壁の数（既定はそのまま）")
+    ap.add_argument("--fine-infill", default=None,
+                    help='細かい側（笛のある高さ）のインフィル密度（例 80%%）。'
+                         '厚い板に笛が埋まるときは下地を密にすると造形が安定する')
+    ap.add_argument("--fine-walls", type=int, default=None, help="細かい側の壁の数")
     ap.add_argument("--object-id", type=int, default=1, help="通し番号（既定1）")
     ap.add_argument("--bambu-studio", default=os.environ.get("BAMBU_STUDIO", BS))
     args = ap.parse_args(argv)
@@ -103,7 +117,7 @@ def main(argv=None):
             z.writestr("Metadata/layer_config_ranges.xml",
                        ranges_xml(args.fine_until, args.fine, args.coarse, args.top,
                                   args.object_id, args.coarse_infill, args.coarse_walls,
-                                  args.fine_from))
+                                  args.fine_from, args.fine_infill, args.fine_walls))
         outdir = os.path.dirname(os.path.abspath(args.dst)) or "."
         os.makedirs(outdir, exist_ok=True)
         r = subprocess.run([args.bambu_studio, "--slice", "0", "--outputdir", outdir,
