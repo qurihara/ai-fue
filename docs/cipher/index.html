@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CipherFlute 復号 v3</title>
+<title>CipherFlute 復号 v4</title>
 <style>
   :root{
     --bg:#0f1220; --card:#1a1f36; --fg:#e8ecf5; --muted:#98a2c0;
@@ -79,8 +79,9 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v3</span></h1>
-  <p class="verNote">v3（2026-08-06）… 符号の音域から外れた音を、列にも入れないようにしました（v2では音名だけ捨てて周波数が残り、雑音が復号へ渡っていました）。<br>
+  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v4</span></h1>
+  <p class="verNote">v4（2026-08-06）… v3で、音域外の音が鳴るとページが固まる不具合がありました。画面更新のループから抜けてしまう書き方をしていたのが原因で、直しました。<br>
+  v3 … 符号の音域から外れた音を、列にも入れないようにしました（v2では音名だけ捨てて周波数が残り、雑音が復号へ渡っていました）。<br>
   v2 … 音名を基準笛で補正して表示するようにし、倍音の取り違えをオクターブ単位で引き戻すようにしました。</p>
   <p class="lead">3Dプリントした笛の並び（コーム）を、先頭の基準笛から順に1本ずつ吹くと、検出した音から秘密を復号します。マイクだけで動きます。</p>
 
@@ -840,7 +841,7 @@ async function oneStart(){
 }
 function oneCommit(){
   if(!one.cand){ el("oneStatus").textContent="まだ音が取れていません。"; return; }
-  one.seq.push(one.cand); one.cand=null;
+  if(one.cand){ one.seq.push(one.cand); one.cand=null; }
   renderOneSeq();
   el("oneEndBtn").disabled=false;
   el("oneStatus").textContent=one.seq.length+"本目まで確定。続けて次の音を吹いて「入力」、終わりなら「終了して復号」。";
@@ -911,12 +912,14 @@ function loop(){
       el("autoDot").classList.remove("on");
       const nt2 = ev.freq ? freqToNote(ev.freq) : null;
       if(ev.freq && !nt2){
-        // 符号の音域へ引き戻せない＝雑音。数えずに読み飛ばす（本数がずれない）
+        // 符号の音域へ引き戻せない＝雑音。数えずに読み飛ばす（本数がずれない）。
+        // [* ここで return してはいけない]。この処理は requestAnimationFrame の
+        // ループ関数の中にあるので、return すると末尾の次フレーム予約へ到達せず、
+        // 画面の更新が止まってページが固まる（2026-08-06、v3で実際に起きた）。
         el("autoHint").textContent = "符号の音域から外れた音（" + Math.round(ev.freq)
           + "Hz）だったので数えませんでした。そのまま次の笛を吹いてください。";
-        el("autoDot").classList.remove("on");
-        return;
-      }
+        el("autoDot").textContent = String(auto.seq.length);
+      } else {
       if(ev.freq && auto.seq.length === 0) refMeasuredHz = ev.freq;   // 1本目＝基準笛
       auto.seq.push({freq: ev.freq, note: nt2});
       renderAutoSeq();
@@ -925,6 +928,7 @@ function loop(){
       el("autoHint").textContent = auto.seq.length
         + "本目まで入りました。続けて次の笛を吹き、終わったらボタンを押してください。";
       if(navigator.vibrate) navigator.vibrate(25);
+      }
     } else if(ev.type === "reject"){
       el("autoDot").classList.remove("on");
       el("autoHint").textContent = "短すぎる音は雑音として捨てました。もう少し長めに吹いてください。";
