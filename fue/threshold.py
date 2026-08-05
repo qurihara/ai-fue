@@ -45,8 +45,12 @@ def split(secret_symbols, k: int, n: int, p: int = 11, rng: random.Random | None
 
     shares = [(j, []) for j in range(1, n + 1)]
     for s in secret_symbols:
-        # 定数項が秘密、それ以外は乱数の (k-1) 次多項式
-        coeff = [s] + [rng.randrange(p) for _ in range(k - 1)]
+        # 定数項が秘密、それ以外は乱数の (k-1) 次多項式。
+        # [* 最高次の係数は 0 にしてはいけない]。0 だと多項式の次数が下がり、k-1個で
+        # 復元できてしまう。k=2 で係数が0なら多項式は定数になり、全断片が秘密そのものに
+        # なって[* 1枚で漏れる]（2026-07-31に、9枚すべての第1記号が同じ値になって気づいた）。
+        coeff = ([s] + [rng.randrange(p) for _ in range(k - 2)]
+                 + [rng.randrange(1, p)])
         for j, out in shares:
             y = 0
             for c in reversed(coeff):          # ホーナー法

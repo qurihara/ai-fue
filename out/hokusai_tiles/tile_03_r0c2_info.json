@@ -1,0 +1,15 @@
+{
+  "size": [
+    67.97418539972276,
+    64.6
+  ],
+  "ink_t": 0.4,
+  "base_t": 0.4,
+  "blank": true,
+  "top_z": 4.78,
+  "outputs": {
+    "base": "out/hokusai_tiles/tile_03_r0c2_base.stl",
+    "ink": "out/hokusai_tiles/tile_03_r0c2_ink.stl",
+    "preview": "out/hokusai_tiles/tile_03_r0c2_preview.png"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "card": [
+    67.97418539972276,
+    64.6
+  ],
+  "grid": [
+    169,
+    161
+  ],
+  "pixel": 0.4,
+  "threshold": 131,
+  "mode": "threshold",
+  "fit": "cover",
+  "black_ratio": 0.424,
+  "image_size": [
+    929,
+    883
+  ],
+  "size": [
+    67.97418539972276,
+    64.6
+  ],
+  "ink_t": 0.4,
+  "base_t": 0.4,
+  "corner_r": 0.5,
+  "corner_style": "chamfer",
+  "face_down": true,
+  "ink_area_mm2": 1862.6,
+  "top_z": 4.78,
+  "outputs": {
+    "base": "out/hokusai_tiles/tile_09_r2c2_base.stl",
+    "ink": "out/hokusai_tiles/tile_09_r2c2_ink.stl",
+    "preview": "out/hokusai_tiles/tile_09_r2c2_preview.png"
+  }
+}

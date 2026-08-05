@@ -100,12 +100,30 @@ def choose_grid(image_path, n_flutes, l_max, want=None):
     return best[1], best[2]
 
 
-def split_image(image_path, gx, gy, out_dir):
-    """画像を gx × gy に割り、タイルごとのPNGを書き出す。左上から右へ、行を下へ進む。"""
+def split_image(image_path, gx, gy, out_dir, tile=None):
+    """画像を gx × gy に割り、タイルごとのPNGを書き出す。左上から右へ、行を下へ進む。
+
+    [* 先に絵全体を切り出してから割る]。順序を逆にして、割ってからタイルごとに
+    切り出すと、タイルごとに独立して左右（または上下）が落ちるので、
+    並べても絵がつながらない（2026-07-31に気づいた）。
+    """
     from PIL import Image
     paths = []
     with Image.open(image_path) as im:
         im = im.convert("RGB")
+        if tile is not None:
+            target = (tile[0] * gx) / (tile[1] * gy)
+            r = im.width / im.height
+            if r > target:                       # 横長すぎるので左右を落とす
+                w2 = int(round(im.height * target))
+                x0 = (im.width - w2) // 2
+                im = im.crop((x0, 0, x0 + w2, im.height))
+            elif r < target:                     # 縦長すぎるので上下を落とす
+                h2 = int(round(im.width / target))
+                y0 = (im.height - h2) // 2
+                im = im.crop((0, y0, im.width, y0 + h2))
+            print("絵全体を先に切り出した（%.3f → %.3f）。割ってから切ると絵がつながらない"
+                  % (r, target))
         w, h = im.size
         for row in range(gy):
             for col in range(gx):
@@ -132,6 +150,41 @@ def comb_of(notes, l_max):
 
 
 SINK = 0.02          # 笛を板へどれだけ沈めるか[mm]
+
+
+def extrude_poly(poly, z0, h):
+    """平面図形を押し出す。穴が多くても通る。
+
+    img2card.extrude は穴をブーリアンで開けるので、枠模様を足したあとの素地のように
+    [* 穴が数百個ある形]では「立体ではない」と拒まれる。trimesh の押し出しは
+    三角形分割で穴を扱うので、この形でも通る（2026-07-31に差し替えた）。
+    """
+    geoms = list(poly.geoms) if hasattr(poly, "geoms") else [poly]
+    parts = []
+    for g in geoms:
+        if g.is_empty or not hasattr(g, "exterior"):
+            continue
+        m = trimesh.creation.extrude_polygon(g, height=h)
+        m.apply_translation([0.0, 0.0, z0])
+        parts.append(m)
+    if not parts:
+        return trimesh.Trimesh()
+    out = trimesh.util.concatenate(parts)
+    out.merge_vertices()
+    return out
+
+
+def blank_plate(size, ink_t=0.4, base_t=0.4):
+    """絵柄がひとつも無い板。真っ白なタイルのために用意する。"""
+    from shapely.geometry import Polygon
+    outline = I.card_polygon(size[0], size[1], CORNER_R, "chamfer")
+    base = trimesh.util.concatenate([
+        extrude_poly(outline, 0.0, ink_t),
+        extrude_poly(outline, ink_t, base_t),
+    ])
+    return dict(base=base, ink=trimesh.Trimesh(), outline=outline,
+                ink_poly=Polygon(), top_z=ink_t + base_t,
+                info=dict(size=size, ink_t=ink_t, base_t=base_t, blank=True))
 
 
 def global_threshold(image_path):
@@ -178,10 +231,10 @@ def add_frame(p, frame_part):
     ink_t, base_t = p["info"]["ink_t"], p["info"]["base_t"]
     q = dict(p)
     q["ink_poly"] = ink_poly
-    q["ink"] = I.extrude(ink_poly, 0.0, ink_t)
+    q["ink"] = extrude_poly(ink_poly, 0.0, ink_t)
     q["base"] = trimesh.util.concatenate([
-        I.extrude(rest, 0.0, ink_t),
-        I.extrude(p["outline"], ink_t, base_t),
+        extrude_poly(rest, 0.0, ink_t),
+        extrude_poly(p["outline"], ink_t, base_t),
     ])
     return q
 
@@ -195,9 +248,15 @@ def build_tile(image_path, notes, size, l_max, stem, binarize="threshold", thres
     笛は板の上に載るだけなので、[* わずかに沈めて重ねれば十分]である。重なった閉じた
     立体は、スライサが和として正しく解釈する（2026-07-31にここで詰まった）。
     """
-    p = plate.image_plate(image_path, size, corner_r=CORNER_R, corner_style="chamfer",
-                          fit="cover", face_down=True, trim=False,
-                          mode=binarize, threshold=threshold)
+    try:
+        p = plate.image_plate(image_path, size, corner_r=CORNER_R, corner_style="chamfer",
+                              fit="cover", face_down=True, trim=False,
+                              mode=binarize, threshold=threshold)
+    except SystemExit:
+        # 絵柄がひとつも無いタイル（絵の真っ白な場所に当たった）。
+        # image_plate は「黒い画素がひとつもない」と止まるが、[* 枠模様だけのタイルは
+        # 作れなければ困る]ので、絵柄が空の板を自分で組み立てる。
+        p = blank_plate(size)
     p = add_frame(p, frame_part)
     comb = comb_of(notes, l_max)
     # 吸込口（x=0）をタイルの縁と面一にし、帯を短辺の中央へ寄せ、上面へ載せる。
@@ -342,7 +401,7 @@ def main(argv=None):
                                       t=args.frame_band)
         print("枠模様: %s（帯 %.1fmm・面積 %.0f mm2）。絵全体の座標で作ってから割るので、"
               "タイルのつなぎ目で必ずつながる" % (args.frame, args.frame_band, frame_poly.area))
-    parts = split_image(args.image, gx, gy, args.out_dir)
+    parts = split_image(args.image, gx, gy, args.out_dir, tile=size)
     pairs = list(zip(parts, plan))
     if args.only:
         pairs = pairs[:args.only]
