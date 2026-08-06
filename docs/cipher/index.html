@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CipherFlute 復号 v4</title>
+<title>CipherFlute 復号 v5</title>
 <style>
   :root{
     --bg:#0f1220; --card:#1a1f36; --fg:#e8ecf5; --muted:#98a2c0;
@@ -75,12 +75,25 @@
   .ver{font-size:.55em;vertical-align:middle;background:#2b6cb0;color:#fff;
        padding:2px 8px;border-radius:10px;letter-spacing:.02em}
   .verNote{font-size:.82em;color:#555;margin:-6px 0 14px}
+  .expectBox{margin:0 0 12px;padding:8px 10px;background:#f7f7f9;border-radius:8px;font-size:.9em}
+  .expectBox summary{cursor:pointer;color:#2b6cb0}
+  .expectBox input{width:100%;padding:6px;font-family:ui-monospace,monospace;margin-top:6px}
+  .chip.hit{background:#e6f6ea;border-color:#57a773}
+  .chip.miss{background:#fdecea;border-color:#d1493f}
+  .exp{font-size:.72em;color:#666;display:block}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v4</span></h1>
-  <p class="verNote">v4（2026-08-06）… v3で、音域外の音が鳴るとページが固まる不具合がありました。画面更新のループから抜けてしまう書き方をしていたのが原因で、直しました。<br>
+  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v5</span></h1>
+  <details class="expectBox"><summary>照合用：期待する音列を貼る（デバッグ）</summary>
+    <p class="hint">設計どおりの音列を空白区切りで貼ると、吹いた結果と1本ずつ突き合わせて色分けします。
+      例 <code>C7 G7 D#7 F7 G#6 A#6 C#7 D#7</code>。基準笛を含めて先頭から並べてください。</p>
+    <input id="expectSeq" type="text" placeholder="C7 G7 D#7 F7 G#6 A#6 C#7 D#7" autocomplete="off">
+    <div id="expectStat" class="hint"></div>
+  </details>
+  <p class="verNote">v5（2026-08-06）… 期待する音列を貼ると、吹いた結果と1本ずつ突き合わせて色分けするようにしました（上の「照合用」を開いてください）。<br>
+  v4（2026-08-06）… v3で、音域外の音が鳴るとページが固まる不具合がありました。画面更新のループから抜けてしまう書き方をしていたのが原因で、直しました。<br>
   v3 … 符号の音域から外れた音を、列にも入れないようにしました（v2では音名だけ捨てて周波数が残り、雑音が復号へ渡っていました）。<br>
   v2 … 音名を基準笛で補正して表示するようにし、倍音の取り違えをオクターブ単位で引き戻すようにしました。</p>
   <p class="lead">3Dプリントした笛の並び（コーム）を、先頭の基準笛から順に1本ずつ吹くと、検出した音から秘密を復号します。マイクだけで動きます。</p>
@@ -510,16 +523,57 @@ function endCapture(){
   el("capStatus").textContent = cap.seq.length + "本を記録しました。復号します。";
   doDecode();
 }
+/* 期待する音列を配列で返す（空なら null）。 */
+function expectedNotes(){
+  const raw = (el("expectSeq") && el("expectSeq").value || "").trim();
+  if(!raw) return null;
+  return raw.split(/[\s,]+/).filter(Boolean);
+}
+
+/* 1本ぶんの照合結果を、chip の追加クラスと注記にして返す。
+ * 期待値が無いときは何も足さない（普段の画面を汚さない）。 */
+function compareOne(i, note){
+  const exp = expectedNotes();
+  if(!exp || i >= exp.length) return {cls:"", html:""};
+  const want = exp[i];
+  const got = note ? note.disp : null;
+  const ok = got === want;
+  return {cls: ok ? " hit" : " miss",
+          html: `<span class="exp">${ok ? "○" : "×"} 期待 ${want}</span>`};
+}
+
+/* 照合の要約を出す。何本中何本が一致したか。 */
+function renderExpectStat(seq){
+  const box = el("expectStat"); if(!box) return;
+  const exp = expectedNotes();
+  if(!exp){ box.textContent = ""; return; }
+  let hit = 0, n = Math.min(exp.length, seq.length);
+  for(let i=0;i<n;i++) if(seq[i] && seq[i].note && seq[i].note.disp === exp[i]) hit++;
+  box.textContent = `期待 ${exp.length}本 ／ 吹いた ${seq.length}本 ／ 一致 ${hit}本`
+    + (exp.length !== seq.length ? "（本数が違います）" : (hit === exp.length ? "（全一致）" : ""));
+}
+
+document.addEventListener("input", (e)=>{
+  if(e.target && e.target.id === "expectSeq"){
+    try{ renderSeq(); }catch{}
+    try{ renderAutoSeq(); }catch{}
+    try{ renderOneSeq(); }catch{}
+  }
+});
+
 function renderSeq(){
   const box = el("seq"); box.innerHTML="";
   cap.seq.forEach((s,i)=>{
     const div = document.createElement("div");
-    div.className = "chip" + (i===0?" ref":"") + (s.freq==null?" empty":"");
+    const cmp = compareOne(i, s.note);
+    div.className = "chip" + (i===0?" ref":"") + (s.freq==null?" empty":"") + cmp.cls;
     div.innerHTML = `<div class="idx">${i+1}${i===0?" 基準":""}</div>`+
       `<div class="nm">${s.note?s.note.disp:"—"}${s.note&&s.note.abs!==s.note.disp?`<span class="cents"> (絶${s.note.abs})</span>`:""}</div>`+
-      `<div class="fz">${s.freq?Math.round(s.freq)+"Hz":"無音"}</div>`;
+      compareOne(i, s.note).html+
+      `<div class="fz">${s.freq?Math.round(s.freq)+"Hz":"無音"}</div>`+cmp.html;
     box.appendChild(div);
   });
+  renderExpectStat(cap.seq);
 }
 
 // --- 無音区切りで自動送りするモード ---
@@ -536,9 +590,11 @@ function renderAutoSeq(){
     div.className="chip"+(i===0?" ref":"")+(s.skipped?" empty":"");
     div.innerHTML=`<div class="idx">${i+1}${i===0?" 基準":""}</div>`+
       `<div class="nm">${s.skipped?"飛":(s.note?s.note.disp:"—")}${!s.skipped&&s.note&&s.note.abs!==s.note.disp?`<span class="cents"> (絶${s.note.abs})</span>`:""}</div>`+
+      compareOne(i, s.skipped?null:s.note).html+
       `<div class="fz">${s.skipped?"鳴らず":Math.round(s.freq)+"Hz"}</div>`;
     box.appendChild(div);
   });
+  renderExpectStat(auto.seq);
 }
 // 開始と終了は同じボタンで兼ねる。押すたびにラベルと色が入れ替わる。
 /* 記録した1回ぶんの測定値を、集計器 fue/calib_comb.py がそのまま読める形で
@@ -828,9 +884,11 @@ function renderOneSeq(){
     div.className="chip"+(i===0?" ref":"");
     div.innerHTML=`<div class="idx">${i+1}${i===0?" 基準":""}</div>`+
       `<div class="nm">${s.note?s.note.disp:"—"}${s.note&&s.note.abs!==s.note.disp?`<span class="cents"> (絶${s.note.abs})</span>`:""}</div>`+
+      compareOne(i, s.note).html+
       `<div class="fz">${s.freq?Math.round(s.freq)+"Hz":""}</div>`;
     box.appendChild(div);
   });
+  renderExpectStat(one.seq);
 }
 async function oneStart(){
   if(!await ensureMic()){ el("oneStatus").textContent="マイクを開始できませんでした。"; return; }
