@@ -76,8 +76,8 @@
      *   {type:"idle"}        待機している
      *   {type:"onset"}       鳴り始めを検出した
      *   {type:"sounding"}    鳴っている最中
-     *   {type:"note", freq}  1本ぶんが確定した
-     *   {type:"reject"}      短すぎたので捨てた
+     *   {type:"note", freq, durationMs, startMs} 1本ぶんが確定した
+     *   {type:"reject", freq, durationMs, startMs, reason} 短すぎたので捨てた
      *   {type:"end"}         入力の終わり(長い無音)を検出した
      */
     function feed(t, level, freq) {
@@ -170,10 +170,17 @@
       } else {
         state.phase = "idle";
       }
-      if (duration < opt.minNoteMs || !f) return {type: "reject"};
+      // 捨てるときも[* 何を捨てたかを返す]。呼び出し側で、あとからテンポを見て
+      // 拾い直したり、画面に出して人が判断したりできるようにするためである
+      // （2026-08-06、テンポを使う後処理のために足した）。
+      const startAt = state.noteStart;
+      if (duration < opt.minNoteMs || !f) {
+        return {type: "reject", freq: f || null, durationMs: duration, startMs: startAt,
+                reason: !f ? "音程が取れなかった" : "短すぎた"};
+      }
       state.count += 1;
       state.lastCommit = t;
-      return {type: "note", freq: f, durationMs: duration};
+      return {type: "note", freq: f, durationMs: duration, startMs: startAt};
     }
 
     return {

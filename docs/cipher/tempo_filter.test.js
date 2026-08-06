@@ -1,0 +1,81 @@
+/* tempo_filter の検査。node docs/cipher/tempo_filter.test.js で走る。 */
+const TF = require("./tempo_filter.js");
+
+let ok = 0, ng = 0;
+function check(label, cond, extra) {
+  if (cond) { ok++; console.log("  ok   " + label); }
+  else { ng++; console.log("  NG   " + label + (extra ? "  → " + extra : "")); }
+}
+
+/* 900ms間隔で8本、きれいに吹いた列を作る。 */
+function cleanRun(n, beat) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    out.push({kind: "note", freq: 2000 + i * 50, durationMs: beat * 0.6, startMs: i * beat});
+  }
+  return out;
+}
+
+console.log("■ きれいに吹いた列は、そのまま全部残る");
+{
+  const r = TF.analyze(cleanRun(8, 900), {});
+  check("テンポを900msと測れる", r.beatMs === 900, "beatMs=" + r.beatMs);
+  check("8本すべて残る", r.items.filter(i => i.keep).length === 8);
+}
+
+console.log("■ 拍から外れた短い雑音は落とす");
+{
+  const ev = cleanRun(8, 900);
+  // 3本目と4本目のあいだ（拍から450msずれた位置）に、80msの短い音が入った
+  ev.push({kind: "note", freq: 2600, durationMs: 80, startMs: 2 * 900 + 450});
+  ev.sort((a, b) => a.startMs - b.startMs);
+  const r = TF.analyze(ev, {});
+  const dropped = r.items.filter(i => !i.keep);
+  check("雑音が1つ落ちる", dropped.length === 1, "落ちた数=" + dropped.length);
+  check("落ちたのは短い方", dropped.length === 1 && dropped[0].durationMs === 80);
+  check("理由が付く", dropped.length === 1 && /拍から外れた短い音/.test(dropped[0].reason));
+  check("本物は8本残る", r.items.filter(i => i.keep).length === 8);
+}
+
+console.log("■ 拍に乗っている短い音は拾い直す");
+{
+  const ev = cleanRun(8, 900);
+  // 5本目が短く鳴ってセグメンタに捨てられた。ただし拍にはきちんと乗っている
+  ev[4] = {kind: "reject", freq: 2300, durationMs: 100, startMs: 4 * 900, reason: "短すぎた"};
+  const r = TF.analyze(ev, {});
+  const revived = r.items[4];
+  check("捨てられた音を拾い直す", revived.keep === true, "keep=" + revived.keep);
+  check("理由が付く", /拍に乗っていたので拾い直した/.test(revived.reason));
+  check("結局8本そろう", r.items.filter(i => i.keep).length === 8);
+}
+
+console.log("■ 拍に乗っていない捨て音は、そのまま捨てたままにする");
+{
+  const ev = cleanRun(6, 900);
+  ev.push({kind: "reject", freq: 2800, durationMs: 60, startMs: 3 * 900 + 400, reason: "短すぎた"});
+  ev.sort((a, b) => a.startMs - b.startMs);
+  const r = TF.analyze(ev, {});
+  const junk = r.items.find(i => i.durationMs === 60);
+  check("拾い直さない", junk.keep === false);
+  check("理由に「拍にも乗っていない」が入る", /拍にも乗っていない/.test(junk.reason));
+}
+
+console.log("■ 2本ぶんが繋がった疑いに印を付ける");
+{
+  const ev = cleanRun(6, 900);
+  ev[2].durationMs = 900 * 1.9;          // 3本目が長すぎる
+  const r = TF.analyze(ev, {});
+  check("警告が付く", /繋がった疑い/.test(r.items[2].warn || ""), "warn=" + r.items[2].warn);
+  check("それでも残す（人が判断する）", r.items[2].keep === true);
+}
+
+console.log("■ 音が少なくてテンポを測れないときは、判定を変えない");
+{
+  const r = TF.analyze(cleanRun(2, 900), {});
+  check("beatMs は null", r.beatMs === null);
+  check("2本ともそのまま残る", r.items.filter(i => i.keep).length === 2);
+  check("説明が付く", /音が足りない/.test(r.note));
+}
+
+console.log("\n結果: ok " + ok + " / NG " + ng);
+process.exit(ng ? 1 : 0);
