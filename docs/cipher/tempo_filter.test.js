@@ -115,5 +115,31 @@ console.log("■ 拍から外れた雑音は、飛ばしではなく除外のま
   check("穴は増えない", r.missing.length === 0, "missing=" + r.missing.length);
 }
 
+console.log("■ ★担体を持ち替える空白を、穴と誤解しない★");
+{
+  // スプール2枚を続けて吹く様子。25本 → 持ち替えで4秒あく → 24本
+  const ev = []; let t = 0;
+  for (let i = 0; i < 25; i++) { ev.push({kind:"note", freq:2000+i*20, durationMs:540, startMs:t}); t += 900; }
+  t += 4000;
+  for (let i = 0; i < 24; i++) { ev.push({kind:"note", freq:2000+i*20, durationMs:540, startMs:t}); t += 900; }
+  const r = TF.analyze(ev, {});
+  check("テンポは900ms", r.beatMs === 900);
+  check("穴を1つも挿さない", r.missing.length === 0, "missing=" + r.missing.length);
+  check("49本のまま", ev.length + r.missing.length === 49);
+  check("全部そのまま採用", r.items.filter(i => i.action === "keep").length === 49);
+}
+
+console.log("■ 続けて2本が鳴らなかったときは、2本ぶん補う");
+{
+  const ev = [];
+  for (let i = 0; i < 9; i++) {
+    if (i === 3 || i === 4) continue;
+    ev.push({kind:"note", freq:2000, durationMs:540, startMs:i*900});
+  }
+  const r = TF.analyze(ev, {});
+  check("穴を2つ挿す", r.missing.length === 2, "missing=" + r.missing.length);
+  check("合わせて9本になる", ev.length + r.missing.length === 9);
+}
+
 console.log("\n結果: ok " + ok + " / NG " + ng);
 process.exit(ng ? 1 : 0);

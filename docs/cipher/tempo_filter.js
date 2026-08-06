@@ -37,7 +37,10 @@
     // 長さが拍のこの倍を超えたら「2本ぶんが繋がった疑い」を立てる
     mergedRatio: 1.7,
     // テンポを測るのに最低これだけの音が要る
-    minForTempo: 3
+    minForTempo: 3,
+    // 隣り合う音の間隔がこの拍数までなら「あいだで鳴らなかった笛がある」とみなす。
+    // これを超える空白は、担体の持ち替えや休憩と考えて何も挿さない。
+    maxGapBeats: 4
   };
 
   function median(xs) {
@@ -115,18 +118,28 @@
     }
 
     // [* 拍の位置に音がまったく来なかった]場合も、笛が鳴らなかったということである。
-    // 最初の音から最後の音までのあいだで、拍の格子に穴が空いていれば飛ばしを挿す。
+    // ただし穴を埋めるのは[* 隣り合う音のあいだ]に限り、しかも[* 少しの穴だけ]にする。
+    //
+    // 全体に1本の拍の格子を敷いてはいけない。担体を持ち替えるときに数秒空くと、
+    // それ以降の音がどれも格子に乗らなくなり、拍という拍がすべて穴に見える。
+    // スプール2枚（25本＋持ち替え4秒＋24本）で試したところ、49本が76本に膨れた
+    // （2026-08-06、栗原さんの問いで気づいた）。
+    //
+    // そこで、隣り合う音の間隔が拍の何倍かを見て、2〜maxGapBeats 倍のときだけ
+    // 「そのあいだで鳴らなかった笛がある」と判断する。それより大きく空いたときは
+    // 持ち替えや休憩とみなし、何も挿さない。
     const missing = [];
     const live = items.filter(it => it.action !== "drop" && it.startMs != null);
-    if (live.length >= 2) {
-      const t0 = live[0].startMs;
-      const tEnd = live[live.length - 1].startMs;
-      const nBeats = Math.round((tEnd - t0) / beatMs);
-      for (let k = 1; k < nBeats; k++) {
-        const t = t0 + k * beatMs;
-        const near = live.some(it => Math.abs(it.startMs - t) <= beatMs * opt.onBeatTol);
-        if (!near) missing.push({beatIndex: k, startMs: t,
-                                 reason: "この拍に音が来なかった（鳴らない笛として飛ばす）"});
+    for (let i = 1; i < live.length; i++) {
+      const gap = live[i].startMs - live[i - 1].startMs;
+      const k = Math.round(gap / beatMs);
+      if (k < 2 || k > opt.maxGapBeats) continue;      // 1拍なら正常、開きすぎは持ち替え
+      // 間隔が拍のちょうど整数倍に近いときだけ信じる（半端なら別の理由で空いている）
+      if (Math.abs(gap - k * beatMs) > beatMs * opt.onBeatTol) continue;
+      for (let j = 1; j < k; j++) {
+        missing.push({after: live[i - 1].index,
+                      startMs: live[i - 1].startMs + j * beatMs,
+                      reason: "この拍に音が来なかった（鳴らない笛として飛ばす）"});
       }
     }
     return {items, beatMs, missing, note: ""};

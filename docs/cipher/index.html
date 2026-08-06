@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CipherFlute 復号 v8</title>
+<title>CipherFlute 復号 v9</title>
 <style>
   :root{
     --bg:#0f1220; --card:#1a1f36; --fg:#e8ecf5; --muted:#98a2c0;
@@ -90,14 +90,15 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v8</span></h1>
+  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v9</span></h1>
   <details class="expectBox"><summary>照合用：期待する音列を貼る（デバッグ）</summary>
     <p class="hint">設計どおりの音列を空白区切りで貼ると、吹いた結果と1本ずつ突き合わせて色分けします。
       例 <code>C7 G7 D#7 F7 G#6 A#6 C#7 D#7</code>。基準笛を含めて先頭から並べてください。</p>
     <input id="expectSeq" type="text" placeholder="C7 G7 D#7 F7 G#6 A#6 C#7 D#7" autocomplete="off">
     <div id="expectStat" class="hint"></div>
   </details>
-  <p class="verNote"><b>v8</b>（2026-08-06）… 鳴らなかった笛を「除外」ではなく「飛ばし」にしました。位置を保つので、誤り訂正のパリティで直せます。拍に音が来なかったところにも飛ばしを入れます。<br>
+  <p class="verNote"><b>v9</b>（2026-08-06）… 担体を持ち替える空白を「鳴らなかった笛」と誤解しないようにしました。スプール2枚のように途中で持ち替える読み方でも、本数が狂いません。<br>
+  <b>v8</b>（2026-08-06）… 鳴らなかった笛を「除外」ではなく「飛ばし」にしました。位置を保つので、誤り訂正のパリティで直せます。拍に音が来なかったところにも飛ばしを入れます。<br>
   <b>v7</b>（2026-08-06）… 秘密分散の節で、担体の番号を1〜9から選べるようにしました（画像タイル9枚の 2-of-9 に対応）。<br>
   <b>v6</b>（2026-08-06）… 「続けて吹く」で、吹いたテンポを手がかりに雑音を見分けるようにしました。
     捨てられた音も列に残し、拍に乗っていれば拾い直します。各音はクリックで除外・復帰できます。
