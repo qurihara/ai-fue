@@ -222,11 +222,19 @@ def frame_for_tile(frame_poly, row, col, gx, gy, tw, th):
     return translate(part, -x0, -y0)
 
 
-def add_frame(p, frame_part):
-    """板の絵柄へ枠模様を足し、素地を作り直す（face_down の並びに合わせる）。"""
+def add_frame(p, frame_part, band=None):
+    """板の絵柄へ枠模様を足し、素地を作り直す（face_down の並びに合わせる）。
+
+    [* 枠は最前面]である。絵柄と対等に足すと、枠の帯に絵が食い込んで模様が上書きされる
+    （2026-08-06、実物を見た栗原さんの指摘で分かった）。額縁は絵を囲んで区切るものなので、
+    枠の帯にかかる絵柄は先に取り除き、そのうえで枠を置く。
+    """
     if frame_part is None or frame_part.is_empty:
         return p
-    ink_poly = p["ink_poly"].union(frame_part).intersection(p["outline"])
+    art = p["ink_poly"]
+    if band is not None and not band.is_empty:
+        art = art.difference(band)          # 枠の帯にかかる絵柄を落とす（枠が前面）
+    ink_poly = art.union(frame_part).intersection(p["outline"])
     rest = p["outline"].difference(ink_poly)
     ink_t, base_t = p["info"]["ink_t"], p["info"]["base_t"]
     q = dict(p)
@@ -240,7 +248,7 @@ def add_frame(p, frame_part):
 
 
 def build_tile(image_path, notes, size, l_max, stem, binarize="threshold", threshold=None,
-               frame_part=None):
+               frame_part=None, frame_band=None):
     """タイル1枚を作る。板を作り、その上面へ笛の帯を載せる。
 
     [* ブーリアンで融合しない]。plate.image_plate が返す素地は押し出しを重ねただけの
@@ -257,7 +265,7 @@ def build_tile(image_path, notes, size, l_max, stem, binarize="threshold", thres
         # image_plate は「黒い画素がひとつもない」と止まるが、[* 枠模様だけのタイルは
         # 作れなければ困る]ので、絵柄が空の板を自分で組み立てる。
         p = blank_plate(size)
-    p = add_frame(p, frame_part)
+    p = add_frame(p, frame_part, frame_band)
     comb = comb_of(notes, l_max)
     # 吸込口（x=0）をタイルの縁と面一にし、帯を短辺の中央へ寄せ、上面へ載せる。
     comb.apply_translation([-comb.bounds[0][0],
@@ -395,10 +403,15 @@ def main(argv=None):
         print("2値化: しきい値 %d（手で指定・全タイル共通）" % thr)
     else:
         print("2値化: 白かそれ以外かで分ける")
-    frame_poly = None
+    frame_poly = band_poly = None
     if args.frame:
         frame_poly = FP.frame_polygon(args.frame, size[0] * gx, size[1] * gy,
                                       t=args.frame_band)
+        # 枠が占める帯そのもの。ここにかかる絵柄は落として、枠を最前面にする。
+        from shapely.geometry import box as _sbox
+        W, H = size[0] * gx, size[1] * gy
+        band_poly = _sbox(0, 0, W, H).difference(
+            _sbox(args.frame_band, args.frame_band, W - args.frame_band, H - args.frame_band))
         print("枠模様: %s（帯 %.1fmm・面積 %.0f mm2）。絵全体の座標で作ってから割るので、"
               "タイルのつなぎ目で必ずつながる" % (args.frame, args.frame_band, frame_poly.area))
     parts = split_image(args.image, gx, gy, args.out_dir, tile=size)
@@ -410,8 +423,10 @@ def main(argv=None):
         stem = os.path.join(args.out_dir, "tile_%02d_r%dc%d" % (idx, row, col))
         fp = (frame_for_tile(frame_poly, row, col, gx, gy, size[0], size[1])
               if frame_poly is not None else None)
+        bd = (frame_for_tile(band_poly, row, col, gx, gy, size[0], size[1])
+              if band_poly is not None else None)
         build_tile(img, ns, size, l_max, stem, binarize=args.binarize, threshold=thr,
-                   frame_part=fp)
+                   frame_part=fp, frame_band=bd)
         print("  書き出した %s（笛%d本）" % (os.path.relpath(stem, ROOT), len(ns)))
     print("2色の3mfに組み立てるには image-card-print の make_card_3mf.py を使う")
     return 0
