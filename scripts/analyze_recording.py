@@ -5,7 +5,13 @@
 復号ページはその場のマイクで読むが、うまくいかないときに何が起きていたのかを
 あとから調べられない。録音があれば、区切り方やしきい値を変えて何度でも試せる。
 ページと同じ考え方（帯域レベルで区切り、区間ごとに周波数の中央値を取る）で実装し、
-結果をページの照合器へそのまま渡せる形で出す。
+結果をページの照合器へそのまま渡せる形で出す。ページはこの解析器を移植した
+docs/cipher/fft_peak.js を使っているので、山の追い方と暗騒音の決め方は揃っている。
+
+ただし[* このツールには、ページにあるテンポの判定が無い]。そのため、1本の音の
+終わりぎわが揺れて切れた断片などが、そのまま余分な音として出ることがある。
+ページ側はそれを「隣の音と近すぎる」として落とすので、本数が食い違うことがある。
+このツールの役目は、何がどう読めているかを生のまま見ることである。
 
 使い方:
     python3 scripts/analyze_recording.py temp/spool128/spool1_1.m4a
@@ -142,6 +148,8 @@ def main(argv=None):
     ap.add_argument("--hi", type=float, default=3400.0, help="見る音域の上[Hz]")
     ap.add_argument("--on-margin", type=float, default=18.0,
                     help="暗騒音からこれだけ上なら鳴っているとみなす[dB]")
+    ap.add_argument("--noise-pct", type=float, default=10.0,
+                    help="静かな側からこの割合の位置を暗騒音とみなす[パーセント]")
     ap.add_argument("--gap", type=float, default=120.0, help="この無音で区切る[ms]")
     ap.add_argument("--min", type=float, default=90.0, help="これより短い音は捨てる[ms]")
     ap.add_argument("--split-cents", type=float, default=80.0,
@@ -151,7 +159,10 @@ def main(argv=None):
 
     x, sr = read_wav(to_wav(args.audio))
     t, p, l = spectrum_track(x, sr, args.lo, args.hi)
-    noise = float(np.percentile(l, 20))          # 静かな側の2割を暗騒音とみなす
+    # 静かな側から1割の位置を暗騒音とみなす。2割にすると、息を継がずに吹き続けた録音では
+    # 鳴っている時間が全体の8割近くを占めるため、その位置がすでに音の裾に入る。実測では
+    # 録音ごとに -3.6dB から -26.0dB まで22dBもぶれた。1割なら4本とも -27〜-28dB に収まる。
+    noise = float(np.percentile(l, args.noise_pct))
     on_db = noise + args.on_margin
     notes = segment(t, p, l, on_db, args.gap, args.min, split_cents=args.split_cents)
 

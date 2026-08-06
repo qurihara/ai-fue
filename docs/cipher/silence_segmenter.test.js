@@ -209,4 +209,45 @@ const cent = (hz, c) => hz * Math.pow(2, c / 1200);
               " 所要", (26 * 0.25 + 0.6).toFixed(1), "秒");
 }
 
-console.log("silence_segmenter: 全15件パス");
+// 16) 暗騒音を外から与えると、冒頭の測定を待たずに1本目から拾える
+//     （録音は冒頭が無音とは限らない。いきなり鳴っている録音でも取りこぼさないため）
+{
+  const script = [note(2093, 400), gap(300), note(2217, 400), gap(500)];  // 冒頭の静けさなし
+  const withCalib = run(script, SPLIT);
+  const given = run(script, Object.assign({}, SPLIT, {noiseDb: -95}));
+  // 冒頭の400msがまるごと測定に使われ、鳴っている音を暗騒音とみなしてしまうので、
+  // そのあとの音も「静かな側」と判定されて1本も拾えない
+  assert.strictEqual(withCalib.notes.length, 0, "冒頭が鳴っていると1本も拾えない");
+  assert.strictEqual(given.notes.length, 2, "外から与えれば1本目から拾える");
+  assert.strictEqual(given.thresholds.noiseDb, -95);
+  // 与えた暗騒音が静かすぎるときは下限（absOnDb）が効く。測定したときと同じ決め方である
+  assert.strictEqual(given.thresholds.onDb, seg.DEFAULTS.absOnDb);
+  const loud = run(script, Object.assign({}, SPLIT, {noiseDb: -60}));
+  assert.strictEqual(loud.thresholds.onDb, -60 + seg.DEFAULTS.onMarginDb,
+                     "下限より大きければ、暗騒音からの相対で決まる");
+  console.log(" 16) 暗騒音を外から与える: 測定ありは", withCalib.notes.length,
+              "本、与えると", given.notes.length, "本");
+}
+
+// 17) ★息を切らずに吹いた列でも、返す開始時刻はその音自身のもの★
+//     以前は、音の変わり目で切ったときに「次の音の開始」を返していた。息を切らずに
+//     吹いた列では全体がずれ、隣り合う音の間隔が0と出て、テンポの判定を狂わせた。
+{
+  const script = [QUIET];
+  const hz = [2093, 2489, 2794];
+  hz.forEach(h => script.push({ms: 400, db: -45, hz: h}));   // 息継ぎなし
+  script.push(gap(500));
+  const r = run(script, SPLIT);
+  assert.strictEqual(r.notes.length, 3, "3本に切り分かれる");
+  const t0 = r.notes[0].startMs;
+  r.notes.forEach((n, i) => {
+    // i本目は、静けさ600msのあと400msずつ進んだところから始まる
+    assert.ok(Math.abs(n.startMs - (t0 + i * 400)) <= FRAME_MS,
+              (i + 1) + "本目の開始が" + (t0 + i * 400) + "ms付近にない（" + n.startMs + "ms）");
+  });
+  const gaps = r.notes.slice(1).map((n, i) => n.startMs - r.notes[i].startMs);
+  assert.ok(gaps.every(g => g > 300), "隣り合う開始の間隔が詰まっていない: " + gaps.join(","));
+  console.log(" 17) 開始時刻はその音自身のもの: 間隔", gaps.join("・"), "ms");
+}
+
+console.log("silence_segmenter: 全17件パス");

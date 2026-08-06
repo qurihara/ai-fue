@@ -141,5 +141,30 @@ console.log("■ 続けて2本が鳴らなかったときは、2本ぶん補う"
   check("合わせて9本になる", ev.length + r.missing.length === 9);
 }
 
+console.log("■ ★1本の音を切ってしまった断片は、拍の近くに来ていても採用しない★");
+{
+  // 実際に起きたこと（2026-08-06、スプールの録音）。4本目の418msの音は終わりぎわで
+  // 83セント下がり、そこで切られて88msの断片ができた。断片は拍の近く（拍から143ms、
+  // 561msの拍に対して25パーセント）に来ていたので「拾い直し」の対象になり、
+  // 5本目として列に入って以降の並びが1つずつずれた。
+  const beat = 561, ev = [];
+  for (let i = 0; i < 8; i++) ev.push({kind:"note", freq:2000+i*40, durationMs:418, startMs:i*beat});
+  ev.splice(4, 0, {kind:"reject", freq:1594, durationMs:88, startMs:3*beat + 418, reason:"短すぎた"});
+  ev.sort((a,b) => a.startMs - b.startMs);
+  const r = TF.analyze(ev, {});
+  const kept = r.items.filter(i => i.action === "keep");
+  check("断片を採用しない", kept.length === 8, "採用=" + kept.length + "本");
+  const dropped = r.items.find(i => i.action === "drop");
+  check("落とした理由を近さで説明する", /近すぎる/.test(dropped.reason || ""), dropped && dropped.reason);
+  check("落とすのは短い方（418msの本物は残す）", dropped.durationMs === 88);
+  check("穴は挿さない", r.missing.length === 0, "missing=" + r.missing.length);
+}
+
+console.log("■ ふつうの間隔（拍ちょうど）は近すぎるとみなさない");
+{
+  const r = TF.analyze(cleanRun(8, 900), {});
+  check("8本すべて残る", r.items.filter(i => i.action === "keep").length === 8);
+}
+
 console.log("\n結果: ok " + ok + " / NG " + ng);
 process.exit(ng ? 1 : 0);

@@ -40,7 +40,10 @@
     minForTempo: 3,
     // 隣り合う音の間隔がこの拍数までなら「あいだで鳴らなかった笛がある」とみなす。
     // これを超える空白は、担体の持ち替えや休憩と考えて何も挿さない。
-    maxGapBeats: 4
+    maxGapBeats: 4,
+    // 隣り合う音がこの拍数より近いときは、2本の笛ではなく1本の音を切ってしまったとみなす。
+    // 笛は1本ずつ吹くので、1つの拍に2本が入ることはない。
+    minSpacingBeats: 0.5
   };
 
   function median(xs) {
@@ -115,6 +118,30 @@
       if (it.keep && it.durationMs != null && it.durationMs > beatMs * opt.mergedRatio) {
         it.warn = "長い（2本ぶんが繋がった疑い）";
       }
+    }
+
+    // [* 1つの拍に2本の笛は入らない]。近すぎる隣り合わせが残っていたら、それは別の笛では
+    // なく、1本の音の途中を切ってしまったものである。短い方を落とす。
+    //
+    // 実例（2026-08-06）。4本目の G#6（418ms）は終わりぎわで83セント下がり、音の変わり目
+    // として切られて88msの断片ができた。断片は拍の近くに来ていたので上の判定で拾い直され、
+    // 5本目として列に入り、以降の並びが1つずつずれて復号できなくなった。
+    //
+    // ここでも[* 全体に拍の格子を敷かず、隣り合う2つだけを見る]。担体を持ち替えて数秒空くと
+    // 格子は狂うが、隣り合う間隔なら狂わない（v9で学んだのと同じ理由である）。
+    for (;;) {
+      const kept = items.filter(it => it.keep && it.startMs != null);
+      let victim = null;
+      for (let i = 1; i < kept.length; i++) {
+        if (kept[i].startMs - kept[i - 1].startMs >= beatMs * opt.minSpacingBeats) continue;
+        const a = kept[i - 1], b = kept[i];
+        victim = (a.durationMs || 0) < (b.durationMs || 0) ? a : b;
+        break;
+      }
+      if (!victim) break;
+      victim.keep = false;
+      victim.action = "drop";
+      victim.reason = "隣の音と近すぎる（1本の音を切ってしまったとみなす）";
     }
 
     // [* 拍の位置に音がまったく来なかった]場合も、笛が鳴らなかったということである。

@@ -35,7 +35,13 @@
     // 読み方のための仕組みである。隣り合う笛が必ず違う音になる符号（隣接禁止）と
     // 組み合わせると、無音を置かなくても1本ずつ確実に切り分けられる。
     pitchSplitCents: 0,  // 今の音からこれだけ離れたら別の笛とみなす[セント]
-    pitchStableMs: 70    // 離れた音がこの時間続いたら、そこで区切る
+    pitchStableMs: 70,   // 離れた音がこの時間続いたら、そこで区切る
+    // 暗騒音[dB]を外から与える。与えると冒頭の測定を行わず、すぐ待機から始める。
+    // 録音を読むときのためにある。録音は[* 冒頭が無音とは限らない]ので、
+    // 始めの0.4秒を測る方式では、いきなり鳴っていると暗騒音を大きく見積もって
+    // しまい、そのあとの音が1本も拾えなくなる。録音なら全体を先に見られるので、
+    // 静かな側から2割にあたる値を暗騒音として渡す（fft_peak.noiseFloorDb）。
+    noiseDb: null
   };
 
   /* 2つの周波数の隔たりをセントで返す。 */
@@ -53,6 +59,14 @@
     const opt = Object.assign({}, DEFAULTS, options || {});
     const state = {};
 
+    /* 暗騒音から、鳴り始めと鳴り終わりのしきい値を決める。 */
+    function setThresholds(noiseDb) {
+      state.noiseDb = noiseDb;
+      state.onDb = Math.max(noiseDb + opt.onMarginDb, opt.absOnDb);
+      state.offDb = Math.max(noiseDb + opt.offMarginDb,
+                             opt.absOnDb - opt.onMarginDb + opt.offMarginDb);
+    }
+
     function reset() {
       state.phase = "calib";   // calib(暗騒音の測定) -> idle(待機) -> note(鳴っている)
       state.t0 = null;
@@ -68,6 +82,10 @@
       state.driftFreqs = [];   // 離れたあとの測定値。次の笛へ引き継ぐ
       state.count = 0;         // 確定した本数
       state.lastCommit = null; // 直近に確定した時刻
+      if (typeof opt.noiseDb === "number") {
+        setThresholds(opt.noiseDb);
+        state.phase = "idle";  // 測る必要がないので、はじめから待機に入る
+      }
     }
     reset();
 
@@ -89,9 +107,7 @@
         state.noise.push(level);
         if (t - state.t0 < opt.calibMs) return {type: "calibrating"};
         // 暗騒音は中央値で代表する。突発的な物音に引きずられないため。
-        state.noiseDb = median(state.noise);
-        state.onDb = Math.max(state.noiseDb + opt.onMarginDb, opt.absOnDb);
-        state.offDb = Math.max(state.noiseDb + opt.offMarginDb, opt.absOnDb - opt.onMarginDb + opt.offMarginDb);
+        setThresholds(median(state.noise));
         state.phase = "idle";
         return {type: "idle"};
       }
@@ -158,6 +174,11 @@
      * 短すぎる音は雑音として捨てる。捨てるときも、次の笛の開始は引き継ぐ。 */
     function closeNote(endAt, t, nextStart, nextFreqs) {
       const duration = endAt - state.noteStart;
+      // [* いま閉じる音の開始時刻を、書き換える前に控える]。下で続けて次の音を始めるとき
+      // state.noteStart を次の音の開始へ進めるので、そのあとで読むと[* 次の音の開始]を
+      // 返してしまう。息を切らずに吹いた列ではこれが全体にずれとして残り、テンポの判定が
+      // 狂う（隣り合う音の間隔が0と出て、本物の音を「近すぎる」と誤って落とした）。
+      const startAt = state.noteStart;
       const f = median(state.freqs);
       const cont = nextStart !== null;
       state.onSince = null;
@@ -173,7 +194,6 @@
       // 捨てるときも[* 何を捨てたかを返す]。呼び出し側で、あとからテンポを見て
       // 拾い直したり、画面に出して人が判断したりできるようにするためである
       // （2026-08-06、テンポを使う後処理のために足した）。
-      const startAt = state.noteStart;
       if (duration < opt.minNoteMs || !f) {
         return {type: "reject", freq: f || null, durationMs: duration, startMs: startAt,
                 reason: !f ? "音程が取れなかった" : "短すぎた"};
