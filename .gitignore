@@ -12,3 +12,4 @@ out/*.png
 temp/*
 !temp/*_profile.json
 result.json
+docs/_probe/
