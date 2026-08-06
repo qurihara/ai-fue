@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CipherFlute 復号 v6</title>
+<title>CipherFlute 復号 v7</title>
 <style>
   :root{
     --bg:#0f1220; --card:#1a1f36; --fg:#e8ecf5; --muted:#98a2c0;
@@ -90,14 +90,15 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v6</span></h1>
+  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v7</span></h1>
   <details class="expectBox"><summary>照合用：期待する音列を貼る（デバッグ）</summary>
     <p class="hint">設計どおりの音列を空白区切りで貼ると、吹いた結果と1本ずつ突き合わせて色分けします。
       例 <code>C7 G7 D#7 F7 G#6 A#6 C#7 D#7</code>。基準笛を含めて先頭から並べてください。</p>
     <input id="expectSeq" type="text" placeholder="C7 G7 D#7 F7 G#6 A#6 C#7 D#7" autocomplete="off">
     <div id="expectStat" class="hint"></div>
   </details>
-  <p class="verNote"><b>v6</b>（2026-08-06）… 「続けて吹く」で、吹いたテンポを手がかりに雑音を見分けるようにしました。
+  <p class="verNote"><b>v7</b>（2026-08-06）… 秘密分散の節で、担体の番号を1〜9から選べるようにしました（画像タイル9枚の 2-of-9 に対応）。<br>
+  <b>v6</b>（2026-08-06）… 「続けて吹く」で、吹いたテンポを手がかりに雑音を見分けるようにしました。
     捨てられた音も列に残し、拍に乗っていれば拾い直します。各音はクリックで除外・復帰できます。
     <details style="display:inline"><summary style="display:inline;cursor:pointer;color:#2b6cb0">これまでの版</summary>
     <span style="display:block;margin-top:4px">
@@ -259,14 +260,17 @@
     <div class="muted big" style="margin-top:4px">照合: <b id="shareVerdict">–</b></div>
   </div>
 
-  <h2>5. 3つのうち2つで開く（2-of-3）</h2>
+  <h2>5. いくつかそろえば開く（k-of-n の秘密分散）</h2>
   <div class="card">
-    <div class="muted">秘密を3つに分けてある場合の読み方です。<b>どの2つがそろっても開き、1つだけでは何も分かりません</b>。1つを失っても残り2つで復元できます。<br>
-      担体（カード・箱・本立てなど）には<b>番号が彫ってあります</b>。番号は復元の計算に必要なので、吹く前に選んでください。読み方は「2. 続けて吹く」と同じです。</div>
+    <div class="muted">秘密を複数に分けてある場合の読み方です。<b>決められた数だけそろえば開き、それに満たなければ何も分かりません</b>。いくつか失っても残りで復元できます。<br>
+      担体（カード・箱・本立て・画像タイルなど）には<b>番号が彫ってあるか、作ったときに決めてあります</b>。番号は復元の計算に必要なので、吹く前に選んでください。読み方は「2. 続けて吹く」と同じです。<br>
+      例。北斎の画像タイル9枚は 2-of-9 なので、<b>どの2枚でも開きます</b>。左上から右へ1・2・3、次の行が4・5・6、最下段が7・8・9です。</div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0">
       <label class="muted" for="thIndex">いま吹く担体の番号：</label>
       <select id="thIndex" style="font:inherit;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.4em">
         <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+        <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+        <option value="7">7</option><option value="8">8</option><option value="9">9</option>
       </select>
       <button id="thBtn">この担体を吹く（開始）</button>
       <button class="sec" id="thClearBtn">やり直す</button>
@@ -862,11 +866,11 @@ function thrRender(){
   const b = el("thBtn");
   b.textContent = thr.capturing ? "終了し読む" : "この担体を吹く（開始）";
   b.classList.toggle("ok", thr.capturing);
-  b.disabled = thr.picked.length >= 3;
+  b.disabled = thr.picked.length >= 9;
   el("thIndex").disabled = thr.capturing;
 }
 async function thrToggle(){
-  if(thr.picked.length >= 3) return;
+  if(thr.picked.length >= 9) return;
   if(thr.capturing){ autoEnd(); return; }
   thr.index = parseInt(el("thIndex").value, 10);
   if(thr.picked.some(c => c.x === thr.index)){
