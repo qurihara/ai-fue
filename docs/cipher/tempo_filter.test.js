@@ -77,5 +77,43 @@ console.log("■ 音が少なくてテンポを測れないときは、判定を
   check("説明が付く", /音が足りない/.test(r.note));
 }
 
+console.log("■ 拍に来たのに読めない音は「飛ばし」にする（除外ではない）");
+{
+  const ev = cleanRun(8, 900);
+  // 5本目が拍どおりに来たが、音程が取れなかった（笛が鳴らなかった）
+  ev[4] = {kind: "reject", freq: null, durationMs: 300, startMs: 4 * 900, reason: "音程が取れなかった"};
+  const r = TF.analyze(ev, {});
+  const it = r.items[4];
+  check("扱いは skip（飛ばし）", it.action === "skip", "action=" + it.action);
+  check("除外(drop)ではない", it.action !== "drop");
+  check("理由が付く", /鳴らない笛として飛ばす/.test(it.reason));
+  check("残り7本は採用", r.items.filter(i => i.action === "keep").length === 7);
+}
+
+console.log("■ 拍の位置に音が来なかったら、飛ばしを挿す");
+{
+  const ev = [];
+  for (let i = 0; i < 8; i++) {
+    if (i === 3) continue;               // 4本目がまったく鳴らなかった
+    ev.push({kind: "note", freq: 2000 + i * 50, durationMs: 540, startMs: i * 900});
+  }
+  const r = TF.analyze(ev, {});
+  check("テンポを900msと測れる", r.beatMs === 900, "beatMs=" + r.beatMs);
+  check("穴を1つ見つける", r.missing.length === 1, "missing=" + JSON.stringify(r.missing));
+  check("穴の位置は4本目（t=2700ms）", r.missing.length === 1 && r.missing[0].startMs === 2700);
+  check("理由が付く", r.missing.length === 1 && /音が来なかった/.test(r.missing[0].reason));
+}
+
+console.log("■ 拍から外れた雑音は、飛ばしではなく除外のまま");
+{
+  const ev = cleanRun(8, 900);
+  ev.push({kind: "note", freq: 2600, durationMs: 80, startMs: 2 * 900 + 450});
+  ev.sort((a, b) => a.startMs - b.startMs);
+  const r = TF.analyze(ev, {});
+  const junk = r.items.find(i => i.durationMs === 80);
+  check("扱いは drop（除外）", junk.action === "drop", "action=" + junk.action);
+  check("穴は増えない", r.missing.length === 0, "missing=" + r.missing.length);
+}
+
 console.log("\n結果: ok " + ok + " / NG " + ng);
 process.exit(ng ? 1 : 0);

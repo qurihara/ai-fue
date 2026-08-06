@@ -75,9 +75,18 @@
       return {items, beatMs: null, note: "テンポを測るには音が足りない（判定は変えていない）"};
     }
 
-    // 捨てられた音のうち、拍に乗っているものは拾い直す。
-    // 逆に、確かだとされた音でも、拍から大きく外れた短い音は雑音とみなす。
+    // 拍に乗っているかどうかで、[* 扱いを3つに分ける]。
+    //
+    //   drop（除外）… 拍から外れた短い音。咳や物音であって笛ではないので、
+    //                 位置ごと取り除く。本数には数えない。
+    //   skip（飛ばし）… 拍には乗っているのに読めない音。[* そこに笛はあったが鳴らなかった]
+    //                 ということなので、位置を保ったまま消失として扱い、パリティで訂正させる。
+    //   keep（採用）… そのまま使う。
+    //
+    // この区別は栗原さんの指摘による（2026-08-06）。以前はどちらも「除外」にしていたので、
+    // 笛が鳴らなかったときに本数が1つ減り、パリティで直せる誤りを直せなくしていた。
     for (const it of items) {
+      it.action = it.keep ? "keep" : "drop";
       if (it.startMs == null) continue;
       const phase = nearestBeatDistance(it.startMs, sure, beatMs);
       const onBeat = phase != null && phase <= beatMs * opt.onBeatTol;
@@ -85,14 +94,18 @@
 
       if (it.kind === "reject") {
         if (onBeat && it.freq) {
-          it.keep = true;
+          it.keep = true; it.action = "keep";
           it.reason = "拍に乗っていたので拾い直した";
+        } else if (onBeat) {
+          // 拍には来ているのに音程が取れなかった＝笛が鳴らなかった
+          it.keep = false; it.action = "skip";
+          it.reason = "拍に来たが読めなかった（鳴らない笛として飛ばす）";
         } else {
-          it.keep = false;
-          it.reason = (it.reason || "短すぎた") + "／拍にも乗っていない";
+          it.keep = false; it.action = "drop";
+          it.reason = (it.reason || "短すぎた") + "／拍にも乗っていない（雑音）";
         }
       } else if (!onBeat && short) {
-        it.keep = false;
+        it.keep = false; it.action = "drop";
         it.reason = "拍から外れた短い音（雑音の疑い）";
       }
 
@@ -100,7 +113,23 @@
         it.warn = "長い（2本ぶんが繋がった疑い）";
       }
     }
-    return {items, beatMs, note: ""};
+
+    // [* 拍の位置に音がまったく来なかった]場合も、笛が鳴らなかったということである。
+    // 最初の音から最後の音までのあいだで、拍の格子に穴が空いていれば飛ばしを挿す。
+    const missing = [];
+    const live = items.filter(it => it.action !== "drop" && it.startMs != null);
+    if (live.length >= 2) {
+      const t0 = live[0].startMs;
+      const tEnd = live[live.length - 1].startMs;
+      const nBeats = Math.round((tEnd - t0) / beatMs);
+      for (let k = 1; k < nBeats; k++) {
+        const t = t0 + k * beatMs;
+        const near = live.some(it => Math.abs(it.startMs - t) <= beatMs * opt.onBeatTol);
+        if (!near) missing.push({beatIndex: k, startMs: t,
+                                 reason: "この拍に音が来なかった（鳴らない笛として飛ばす）"});
+      }
+    }
+    return {items, beatMs, missing, note: ""};
   }
 
   /* いちばん近い拍からの隔たり[ms]。拍の格子は、確かな音の並びから作る。 */

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CipherFlute 復号 v7</title>
+<title>CipherFlute 復号 v8</title>
 <style>
   :root{
     --bg:#0f1220; --card:#1a1f36; --fg:#e8ecf5; --muted:#98a2c0;
@@ -90,14 +90,15 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v7</span></h1>
+  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v8</span></h1>
   <details class="expectBox"><summary>照合用：期待する音列を貼る（デバッグ）</summary>
     <p class="hint">設計どおりの音列を空白区切りで貼ると、吹いた結果と1本ずつ突き合わせて色分けします。
       例 <code>C7 G7 D#7 F7 G#6 A#6 C#7 D#7</code>。基準笛を含めて先頭から並べてください。</p>
     <input id="expectSeq" type="text" placeholder="C7 G7 D#7 F7 G#6 A#6 C#7 D#7" autocomplete="off">
     <div id="expectStat" class="hint"></div>
   </details>
-  <p class="verNote"><b>v7</b>（2026-08-06）… 秘密分散の節で、担体の番号を1〜9から選べるようにしました（画像タイル9枚の 2-of-9 に対応）。<br>
+  <p class="verNote"><b>v8</b>（2026-08-06）… 鳴らなかった笛を「除外」ではなく「飛ばし」にしました。位置を保つので、誤り訂正のパリティで直せます。拍に音が来なかったところにも飛ばしを入れます。<br>
+  <b>v7</b>（2026-08-06）… 秘密分散の節で、担体の番号を1〜9から選べるようにしました（画像タイル9枚の 2-of-9 に対応）。<br>
   <b>v6</b>（2026-08-06）… 「続けて吹く」で、吹いたテンポを手がかりに雑音を見分けるようにしました。
     捨てられた音も列に残し、拍に乗っていれば拾い直します。各音はクリックで除外・復帰できます。
     <details style="display:inline"><summary style="display:inline;cursor:pointer;color:#2b6cb0">これまでの版</summary>
@@ -636,16 +637,47 @@ function autoTempoPass(){
                                freq: s.freq, durationMs: s.durationMs, startMs: s.startMs}));
   const r = window.TempoFilter.analyze(ev, {});
   if(!r.beatMs){ el("autoTempo").textContent = r.note || ""; return; }
-  let changed = 0;
+  let dropped = 0, skipped = 0;
   r.items.forEach((it, i)=>{
     if(auto.seq[i].skipped) return;              // 手で空けたものは触らない
-    const want = !it.keep;
-    if(auto.seq[i].off !== want && !auto.seq[i].byHand){ auto.seq[i].off = want; changed++; }
+    if(auto.seq[i].byHand) return;               // 手で決めたものは覆さない
+    if(it.action === "skip"){
+      // [* 拍には来たのに読めなかった＝そこに笛はあったが鳴らなかった]。
+      // 除外して詰めると本数が1つ減り、パリティで直せる誤りを直せなくなる。
+      // 位置を保ったまま消失として扱い、誤り訂正に任せる（栗原さんの指摘・2026-08-06）。
+      auto.seq[i].off = false;
+      auto.seq[i].skipped = true;
+      auto.seq[i].freq = null;
+      auto.seq[i].note = null;
+      skipped++;
+    } else {
+      const want = (it.action === "drop");
+      if(auto.seq[i].off !== want){ auto.seq[i].off = want; if(want) dropped++; }
+    }
     if(it.reason) auto.seq[i].why = it.reason;
     if(it.warn) auto.seq[i].warn = it.warn;
   });
+
+  // 拍の位置に音がまったく来なかったところにも、鳴らない笛として飛ばしを挿す
+  let inserted = 0;
+  if(r.missing && r.missing.length){
+    for(const m of r.missing){
+      // その拍より後ろにある最初の要素の直前へ挿す（時刻の順を保つ）
+      let at = auto.seq.findIndex(s => s.startMs != null && s.startMs > m.startMs);
+      if(at < 0) at = auto.seq.length;
+      auto.seq.splice(at, 0, {freq:null, note:null, skipped:true, startMs:m.startMs,
+                              kind:"missing", why:m.reason});
+      inserted++;
+    }
+  }
+
+  const parts = [];
+  if(skipped) parts.push(skipped + "本を鳴らない笛として飛ばしました");
+  if(inserted) parts.push(inserted + "本ぶん、音が来なかった拍に飛ばしを入れました");
+  if(dropped) parts.push(dropped + "本を雑音として除きました");
   el("autoTempo").textContent = "テンポは約" + Math.round(r.beatMs) + "ms。"
-    + (changed ? changed + "本の扱いを変えました（クリックで戻せます）。" : "拍から外れた音はありませんでした。");
+    + (parts.length ? parts.join("／") + "（クリックで戻せます）。"
+                    : "拍から外れた音はありませんでした。");
   renderAutoSeq();
 }
 // 開始と終了は同じボタンで兼ねる。押すたびにラベルと色が入れ替わる。
