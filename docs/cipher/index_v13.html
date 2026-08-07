@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CipherFlute 復号 v14</title>
+<title>CipherFlute 復号 v13</title>
 <style>
   :root{
     --bg:#0f1220; --card:#1a1f36; --fg:#e8ecf5; --muted:#98a2c0;
@@ -98,15 +98,14 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v14</span></h1>
+  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v13</span></h1>
   <details class="expectBox"><summary>照合用：期待する音列を貼る（デバッグ）</summary>
     <p class="hint">設計どおりの音列を空白区切りで貼ると、吹いた結果と1本ずつ突き合わせて色分けします。
       例 <code>C7 G7 D#7 F7 G#6 A#6 C#7 D#7</code>。基準笛を含めて先頭から並べてください。</p>
     <input id="expectSeq" type="text" placeholder="C7 G7 D#7 F7 G#6 A#6 C#7 D#7" autocomplete="off">
     <div id="expectStat" class="hint"></div>
   </details>
-  <p class="verNote"><b>v14</b>（2026-08-07）… 照合用の音列を <code>expect=</code> でURLに仕込めるようにしました。吹いている最中は、直前の1本が期待と合っていたかと次に吹く音を案内し、違ったときは「この笛は飛ばす」を押すよう促します。鳴らない笛でつまずいてもそこから先がずれません。<br>
-  <b>v13</b>（2026-08-07）… マイクで拾うときも、録音とまったく同じ「笛の音域の中でいちばん強い山を追う」方式にしました。これまでの自己相関にもとづく検出は符号の最低音 G#6 を誤ります。あわせて、復号の結果をこの節にも出し、「いまの音列で復号する」ボタンを付けました。<br>
+  <p class="verNote"><b>v13</b>（2026-08-07）… マイクで拾うときも、録音とまったく同じ「笛の音域の中でいちばん強い山を追う」方式にしました。これまでの自己相関にもとづく検出は符号の最低音 G#6 を誤ります。あわせて、復号の結果をこの節にも出し、「いまの音列で復号する」ボタンを付けました。<br>
   <b>v12</b>（2026-08-06）… 録音ファイルの音の高さを、笛の音域だけを見てFFTの山を追う方式に替えました。これまでの方式は符号の最低音 G#6（1661Hz）を 3992Hz と誤り、それが復号を止めていました。スプール2枚の録音で128ビットの秘密が復元できています。担体が複数あるときは<b>録音をまとめて選べる</b>ようになり、あらかじめ音声を繋いでおく必要がなくなりました。<br>
   <b>v11</b>（2026-08-06）… 音域から外れた音を列から消さず、読めなかった印を付けて残すようにしました（消すと位置が詰まって以降がずれます）。倍音の引き戻しはやめ、飛ばしとしてパリティに直させます。<br>
   <b>v10</b>（2026-08-06）… 録音ファイルを読み込めるようにしました（マイクの代わり。節2の下）。あわせて、音域のすぐ外にある音を倍音と取り違えないようにしました。<br>
@@ -331,10 +330,10 @@
 <!-- ページの版をそのまま付ける。付けないと、index.html だけが新しくなっても
      ブラウザが古い部品を掴んだままになる（実際、直した tempo_filter.js が
      読み込まれずに古い判定が動いた）。[* 版を上げるときはここも一緒に変える]。 -->
-<script src="cipher_codec.js?v=14"></script>
-<script src="silence_segmenter.js?v=14"></script>
-<script src="tempo_filter.js?v=14"></script>
-<script src="fft_peak.js?v=14"></script>
+<script src="cipher_codec.js?v=13"></script>
+<script src="silence_segmenter.js?v=13"></script>
+<script src="tempo_filter.js?v=13"></script>
+<script src="fft_peak.js?v=13"></script>
 <script type="module">
 // v13で pitchy（自己相関にもとづく音程検出）をやめた。符号の最低音 G#6 に無関係な値を
 // 返すことがあり、それが復号を止めていた。いまは録音もマイクも FftPeak で山を追う。
@@ -386,16 +385,6 @@ const segOptions = {};  // 無音区切りの調整（gap= onmargin= minnote=）
   if(q.get("pitchsplit") === "1") el("pitchSplit").checked = true;
   const sha = (q.get("sha256") || q.get("hash") || "").trim();
   if(sha) el("cipherHash").value = sha;
-  // 照合用の音列をURLに仕込む（v13）。毎回貼り直さずに済む。
-  // 空白でも読点でも区切れる。`expect=C7,C%236,A6...` のように書ける
-  // （音名の # は URL では %23 と書く。生の # だとそこから後ろが断片扱いになる）。
-  const expect = (q.get("expect") || q.get("seq") || "").trim();
-  if(expect){
-    el("expectSeq").value = expect.replace(/[,、]+/g, " ").replace(/\s+/g, " ").trim();
-    // 貼ったときと同じ扱いにする。折りたたみも開いて、入っていることが見えるようにする
-    const box = el("expectSeq").closest("details");
-    if(box) box.open = true;
-  }
   const spf = q.get("spf");
   if(spf && [...el("spf").options].some(o=>o.value===spf)) el("spf").value = spf;
   const mode = q.get("mode");
@@ -609,32 +598,6 @@ function compareOne(i, note){
           html: `<span class="exp">${ok ? "○" : "×"} 期待 ${want}</span>`};
 }
 
-/* 吹いている最中の案内を作る。期待する音列があるときは、直前の1本が合っていたかと、
- * 次に吹くべき音を示す。
- *
- * ★合わなかったときに何をすればよいかまで書く★。鳴らない笛でつまずくと、そこから先が
- * 1本ずつずれて復号できなくなる。ずれたことがその場で分かり、「この笛は飛ばす」を
- * 押せば直る（2026-08-07、栗原さんの指摘。4本目が不安定で止まってしまった）。 */
-function autoHintText(){
-  const live = auto.seq.filter(s => !s.off);
-  const n = live.length;
-  const exp = expectedNotes();
-  if(!exp) return n + "本目まで入りました。続けて次の笛を吹き、終わったらボタンを押してください。";
-  if(!n) return `1本目 ${exp[0]} から吹いてください。`;
-  const last = live[n - 1];
-  const want = exp[n - 1];
-  const next = n < exp.length ? exp[n] : null;
-  const tail = next ? `　次は ${n + 1}本目 ${next} です。`
-                    : "　これで最後です。ボタンを押してください。";
-  // 飛ばしは「鳴らなかった」ことを記録しただけなので、合った・違うの判定はしない
-  if(last.skipped) return `${n}本目は飛ばしました（位置は空けてあります）。` + tail;
-  const got = last.note ? last.note.disp : "—";
-  if(got === want) return `${n}本目 ${got} ○` + tail;
-  return `★${n}本目は ${want} のはずが ${got} でした★　`
-       + `鳴らなかったなら「この笛は飛ばす」を押してください`
-       + `（位置が空くので誤り訂正で埋まります）。` + tail;
-}
-
 /* 照合の要約を出す。何本中何本が一致したか。 */
 function renderExpectStat(seq){
   const box = el("expectStat"); if(!box) return;
@@ -811,7 +774,7 @@ function autoSkip(){
   renderAutoSeq();
   autoSetButton();
   el("autoDot").textContent = String(auto.seq.length);
-  el("autoHint").textContent = autoHintText();
+  el("autoHint").textContent = auto.seq.length + "本目を「鳴らない」として空けました。次の笛へ進んでください。";
   if(navigator.vibrate) navigator.vibrate([15,40,15]);
 }
 /* 区切りの設定を、画面のつまみから読む。
@@ -1288,7 +1251,8 @@ function loop(){
       renderAutoSeq();
       autoSetButton();
       el("autoDot").textContent = String(auto.seq.length);
-      el("autoHint").textContent = autoHintText();
+      el("autoHint").textContent = auto.seq.length
+        + "本目まで入りました。続けて次の笛を吹き、終わったらボタンを押してください。";
       if(navigator.vibrate) navigator.vibrate(25);
       }
     } else if(ev.type === "reject"){

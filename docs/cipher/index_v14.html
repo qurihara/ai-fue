@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CipherFlute 復号 v15</title>
+<title>CipherFlute 復号 v14</title>
 <style>
   :root{
     --bg:#0f1220; --card:#1a1f36; --fg:#e8ecf5; --muted:#98a2c0;
@@ -98,15 +98,14 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v15</span></h1>
+  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v14</span></h1>
   <details class="expectBox"><summary>照合用：期待する音列を貼る（デバッグ）</summary>
     <p class="hint">設計どおりの音列を空白区切りで貼ると、吹いた結果と1本ずつ突き合わせて色分けします。
       例 <code>C7 G7 D#7 F7 G#6 A#6 C#7 D#7</code>。基準笛を含めて先頭から並べてください。</p>
     <input id="expectSeq" type="text" placeholder="C7 G7 D#7 F7 G#6 A#6 C#7 D#7" autocomplete="off">
     <div id="expectStat" class="hint"></div>
   </details>
-  <p class="verNote"><b>v15</b>（2026-08-07）… 新しい入口「<b>2''. 一定のテンポで吹いて、あとから読む</b>」を足しました。吹いている最中は何も判定せず、その場で録音するだけです。読むのは終わってからで、録音ファイルを読むのとまったく同じ道を通ります。鳴らない笛があっても、拍を1つ空けて吹き続ければ、あとから拍を見て自動で「飛ばし」が入ります。途中で判定する入口は、気づいて立ち止まると拍が崩れてかえって直せなくなるため、こちらを勧めます。<br>
-  <b>v14</b>（2026-08-07）… 照合用の音列を <code>expect=</code> でURLに仕込めるようにしました。吹いている最中は、直前の1本が期待と合っていたかと次に吹く音を案内し、違ったときは「この笛は飛ばす」を押すよう促します。鳴らない笛でつまずいてもそこから先がずれません。<br>
+  <p class="verNote"><b>v14</b>（2026-08-07）… 照合用の音列を <code>expect=</code> でURLに仕込めるようにしました。吹いている最中は、直前の1本が期待と合っていたかと次に吹く音を案内し、違ったときは「この笛は飛ばす」を押すよう促します。鳴らない笛でつまずいてもそこから先がずれません。<br>
   <b>v13</b>（2026-08-07）… マイクで拾うときも、録音とまったく同じ「笛の音域の中でいちばん強い山を追う」方式にしました。これまでの自己相関にもとづく検出は符号の最低音 G#6 を誤ります。あわせて、復号の結果をこの節にも出し、「いまの音列で復号する」ボタンを付けました。<br>
   <b>v12</b>（2026-08-06）… 録音ファイルの音の高さを、笛の音域だけを見てFFTの山を追う方式に替えました。これまでの方式は符号の最低音 G#6（1661Hz）を 3992Hz と誤り、それが復号を止めていました。スプール2枚の録音で128ビットの秘密が復元できています。担体が複数あるときは<b>録音をまとめて選べる</b>ようになり、あらかじめ音声を繋いでおく必要がなくなりました。<br>
   <b>v11</b>（2026-08-06）… 音域から外れた音を列から消さず、読めなかった印を付けて残すようにしました（消すと位置が詰まって以降がずれます）。倍音の引き戻しはやめ、飛ばしとしてパリティに直させます。<br>
@@ -247,27 +246,6 @@
     </div>
   </div>
 
-  <h2>2''. 一定のテンポで吹いて、あとから読む（おすすめ）</h2>
-  <div class="card">
-    <div class="muted">その場で録音して、あとからまとめて読みます。<b>読み取りは録音ファイルを読むときとまったく同じ道</b>を通ります。</div>
-    <div class="muted" style="margin-top:6px">
-      <b>吹いている最中は何も判定しません。</b>拍の印に合わせて、<b>止まらずに最後まで吹いてください。</b>
-      鳴らない笛があっても、そこは休符のつもりで<b>1拍ぶん空けて次へ進みます</b>。あとから拍を見て、空いた位置に「飛ばし」を入れます。
-      <br>途中で担体を持ち替えるとき（スプール2枚など）は、<b>拍を気にせず3秒以上ゆっくり</b>持ち替えてください。持ち替えの空白として扱われ、笛の数には数えません。
-    </div>
-    <div class="row" style="margin-top:10px;align-items:center">
-      <span class="dot" id="recDot">–</span>
-      <label class="muted" for="recBeat">拍の間かく</label>
-      <input type="range" id="recBeat" min="300" max="1200" step="50" value="700" style="flex:1;min-width:160px">
-      <span class="muted" id="recBeatVal">700 ms</span>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <button id="recStartBtn">録音を開始して吹く</button>
-      <span class="status" id="recStatus"></span>
-    </div>
-    <div class="muted" style="margin-top:6px" id="recCount">拍の印が動きはじめたら、その速さで吹いてください。</div>
-  </div>
-
   <h2>2'. 1文字ずつ入力（1本ずつ確定）</h2>
   <div class="card">
     <div class="muted">「開始」を押すと1本ぶんの音を受け付けます。いま鳴っている音が下に出ます（新しい音に上書き）。「入力」でその音を1本ぶん確定。全部入れ終えたら「終了して復号」。</div>
@@ -353,10 +331,10 @@
 <!-- ページの版をそのまま付ける。付けないと、index.html だけが新しくなっても
      ブラウザが古い部品を掴んだままになる（実際、直した tempo_filter.js が
      読み込まれずに古い判定が動いた）。[* 版を上げるときはここも一緒に変える]。 -->
-<script src="cipher_codec.js?v=15"></script>
-<script src="silence_segmenter.js?v=15"></script>
-<script src="tempo_filter.js?v=15"></script>
-<script src="fft_peak.js?v=15"></script>
+<script src="cipher_codec.js?v=14"></script>
+<script src="silence_segmenter.js?v=14"></script>
+<script src="tempo_filter.js?v=14"></script>
+<script src="fft_peak.js?v=14"></script>
 <script type="module">
 // v13で pitchy（自己相関にもとづく音程検出）をやめた。符号の最低音 G#6 に無関係な値を
 // 返すことがあり、それが復号を止めていた。いまは録音もマイクも FftPeak で山を追う。
@@ -364,7 +342,6 @@
 const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 const el = id => document.getElementById(id);
 let audioCtx, analyser, raf, running=false;
-let micStream = null;      // マイクの生の流れ。その場の録音（節2''）に渡す
 let freqData;
 let live = {freq:0, peak:0, bandDb:-120};
 let cipherConfig = null;
@@ -536,7 +513,6 @@ async function start(){
   if(running) return true;
   try{
     const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
-    micStream = stream;          // その場の録音（節2''）でも使うので持っておく
     audioCtx = new (window.AudioContext||window.webkitAudioContext)();
     const src = audioCtx.createMediaStreamSource(stream);
     // [* 窓は4096にする]（v13）。8192（約186ms）だと、息を切らずに続けて吹いたときの
@@ -700,90 +676,6 @@ function renderSeq(){
   });
   renderExpectStat(cap.seq);
 }
-
-/* --- その場で録音して、あとからまとめて読むモード（節2''・v14） ---
- *
- * なぜ別の入口にしたか
- * --------------------
- * 「続けて吹く」は1本ごとに判定して画面に出す。ところが[* 拍を手がかりに穴を埋める仕組みと
- * 相性が悪い]。鳴らない笛に気づいて吹き直すと、そこで拍が崩れ、あとから穴を埋められなく
- * なる。実測では、止まらずに吹けば埋まって秘密が戻るのに、0.6秒でも間を置くと失敗した。
- * 見て直せるようにするほど、直せなくなるという矛盾である（2026-08-07、栗原さんの指摘）。
- *
- * そこで[* 吹いている最中は何も判定しない]入口を作った。録音するだけで、読むのは終わって
- * から。[* 録音ファイルを読むときとまったく同じ関数を通す]ので、FFTの山を追う読み方も、
- * 暗騒音を全体から測るやり方も、持ち替えの空白の扱いも、そのまま効く。
- *
- * 持ち替えは間の長さで見分ける。拍の4倍までの空きは「鳴らなかった笛」として埋め、
- * それより長ければ持ち替えとみなして何も挿さない。3秒以上かけて持ち替えれば確実である。
- */
-const rec = {active:false, mr:null, chunks:[], t0:0, timer:null, beats:0};
-
-function recSetBeat(){
-  el("recBeatVal").textContent = el("recBeat").value + " ms";
-}
-
-async function recStart(){
-  if(!await ensureMic()){ el("recStatus").textContent="マイクを開始できませんでした。"; return; }
-  if(!micStream){ el("recStatus").textContent="マイクの流れを取れませんでした。"; return; }
-  if(auto.active || cap.active || one.active){
-    el("recStatus").textContent="ほかの入力方式が動いています。先にそちらを終えてください。"; return;
-  }
-  if(typeof MediaRecorder === "undefined"){
-    el("recStatus").textContent="このブラウザは録音に対応していません。録音アプリで録って、上の『録音ファイルから読む』へ渡してください。"; return;
-  }
-  rec.chunks = [];
-  // 対応している形式のうち、decodeAudioData が読めるものを選ぶ
-  const cand = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus", ""];
-  const type = cand.find(t => t === "" || (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)));
-  try{
-    rec.mr = type ? new MediaRecorder(micStream, {mimeType: type}) : new MediaRecorder(micStream);
-  }catch(e){
-    el("recStatus").textContent = "録音を始められませんでした（" + e.message + "）。"; return;
-  }
-  rec.mr.ondataavailable = e => { if(e.data && e.data.size) rec.chunks.push(e.data); };
-  rec.mr.onstop = recFinish;
-  rec.mr.start();
-  rec.active = true; rec.t0 = performance.now(); rec.beats = 0;
-  el("recStartBtn").textContent = "終わり（読み取る）";
-  el("recStatus").textContent = "録音しています。拍に合わせて、止まらずに吹いてください。";
-  el("autoDecoded").style.display = "none";
-  // 拍の印。音は鳴らさない（マイクが拾ってしまうため）
-  const tick = () => {
-    if(!rec.active) return;
-    rec.beats++;
-    el("recDot").classList.toggle("on");
-    el("recDot").textContent = String(rec.beats);
-    el("recCount").textContent = rec.beats + "拍め（" + ((performance.now()-rec.t0)/1000).toFixed(1) + "秒）。"
-      + "鳴らない笛は1拍ぶん空けて次へ。持ち替えは3秒以上ゆっくり。";
-  };
-  rec.timer = setInterval(tick, parseInt(el("recBeat").value, 10));
-  tick();
-}
-
-function recStop(){
-  if(!rec.active) return;
-  rec.active = false;
-  clearInterval(rec.timer); rec.timer = null;
-  el("recDot").classList.remove("on"); el("recDot").textContent = "–";
-  el("recStartBtn").textContent = "録音を開始して吹く";
-  el("recStatus").textContent = "読み取っています…";
-  try{ rec.mr.stop(); }catch(e){ el("recStatus").textContent = "止められませんでした（" + e.message + "）。"; }
-}
-
-/* 録音が閉じたところで、録音ファイルとまったく同じ道へ渡す。 */
-async function recFinish(){
-  const blob = new Blob(rec.chunks, {type: rec.mr && rec.mr.mimeType || "audio/webm"});
-  if(!blob.size){ el("recStatus").textContent = "録音が空でした。もう一度お試しください。"; return; }
-  const ext = /mp4/.test(blob.type) ? "m4a" : (/ogg/.test(blob.type) ? "ogg" : "webm");
-  const file = new File([blob], "その場の録音." + ext, {type: blob.type});
-  el("recStatus").textContent = "録音 " + (blob.size/1024).toFixed(0) + "kB を読み取っています…";
-  await autoFromFiles([file]);          // ← 録音ファイルを読むのと同じ関数
-  el("recStatus").textContent = "読み取りました。結果は上の「2. 続けて吹く」の列と、下の「3. 復号」に出ます。";
-  el("recCount").textContent = "もう一度録るときは「録音を開始して吹く」を押してください。";
-}
-
-function recToggle(){ rec.active ? recStop() : recStart(); }
 
 // --- 無音区切りで自動送りするモード ---
 // 笛と笛の間に短い無音を置くだけで次の桁へ進む。拍にもボタン操作にも縛られない。
@@ -1606,9 +1498,6 @@ el("autoStartBtn").onclick = autoToggle;
 el("autoSkipBtn").onclick = autoSkip;
 el("autoUndoBtn").onclick = autoUndo;
 el("autoClearBtn").onclick = autoClear;
-el("recStartBtn").onclick = recToggle;
-el("recBeat").oninput = recSetBeat;
-recSetBeat();
 // いまの音列でもう一度復号する。設定（音域・パリティなど）を変えたあとに押し直せる
 el("autoDecodeBtn").onclick = ()=>{
   const live_ = auto.seq.filter(s=>!s.off);
