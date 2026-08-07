@@ -105,6 +105,37 @@ console.log("■ 窓の長さと時間のきざみ");
         r.times.length + "窓");
 }
 
+console.log("■ スペクトルから山を拾う（マイクと録音で共通の関数）");
+{
+  const binHz = 44100 / 4096;                        // 約10.77Hz
+  // 2000Hz にちょうど山がある形を作る（両隣が対称に低い）
+  const spec = new Float64Array(2049).fill(-120);
+  const k = Math.round(2000 / binHz);
+  spec[k - 1] = -30; spec[k] = -20; spec[k + 1] = -30;
+  const p = FP.peakInBand(spec, binHz, 1500, 3400);
+  check("山の位置を返す", p.bin === k, "bin=" + p.bin);
+  check("両隣が対称なら補間しても中心のまま",
+        Math.abs(p.freq - k * binHz) < 1e-6, p.freq.toFixed(2));
+  check("山の強さを返す", p.level === -20);
+
+  // 右隣が高ければ、山の頂点は右へ寄る
+  spec[k + 1] = -25;
+  const q = FP.peakInBand(spec, binHz, 1500, 3400);
+  check("右が高ければ右へ寄る", q.freq > k * binHz, q.freq.toFixed(2));
+  check("寄る量は1ビン以内", q.freq - k * binHz < binHz, (q.freq - k*binHz).toFixed(2));
+
+  // 音域の外にもっと強い山があっても、拾わない
+  const spec2 = new Float64Array(2049).fill(-120);
+  spec2[Math.round(300 / binHz)] = 0;                // 音域より下の唸り（最強）
+  spec2[Math.round(2500 / binHz)] = -40;             // 音域の中の笛（弱い）
+  const r = FP.peakInBand(spec2, binHz, 1500, 3400);
+  check("音域の外は見ない", Math.abs(r.freq - 2500) < binHz, r.freq.toFixed(1) + "Hz");
+
+  check("音域が狭すぎれば null", FP.peakInBand(spec, binHz, 2000, 2000) === null);
+  check("全部が無限小なら null",
+        FP.peakInBand(new Float64Array(100).fill(-Infinity), binHz, 200, 400) === null);
+}
+
 console.log("■ 暗騒音（静かな側から数えた割合）");
 {
   const v = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];

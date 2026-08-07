@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CipherFlute 復号 v13</title>
+<title>CipherFlute 復号 v12</title>
 <style>
   :root{
     --bg:#0f1220; --card:#1a1f36; --fg:#e8ecf5; --muted:#98a2c0;
@@ -98,15 +98,14 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v13</span></h1>
+  <h1>CipherFlute 復号 <span class="ver" id="pageVer">v12</span></h1>
   <details class="expectBox"><summary>照合用：期待する音列を貼る（デバッグ）</summary>
     <p class="hint">設計どおりの音列を空白区切りで貼ると、吹いた結果と1本ずつ突き合わせて色分けします。
       例 <code>C7 G7 D#7 F7 G#6 A#6 C#7 D#7</code>。基準笛を含めて先頭から並べてください。</p>
     <input id="expectSeq" type="text" placeholder="C7 G7 D#7 F7 G#6 A#6 C#7 D#7" autocomplete="off">
     <div id="expectStat" class="hint"></div>
   </details>
-  <p class="verNote"><b>v13</b>（2026-08-07）… マイクで拾うときも、録音とまったく同じ「笛の音域の中でいちばん強い山を追う」方式にしました。これまでの自己相関にもとづく検出は符号の最低音 G#6 を誤ります。あわせて、復号の結果をこの節にも出し、「いまの音列で復号する」ボタンを付けました。<br>
-  <b>v12</b>（2026-08-06）… 録音ファイルの音の高さを、笛の音域だけを見てFFTの山を追う方式に替えました。これまでの方式は符号の最低音 G#6（1661Hz）を 3992Hz と誤り、それが復号を止めていました。スプール2枚の録音で128ビットの秘密が復元できています。担体が複数あるときは<b>録音をまとめて選べる</b>ようになり、あらかじめ音声を繋いでおく必要がなくなりました。<br>
+  <p class="verNote"><b>v12</b>（2026-08-06）… 録音ファイルの音の高さを、笛の音域だけを見てFFTの山を追う方式に替えました。これまでの方式は符号の最低音 G#6（1661Hz）を 3992Hz と誤り、それが復号を止めていました。スプール2枚の録音で128ビットの秘密が復元できています。担体が複数あるときは<b>録音をまとめて選べる</b>ようになり、あらかじめ音声を繋いでおく必要がなくなりました。<br>
   <b>v11</b>（2026-08-06）… 音域から外れた音を列から消さず、読めなかった印を付けて残すようにしました（消すと位置が詰まって以降がずれます）。倍音の引き戻しはやめ、飛ばしとしてパリティに直させます。<br>
   <b>v10</b>（2026-08-06）… 録音ファイルを読み込めるようにしました（マイクの代わり。節2の下）。あわせて、音域のすぐ外にある音を倍音と取り違えないようにしました。<br>
   <b>v9</b>（2026-08-06）… 担体を持ち替える空白を「鳴らなかった笛」と誤解しないようにしました。スプール2枚のように途中で持ち替える読み方でも、本数が狂いません。<br>
@@ -312,7 +311,7 @@
     <div class="muted big" style="margin-top:4px">照合: <b id="thVerdict">–</b></div>
   </div>
 
-  <p class="muted">復号ロジックは <a href="cipher_codec.js">cipher_codec.js</a>（Python版 fue/cipher_codec.py と一致）。設定は <a href="cipher_config.json">cipher_config.json</a>。音の高さは <a href="fft_peak.js">fft_peak.js</a> で読みます（笛の音域の中でいちばん強い山を追う方式。マイクでも録音でも同じ）。測定・較正ツールは <a href="../">こちら</a>。</p>
+  <p class="muted">復号ロジックは <a href="cipher_codec.js">cipher_codec.js</a>（Python版 fue/cipher_codec.py と一致）。設定は <a href="cipher_config.json">cipher_config.json</a>。音程検出は <a href="https://github.com/ianprime0509/pitchy" target="_blank">pitchy</a>。測定・較正ツールは <a href="../">こちら</a>。</p>
 </div>
 
 
@@ -330,10 +329,10 @@
 <!-- ページの版をそのまま付ける。付けないと、index.html だけが新しくなっても
      ブラウザが古い部品を掴んだままになる（実際、直した tempo_filter.js が
      読み込まれずに古い判定が動いた）。[* 版を上げるときはここも一緒に変える]。 -->
-<script src="cipher_codec.js?v=13"></script>
-<script src="silence_segmenter.js?v=13"></script>
-<script src="tempo_filter.js?v=13"></script>
-<script src="fft_peak.js?v=13"></script>
+<script src="cipher_codec.js?v=12"></script>
+<script src="silence_segmenter.js?v=12"></script>
+<script src="tempo_filter.js?v=12"></script>
+<script src="fft_peak.js?v=12"></script>
 <script type="module">
 // v13で pitchy（自己相関にもとづく音程検出）をやめた。符号の最低音 G#6 に無関係な値を
 // 返すことがあり、それが復号を止めていた。いまは録音もマイクも FftPeak で山を追う。

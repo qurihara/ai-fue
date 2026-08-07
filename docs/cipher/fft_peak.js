@@ -80,6 +80,37 @@
     return w;
   }
 
+  /* スペクトルの配列から、音域の中でいちばん強い山を返す。
+   *
+   * spec は[* 振幅でもデシベルでもよい]。どちらも単調な変換なので、山の位置は変わらない。
+   * AnalyserNode の getFloatFrequencyData（デシベル）をそのまま渡せるので、
+   * マイクで拾うときも録音を読むときも[* まったく同じ判定]ができる。
+   *
+   * 山の頂点は両隣を使った放物線で補間する。ビンの幅より細かく読めるので、
+   * マイク側の分解能（44.1kHz・窓4096で約10.8Hz）でも十分な精度になる。
+   */
+  function peakInBand(spec, binHz, loHz, hiHz) {
+    const k0 = Math.max(1, Math.ceil(loHz / binHz));
+    const k1 = Math.min(spec.length - 1, Math.floor(hiHz / binHz));
+    if (k1 <= k0) return null;
+    let best = k0, bestVal = -Infinity;
+    for (let k = k0; k <= k1; k++) {
+      if (spec[k] > bestVal) { bestVal = spec[k]; best = k; }
+    }
+    if (!isFinite(bestVal)) return null;
+    let f = best * binHz;
+    if (best > k0 && best < k1) {
+      const a = spec[best - 1], b = spec[best], c = spec[best + 1];
+      const den = a - 2 * b + c;
+      if (den !== 0 && isFinite(den)) {
+        const d = (a - c) / (2 * den);
+        // 補間が隣のビンを越えたら信じない（山でない所を拾っている）
+        if (Math.abs(d) <= 1) f = (best + d) * binHz;
+      }
+    }
+    return {freq: f, level: bestVal, bin: best};
+  }
+
   /* 窓ごとに、音域の中でいちばん強い山とその強さを返す。 */
   function track(x, sampleRate, options) {
     const opt = Object.assign({}, DEFAULTS, options || {});
@@ -96,22 +127,14 @@
     for (let i = 0; i + win < x.length; i += hop) {
       for (let k = 0; k < win; k++) { re[k] = x[i + k] * w[k]; im[k] = 0; }
       fft(re, im);
-      let best = k0, bestMag = -1;
       for (let k = k0; k <= k1; k++) {
-        const m = Math.sqrt(re[k] * re[k] + im[k] * im[k]);
-        mag[k] = m;
-        if (m > bestMag) { bestMag = m; best = k; }
+        mag[k] = Math.sqrt(re[k] * re[k] + im[k] * im[k]);
       }
-      // 山の頂点を、両隣を使った放物線で補間する（ビンの幅より細かく読む）
-      let f = best * binHz;
-      if (best > k0 && best < k1 && bestMag > 0) {
-        const a = mag[best - 1], b = mag[best], c = mag[best + 1];
-        const den = a - 2 * b + c;
-        if (den !== 0) f = (best + (a - c) / (2 * den)) * binHz;
-      }
+      // 山を拾うところは[* マイクの側とまったく同じ関数]を通す
+      const pk = peakInBand(mag, binHz, opt.loHz, opt.hiHz);
       times.push(i / sampleRate * 1000);
-      freqs.push(f);
-      levels.push(20 * Math.log10(bestMag + 1e-12));
+      freqs.push(pk ? pk.freq : k0 * binHz);
+      levels.push(20 * Math.log10((pk ? pk.level : 0) + 1e-12));
     }
     return {times: times, freqs: freqs, levels: levels, binHz: binHz};
   }
@@ -135,6 +158,6 @@
     return lo === hi ? s[lo] : s[lo] + (s[hi] - s[lo]) * (pos - lo);
   }
 
-  return {track: track, fft: fft, hanning: hanning,
+  return {track: track, peakInBand: peakInBand, fft: fft, hanning: hanning,
           noiseFloorDb: noiseFloorDb, DEFAULTS: DEFAULTS};
 });
