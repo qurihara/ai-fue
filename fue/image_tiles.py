@@ -228,9 +228,19 @@ def add_frame(p, frame_part, band=None):
     [* 枠は最前面]である。絵柄と対等に足すと、枠の帯に絵が食い込んで模様が上書きされる
     （2026-08-06、実物を見た栗原さんの指摘で分かった）。額縁は絵を囲んで区切るものなので、
     枠の帯にかかる絵柄は先に取り除き、そのうえで枠を置く。
+
+    [* 枠模様も絵柄と同じだけ左右を返す]。plate.image_plate は face_down のとき絵柄の
+    左右を返す（裏返して見るため）。枠模様は絵全体の座標から切り出したままなので、
+    ここで同じように返さないと、絵柄と枠がタイルの中で食い違う（2026-08-07）。
     """
     if frame_part is None or frame_part.is_empty:
         return p
+    from shapely.affinity import scale as _scale
+    w = float(p["info"]["size"][0])
+    if p["info"].get("face_down", True):
+        frame_part = _scale(frame_part, xfact=-1.0, yfact=1.0, origin=(w / 2.0, 0.0))
+        if band is not None and not band.is_empty:
+            band = _scale(band, xfact=-1.0, yfact=1.0, origin=(w / 2.0, 0.0))
     art = p["ink_poly"]
     if band is not None and not band.is_empty:
         art = art.difference(band)          # 枠の帯にかかる絵柄を落とす（枠が前面）
