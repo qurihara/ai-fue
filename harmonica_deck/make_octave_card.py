@@ -13,6 +13,13 @@ Chordikaが和音のカードなのに対し、これは[* 音階のカード]�
     新規に確かめる必要があるのは最高音のG#7＝38.4mmだけで、危険が1点に絞られる。
  ドをCにした C7〜C8 は最高音が4186Hzで帯を大きく外れる。この音域では移調が避けられない。
 
+[他の調]（2026/8/8に追加）
+ A♭の上下に1半音ずつずらした G major と A major も作れる。どちらも8本のうち7本は
+ Chordikaで実績のある管長そのままで、[* 新しく試す寸法が1本だけ]に絞られる。
+  ・G major  G6〜G7  最長 67.2mm ← 下側の限界。この寸法は実機で鳴らない個体が出たことがある
+  ・A major  A6〜A7  最短 36.9mm ← 上側の限界。実績のある最短は A♭7 の 38.4mm
+ 危険が上下逆向きなので、2枚を同じ条件で刷れば、どちらの側へ音域を伸ばせるかが一度に分かる。
+
 [名前] Recorika（recorder＋-ika）＝[* リコリカ]。和音の Chordika（[* コーディカ]）に対して、音階の Recorika という対。
  英語の recorder は /rɪ/ で始まるので Re-co-ri-ka → リ・コ・リ・カ と読む。頭の「リコ」がリコーダーを想起させる。
  語尾を -ika で揃えたのは、k が「Chordica にできなかった代用」ではなく[* 一族共通の綴り]だと示すため。
@@ -49,6 +56,13 @@ MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11, 12]   # ど れ み ふぁ そ ら し ど
 ROOT_MIDI = 92                              # G#6＝A♭6。上の docstring の理由で選定
 BRAND = "Recorika"                          # recorder＋-ika。Chordikaと語尾を揃えた対の名前
 KEY_LABEL = "Ab major"                      # 調名。G#ではなくA♭が正式な綴り（G#majorは重嬰記号を要する）
+
+# 作れる調。(根音MIDI, 調名, 出力ファイル名の幹)。上の docstring の[他の調]を参照。
+KEYS = [
+    (91, "G major",  "recorika_G_G6_G7"),
+    (92, "Ab major", "recorika_Ab_Gs6_Gs7"),
+    (93, "A major",  "recorika_A_A6_A7"),
+]
 
 
 def _cut_plate(mesh, poly):
@@ -126,14 +140,40 @@ def build_card(root_midi=ROOT_MIDI, label=KEY_LABEL, brand=BRAND):
 def report(midis):
     nm = lambda m: "%s%d" % (CK.NAMES[m % 12], m // 12 - 1)
     sol = ["ど", "れ", "み", "ふぁ", "そ", "ら", "し", "ど"]
-    print("=== オクターブカード（%s メジャー・左が最低音）===" % CK.NAMES[ROOT_MIDI % 12])
+    print("=== オクターブカード・左が最低音 ===")
     print("較正 A=%.1f e=%.4f" % (CK.A, CK.E))
     print(" 位置 階名   音     周波数Hz  管長mm")
     for i, m in enumerate(midis):
         print("  %d   %-4s  %-5s %8.1f  %6.1f" % (i + 1, sol[i], nm(m), CK._hz(m), CK._len_of(m)))
 
 
+def make(root_midi, label, stem):
+    """1枚ぶんを生成して書き出し、検証結果を表示する。"""
+    CK.calib_from_file()
+    midis = scale_midis(root_midi)
+    print("\n=== Recorika %s ===" % label)
+    report(midis)
+    card, feet, yshift = build_card(root_midi=root_midi, label=label)
+    fn = os.path.join(OUT, "%s.stl" % stem)
+    card.export(fn)
+    verify(card, fn)
+    return fn
+
+
+def verify(card, fn):
+    s = card.section(plane_origin=[30, 0, 0], plane_normal=[1, 0, 0])
+    p2, _ = s.to_planar()
+    areas = sorted(set(round(abs(Polygon(r).area), 3) for p in p2.polygons_full for r in p.interiors))
+    print("外形 %.1f×%.1f×%.1f mm  水密=%s" % (*card.extents, card.is_watertight))
+    print("x=30断面のボア穴面積 %s （素の笛=9.808）" % areas)
+    print("-> %s" % os.path.relpath(fn, ROOT))
+
+
 if __name__ == "__main__":
+    if "--all" in sys.argv:
+        for root, label, stem in KEYS:
+            make(root, label, stem)
+        raise SystemExit(0)
     CK.calib_from_file()
     midis = scale_midis()
     report(midis)
