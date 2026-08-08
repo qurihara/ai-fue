@@ -143,14 +143,19 @@ def calib_from_file(path=None):
     return A, E, False
 
 
-def build_card(root_pc, low_midi, label, notch_index):
+def build_card(root_pc, low_midi, label, notch_index, invert=False):
     """1調ぶんの8本カード（名刺プレート付き）。
     root_pc: 主音の半音番号(C=0)。low_midi: 窓の下端音のMIDI(G6=91, A6=93)。
-    label: 刻印文字（例 'C / Am'）。notch_index: 切り欠き位置(調の半音番号 C=0)。"""
+    label: 刻印文字（例 'C / Am'）。notch_index: 切り欠き位置(調の半音番号 C=0)。
+    invert: 笛の並びだけを逆順にした「逆並び版」を作る。刻印・ストラップ穴・切り欠きは
+    通常版と同じ位置のままなので、外形と手触りは変わらず、鳴る和音の左右だけが入れ替わる。"""
     W = trimesh.load(BASE).extents[1]              # パイプ幅 ≈7
     step = W - OVER
     chain = chain_pitchclasses(root_pc)
     tonic_idx = DEGREES.index(1)                    # 主音(度数1)の連鎖内位置＝3（＊を置く笛）
+    if invert:
+        chain = chain[::-1]
+        tonic_idx = len(chain) - 1 - tonic_idx
 
     ms, y, feet = [], 0.0, []
     for pc in chain:
@@ -217,7 +222,7 @@ def _safe(label):
     return label.replace(" ", "").replace("/", "_").replace("#", "s")
 
 
-def build_deck(outdir=OUT, prefix="chordika_v11", analyze=False):
+def build_deck(outdir=OUT, prefix="chordika_v11", analyze=False, invert=False):
     """全12調のカードを基準窓 G6〜F#7 で生成。analyze=True なら和音・管長の解析のみ（STL出力なし）。"""
     A4used, Eused, loaded = calib_from_file()
     win = "%s%d〜%s%d" % (NAMES[LOW_MIDI % 12], LOW_MIDI // 12 - 1,
@@ -239,7 +244,8 @@ def build_deck(outdir=OUT, prefix="chordika_v11", analyze=False):
         print("     隣接3本の和音: %s" % "  ".join("%s%s%s=%s" % (
             NAMES[w[0]], NAMES[w[1]], NAMES[w[2]], q) for w, q in tris))
         if not analyze:
-            card = build_card(root_pc=root_pc, low_midi=LOW_MIDI, label=label, notch_index=root_pc)
+            card = build_card(root_pc=root_pc, low_midi=LOW_MIDI, label=label,
+                              notch_index=root_pc, invert=invert)
             fn = os.path.join(outdir, "%s_%s.stl" % (prefix, _safe(label)))
             card.export(fn)
             print("     -> %s" % os.path.relpath(fn, ROOT))
@@ -253,5 +259,8 @@ if __name__ == "__main__":
         out = os.path.join(OUT, "nc2_CAm_G6Fs7_plate.stl")
         card.export(out)
         print("wrote", out)
+    elif "--inverted" in sys.argv:
+        # 逆並び版。図に合わせて左から位置1になる並び。おまけ扱いで、専用の図は作らない。
+        build_deck(outdir=os.path.join(OUT, "inverted"), prefix="chordika_inv", invert=True)
     else:
         build_deck(analyze=("--analyze" in sys.argv or "--dry" in sys.argv))

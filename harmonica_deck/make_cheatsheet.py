@@ -33,11 +33,12 @@ def window_text(lang):
 JP_FONT = "/System/Library/Fonts/Hiragino Sans GB.ttc"
 EN_FONT = "/Library/Fonts/Arial Unicode.ttf"
 
-# chord_map と同じ配色（足側から ii IV vi I iii V）
-COLORS = ["#63c2a6", "#f2864b", "#7b8fc4", "#d982c0", "#9ec54a", "#f5c518"]
-DEGREES = ["ii", "IV", "vi", "I", "iii", "V"]
-CAM = ["Dm", "F", "Am", "C", "Em", "G"]   # C/Am での実際の和音
-POS = [1, 2, 3, 4, 5, 6]
+# 実物を見たままの左→右に並べる。カードを窓が上・吹き込み口が手前に置くと、この順に鳴る。
+# 色は chord_map と同じで、和音の機能ごとに固定してある（並べ替えても色は付いて回る）。
+COLORS = ["#f5c518", "#9ec54a", "#d982c0", "#7b8fc4", "#f2864b", "#63c2a6"]
+DEGREES = ["V", "iii", "I", "vi", "IV", "ii"]
+CAM = ["G", "Em", "C", "Am", "F", "Dm"]   # C/Am での実際の和音
+POS = [1, 2, 3, 4, 5, 6]                  # その和音が始まる位置（左から数える）
 
 # 定番進行： (名前, 度数リスト)  位置番号は DEGREES.index+1、C/Am和音は CAM で引く
 PROG = [
@@ -53,7 +54,7 @@ TXT = {
     "ja": {
         "title": "Chordika ― コード進行 早見表",
         "sub": "どのカードも並びは同じ。C / Am を例にすると：",
-        "layout_h": "足側から吹くと、隣り合う3本ずつがこの6和音（＊＝主音トニック I）",
+        "layout_h": "隣り合う3本ずつを吹くと、左から順にこの6和音（＊＝主音トニック I）",
         "adj_h": "主要三和音と平行短調が隣どうし（スライド1つで行き来）",
         "adj": ["C(I) ↔ Am(vi)", "F(IV) ↔ Dm(ii)", "G(V) ↔ Em(iii)"],
         "prog_h": "定番のコード進行（位置番号と C/Am の和音）",
@@ -74,7 +75,7 @@ TXT = {
     "en": {
         "title": "Chordika — Chord Progression Cheat Sheet",
         "sub": "Every card has the same layout. Example in C / Am:",
-        "layout_h": "Blow 3 adjacent pipes from the mouth edge — these 6 chords (＊ = tonic I)",
+        "layout_h": "Blow any 3 adjacent pipes — left to right, these 6 chords (＊ = tonic I)",
         "adj_h": "Each primary triad sits next to its relative minor (one slide apart)",
         "adj": ["C(I) ↔ Am(vi)", "F(IV) ↔ Dm(ii)", "G(V) ↔ Em(iii)"],
         "prog_h": "Common progressions (position numbers and C/Am chords)",
@@ -137,11 +138,6 @@ def render(lang, out_path):
         text(x + bw / 2, y0 + 3.9, deg, 15, bold=True, ha="center", va="center", color="#1a1a1a")
         text(x + bw / 2, y0 + 1.4, CAM[i], 12.5, ha="center", va="center", color="#1a1a1a")
         text(x + bw / 2, y0 - 1.6, "%s %d" % (t["poslabel"], POS[i]), 9.5, ha="center", color="#666")
-    # 吹く辺の矢印注記
-    text(8.5, y0 - 5.2, "←", 12, bold=True)
-    text(11, y0 - 5.2, {"ja": "口をあてて吹く辺（歌口はすべてこの側にそろう）",
-                         "en": "mouth edge — all mouthpieces aligned on this side"}[lang], 10.5, color="#555")
-
     # --- 平行短調の隣接 ---
     ya = 102
     text(8.5, ya, t["adj_h"], 12.5, bold=True)

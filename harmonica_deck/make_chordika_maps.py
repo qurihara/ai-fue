@@ -6,7 +6,10 @@
 
 図の構成は旧版を踏襲する。
   上段: 8本のパイプを棒で表す（棒の高さ＝管長＝音高、下に音名と位置番号）。
-  下段: 隣り合う3本を吹くとどの和音になるかを6行（上から ii IV vi I iii V）で色分けする。
+  下段: 隣り合う3本を吹くとどの和音になるかを6行で色分けする（左の組から順に上の行へ）。
+
+並びは実物を見たままにしてある。カードを窓が上・吹き込み口が手前に置いたとき、モデルの
+y が小さい側が右に来るため、生成器の索引順にそのまま描くと左右が逆の図になる。
 出力は harmonica_deck/chord_map_<調>.png。
 """
 import os
@@ -47,10 +50,28 @@ def card_data(root_pc):
     return notes, lens, midis, triads
 
 
+def to_display(notes, lens, triads, n):
+    """モデルの並びを、実物を見たときの左→右に直す。
+
+    カードを窓が上(z+)・吹き込み口が手前になるように置くと、モデルの y が小さい側が
+    右に来る。生成器の索引0から順に左へ描くと、実物と左右が逆の図になる（2026-08-04に
+    実機と照合して判明）。図は見たままの左→右で並べ、位置番号もその順に振る。
+    """
+    d_notes = notes[::-1]
+    d_lens = lens[::-1]
+    rows = []
+    for start, w, q in triads:                 # start はモデル索引
+        rows.append((n - 3 - start, w[::-1], q, ROW_LABELS[start], ROW_COLORS[start]))
+    rows.sort(key=lambda r: r[0])              # 左の組から順に上の行へ
+    return d_notes, d_lens, rows
+
+
 def make_map(root_pc, label, outdir=HERE):
     CK.calib_from_file()
     notes, lens, midis, triads = card_data(root_pc)
-    tonic_idx = CK.DEGREES.index(1)
+    n = len(notes)
+    notes, lens, rows = to_display(notes, lens, triads, n)
+    tonic_idx = n - 1 - CK.DEGREES.index(1)
     # 波ダッシュ（〜）は Hiragino Sans GB に無いので、図中では en dash を使う
     win = "%s–%s" % (_note_name(CK.LOW_MIDI), _note_name(CK.LOW_MIDI + 11))
     fp = fm.FontProperties(fname=JP_FONT)
@@ -62,7 +83,6 @@ def make_map(root_pc, label, outdir=HERE):
 
     # ---- 上段: パイプの棒 ----
     ax = fig.add_subplot(gs[0])
-    n = len(notes)
     for x, (note, L) in enumerate(zip(notes, lens)):
         is_tonic = (x == tonic_idx)
         ax.add_patch(Rectangle((x - 0.4, 0), 0.8, L,
@@ -75,12 +95,6 @@ def make_map(root_pc, label, outdir=HERE):
                 fontsize=15, fontproperties=fpb)
         ax.text(x, -13.5, "位置 %d" % (x + 1), ha="center", va="top",
                 fontsize=10, color="#777", fontproperties=fp)
-    ax.annotate("歌口はすべてこの辺にそろう\nこちら側を吹く",
-                xy=(-0.35, 3.0), xytext=(0.6, max(lens) * 0.36),
-                fontsize=11, color="#555", ha="left", va="center",
-                fontproperties=fp,
-                bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="#ccc", alpha=0.85),
-                arrowprops=dict(arrowstyle="->", color="#999", lw=1.4))
     ax.set_xlim(-0.9, n - 0.2)
     ax.set_ylim(-20, max(lens) * 1.16)
     ax.axis("off")
@@ -95,10 +109,9 @@ def make_map(root_pc, label, outdir=HERE):
              fontsize=15, ha="left", va="bottom", fontproperties=fpb,
              transform=ax2.get_yaxis_transform())
     cell, gap, x0 = 1.0, 0.12, 1.2
-    for row, (start, w, chord) in enumerate(triads):
-        y = len(triads) - 1 - row
-        color = ROW_COLORS[row]
-        ax2.text(0.55, y + cell / 2, ROW_LABELS[row], ha="center", va="center",
+    for row, (start, w, chord, deg, color) in enumerate(rows):
+        y = len(rows) - 1 - row
+        ax2.text(0.55, y + cell / 2, deg, ha="center", va="center",
                  fontsize=17, fontproperties=fpb)
         for c in range(n):
             cx = x0 + c * (cell + gap)
@@ -116,13 +129,13 @@ def make_map(root_pc, label, outdir=HERE):
                  (start + 1, start + 2, start + 3, " ".join(w), chord),
                  ha="left", va="center", fontsize=14, fontproperties=fp)
     ax2.set_xlim(0, x0 + n * (cell + gap) + 8.0)
-    ax2.set_ylim(-0.4, len(triads) + 0.4)
+    ax2.set_ylim(-0.4, len(rows) + 0.4)
     ax2.axis("off")
 
     out = os.path.join(outdir, "chord_map_%s.png" % CK._safe(label))
     fig.savefig(out, dpi=110)
     plt.close(fig)
-    return out, notes, [round(L, 1) for L in lens], [t[2] for t in triads]
+    return out, notes, [round(L, 1) for L in lens], [r[2] for r in rows]
 
 
 def main():
@@ -134,7 +147,7 @@ def main():
         print("[%-9s] %s" % (label, os.path.relpath(out, HERE)))
         print("    音名: %s" % " ".join(notes))
         print("    管長: %s" % " ".join("%.1f" % L for L in lens))
-        print("    和音(ii IV vi I iii V): %s" % "  ".join(chords))
+        print("    和音(左の組から順に): %s" % "  ".join(chords))
 
 
 if __name__ == "__main__":
