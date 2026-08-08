@@ -131,6 +131,11 @@ def export_embed(out, dry=False):
     d = os.path.join(out, "embed")
     copy(os.path.join(SKILLS, "flute-embed/scripts/embed_flutes.py"),
          os.path.join(d, "embed_flutes.py"), dry)
+    # 判断を伴う部分は手順書（スキル）の側にある。プログラムだけでは埋め込みは再現できない。
+    copy(os.path.join(SKILLS, "flute-embed/SKILL.md"),
+         os.path.join(d, "flute-embed.md"), dry)
+    copy(os.path.join(SKILLS, "cipher-image-tiles/SKILL.md"),
+         os.path.join(d, "cipher-image-tiles.md"), dry)
     copy(os.path.join(ROOT, "fue/orient_check.py"), os.path.join(d, "orient_check.py"), dry)
     copy(os.path.join(ROOT, "scripts/check_flute_cavity.py"),
          os.path.join(d, "check_cavity.py"), dry)
