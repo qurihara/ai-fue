@@ -1,0 +1,35 @@
+{
+  "card": [
+    67.97418539972276,
+    64.6
+  ],
+  "grid": [
+    169,
+    161
+  ],
+  "pixel": 0.4,
+  "threshold": 122,
+  "mode": "threshold",
+  "fit": "cover",
+  "black_ratio": 0.135,
+  "image_size": [
+    1360,
+    1024
+  ],
+  "size": [
+    67.97418539972276,
+    64.6
+  ],
+  "ink_t": 0.4,
+  "base_t": 0.4,
+  "corner_r": 0.5,
+  "corner_style": "chamfer",
+  "face_down": true,
+  "ink_area_mm2": 589.0,
+  "top_z": 4.78,
+  "outputs": {
+    "base": "out/tiles_test2/tile_01_r0c0_base.stl",
+    "ink": "out/tiles_test2/tile_01_r0c0_ink.stl",
+    "preview": "out/tiles_test2/tile_01_r0c0_preview.png"
+  }
+}

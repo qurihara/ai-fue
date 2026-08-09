@@ -107,6 +107,11 @@ def export_codec(out, dry=False):
     copy(os.path.join(ROOT, "fue/threshold.py"), os.path.join(d, "threshold.py"), dry)
     copy(os.path.join(ROOT, "docs/cipher/cipher_test_vectors.json"),
          os.path.join(d, "test_vectors.json"), dry)
+    # 紙の上で誤り訂正まで行うための早見表と、その検証
+    copy(os.path.join(ROOT, "docs/cipher/manual_decode_card.md"),
+         os.path.join(d, "manual_decode_card.md"), dry)
+    copy(os.path.join(ROOT, "scripts/verify_manual_decode.py"),
+         os.path.join(d, "verify_manual_decode.py"), dry)
     copy(os.path.join(ROOT, "docs/cipher/cipher_config.json"),
          os.path.join(d, "default_config.json"), dry)
 
