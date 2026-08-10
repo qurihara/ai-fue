@@ -44,8 +44,10 @@ PLATE_Z = 0.5       # 板の厚み[mm]。笛の床と融合する
 MARGIN = 1.0        # 笛の列の両脇に残す余白[mm]。板の縁を笛のすぐ際まで寄せる
 BAND_GAP = 2.0      # 笛の足から番号までの距離[mm]
 NUM_H = 4.5         # 番号の文字高さ[mm]
-NUM_W = 7.0         # 番号に充てる帯の幅[mm]。2桁（10・11）が収まる分を取る
-TAIL = 1.5          # 番号の先に残す余白[mm]
+TAIL = 3.0          # いちばん幅の広い番号の先に残す余白[mm]。
+# ★帯の幅を決め打ちしてはいけない★ 文字の実幅はフォントで決まる。高さ4.5mmのとき
+# 「10」は8.19mmあり、7.0mmと決め打ちしたv8では板端まで0.31mmしか残らず、壁1本
+# （0.42mm）も入らずに造形が崩れた。下の build は全番号の幅を実際に測って板を決める。
 HEAD = 1.0          # 吸込口の側に残す余白[mm]
 # 角丸の半径は余白と同じにする。こうすると角を丸める円弧の中心が笛の角と一致するので、
 # **丸めても笛は1ミリも削られない**。半径を余白より大きくすると、両端の笛の吸込口や足が
@@ -98,7 +100,10 @@ def build(notes=None, label="CipherFlute"):
     comb = trimesh.boolean.union(flutes, engine="manifold")
     comb.merge_vertices()
 
-    cx = HEAD + l_max + BAND_GAP + NUM_W + TAIL
+    x_left = HEAD + l_max + BAND_GAP
+    num_w = max(stencil.text_holes(str(i), height=NUM_H, bridge_w=1.0)[1][0]
+                for i in range(n))
+    cx = x_left + num_w + TAIL
     cy = MARGIN * 2 + width + (n - 1) * step
     plate = trimesh.creation.box(extents=[cx, cy, PLATE_Z])
     plate.apply_translation([cx / 2, cy / 2, PLATE_Z / 2])
@@ -111,7 +116,6 @@ def build(notes=None, label="CipherFlute"):
     # ★笛の真下には何も抜かないこと★ 板は笛の床であり、抜けばボアに穴が開いて鳴らない。
     # 置いてよいのは笛の足より先（x > HEAD + l_max）と、笛の列の外の余白だけである。
     # 向きを示す印は要らない。番号そのものが順序と向きを示すからである。
-    x_left = HEAD + l_max + BAND_GAP
     parts = []
     for info in infos:
         p = _digits_poly(str(info["slot"]), x_left, info["y_center"])
