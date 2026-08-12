@@ -193,7 +193,37 @@ def listen_once(x, cfg, on_db_margin=12.0):
     return freqs, ends
 
 
+def matches(got, want, tolerance=1):
+    """読めた記号列が、登録した列と一致するとみなせるか。
+
+    ★差分符号なので、1本の音の読み違いは必ず隣り合う2つの記号へ波及する★
+    記号は「今回のスロット − 前回のスロット − 1」なので、ある笛が1スロット低く
+    読まれると、その笛の記号が−1、次の笛の記号が+1になる（10,0 が 9,1 になる）。
+    そこで「食い違いが隣り合う2箇所で、片方が+d、もう片方が−d」という形なら、
+    音1本のずれとみなして通す。tolerance はそのずれの大きさの上限[スロット]である。
+
+    デモのための緩和であって、秘密の保管には使わない。パリティを付けた用途では
+    誤り訂正が同じ仕事をきちんと行う。
+    """
+    if len(got) != len(want):
+        return False, "本数が違う"
+    diff = [(i, g - w) for i, (g, w) in enumerate(zip(got, want)) if g != w]
+    if not diff:
+        return True, "完全に一致"
+    if len(diff) == 2:
+        (i, d1), (j, d2) = diff
+        if j == i + 1 and d1 == -d2 and abs(d1) <= tolerance:
+            return True, "%d本目が%dスロットずれただけ" % (i + 1, -d1)
+    return False, "%d箇所が違う" % len(diff)
+
+
 def main(argv=None):
+    # 端末へ流しながら見るので、行ごとに吐き出す。パイプ越しだと既定では溜まって
+    # しまい、吹いている最中に何本拾えているかが見えない。
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
     ap = argparse.ArgumentParser(description="笛を吹くと電子錠が開く")
     ap.add_argument("--device", default="bot2", help="錠の名前（bot2 / bike / m315）")
     ap.add_argument("--command", default=None, help="送るコマンド。既定は機器ごとに決まる")
@@ -202,6 +232,8 @@ def main(argv=None):
     ap.add_argument("--list-audio", action="store_true", help="音の入力装置を並べて終わる")
     ap.add_argument("--dry-run", action="store_true", help="錠へ送らず、判定だけ出す")
     ap.add_argument("--margin", type=float, default=12.0, help="暗騒音からのしきい値[dB]")
+    ap.add_argument("--tolerance", type=int, default=1,
+                    help="音1本ぶんのずれを何スロットまで許すか。0で厳密に一致を求める")
     args = ap.parse_args(argv)
 
     if args.list_audio:
@@ -255,8 +287,11 @@ def main(argv=None):
 
             res = cc.decode(freqs, cfg)
             got = list(res.symbols) if hasattr(res, "symbols") else []
-            ok = (want is None and res.status.startswith("ok")) or (want is not None and got == want)
-            print("[判定] %s → %s" % (got or res.status, "一致" if ok else "違う"))
+            if want is None:
+                ok, why = res.status.startswith("ok"), res.status
+            else:
+                ok, why = matches(got, want, args.tolerance)
+            print("[判定] %s → %s（%s）" % (got or res.status, "一致" if ok else "違う", why))
             if ok:
                 last_fire = now
                 lock.fire()

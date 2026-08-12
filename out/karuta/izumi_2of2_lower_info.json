@@ -1,0 +1,35 @@
+{
+  "card": [
+    53.98,
+    85.6
+  ],
+  "grid": [
+    134,
+    213
+  ],
+  "pixel": 0.4,
+  "threshold": 220,
+  "mode": "threshold",
+  "fit": "cover",
+  "black_ratio": 0.23,
+  "image_size": [
+    647,
+    1027
+  ],
+  "size": [
+    53.98,
+    85.6
+  ],
+  "ink_t": 0.4,
+  "base_t": 0.4,
+  "corner_r": 2.0,
+  "corner_style": "round",
+  "face_down": true,
+  "ink_area_mm2": 1063.2,
+  "top_z": 4.75,
+  "outputs": {
+    "base": "out/karuta/izumi_2of2_lower_base.stl",
+    "ink": "out/karuta/izumi_2of2_lower_ink.stl",
+    "preview": "out/karuta/izumi_2of2_lower_preview.png"
+  }
+}
