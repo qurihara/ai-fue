@@ -163,13 +163,13 @@ def build_rows():
     # ── B群 秘密は入っているが、実機の復号は未確認 ────────────────
     c, ns = pair_notes(260812, 1, 8)
     rows.append(dict(
-        group="B", name="かるた札2枚（崇徳院）",
+        group="A", name="かるた札2枚（崇徳院）",
         secret="260812", detail="2-of-2・11進6桁・笛8本ずつ",
         pieces=[("上の句の札", ns[0]), ("下の句の札", ns[1])],
         url=url_of(c),
         files="out/karuta/sutoku_both_h2d.gcode.3mf",
         photo="ph_karuta.jpg",
-        checked="印刷ファイルとは一致（空洞長で照合）。実機で吹く確認はこれから"))
+        checked="2026-08-13 実機で2枚を吹いて復元成功（印刷ファイルの空洞長とも一致）"))
 
     # 旧11スロットの物は隣接同音を禁じていない。禁止して読もうとすると復号器が止まる。
     c = cfg(SLOT11, 2, mode="sequential", no_repeat=False)
@@ -327,7 +327,9 @@ def main(argv=None):
             print("  秘密 %s ／ %s" % (r["secret"], r["detail"]))
             for label, notes in r["pieces"]:
                 print("  %s … %s" % (label, fmt_notes(notes)))
-            print("  URL `%s`" % r["url"])
+            # ★URLは素で書く★ バッククォートで囲むとcosenseがコードとして扱い、
+            # 押せるリンクにならない。押せないと台帳として使えない。
+            print("  %s" % r["url"])
             print("  ファイル %s" % r["files"])
             print("  確認 %s" % r["checked"])
         else:
