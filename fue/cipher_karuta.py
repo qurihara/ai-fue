@@ -37,6 +37,7 @@ plate.image_plate が返す板は押し出しを重ねただけで水密では�
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 
@@ -144,6 +145,62 @@ def flute_offset_portrait(where):
     return STRAP_SHIFT if where.endswith("下") else 1.0
 
 
+def edge_ring(outline, width, hole):
+    """外周から内へ width[mm] の帯（ふち取り）を作る。穴の分は抜く。
+
+    ★ふちは絵柄の面にしか意味が無い★ 板の上（笛の側）は全部おなじ色で刷るので、
+    ふちが色として見えるのは、白地と隣り合う絵柄の面だけである。
+    """
+    inner = outline.buffer(-width, join_style=2)
+    return outline.difference(inner).difference(hole), inner
+
+
+def image_plate_3color(image_path, hole, size, edge_w, face_t, **kw):
+    """絵柄の面を3色（黒い字・白い地・緑のふち）にした板を作る。
+
+    層の作り（z は絵柄の面を0とする。裏返して刷るので、この面がベッドに接する）
+
+        z = 0      〜 face_t   黒い字 ／ 白い地 ／ 緑のふち   ← ここだけ3色
+        z = face_t 〜 0.8mm    緑（板の残り）
+        z = 0.8mm  〜          緑（笛8本）
+
+    ★白い地の厚みが face_t である★ この上はすべて緑なので、薄いと緑が透ける。
+    0.2mm（1層）だと緑がかって見え、0.4mm（2層）ならほぼ隠れる。フィラメントの
+    交換の回数と引き換えになるので、呼ぶ側で決める。
+    """
+    p = plate.image_plate(image_path, size, corner_r=CORNER_R,
+                          corner_style="round", fit="cover", face_down=True,
+                          trim=False, ink_t=INK_T, base_t=BASE_T,
+                          mode="threshold", threshold=kw.pop("threshold", 220), **kw)
+    outline = p["outline"].difference(hole)
+    ring, inner = edge_ring(p["outline"], edge_w, hole)
+
+    # 字がふちに食い込んでいないかを見る。食い込むと、その字だけ緑で刷られる。
+    ink_poly = p["ink_poly"].difference(hole)
+    eaten = ink_poly.intersection(ring).area
+    ink_poly = ink_poly.intersection(inner)
+    white_poly = inner.difference(hole).difference(ink_poly)
+
+    total = INK_T + BASE_T
+    ink = IT.extrude_poly(ink_poly, 0.0, face_t)
+    white = IT.extrude_poly(white_poly, 0.0, face_t)
+    green = trimesh.util.concatenate([
+        IT.extrude_poly(ring, 0.0, face_t),          # ふち（絵柄の面）
+        IT.extrude_poly(outline, face_t, total - face_t),   # その上の板は全部これ
+    ])
+    for m in (ink, white, green):
+        m.merge_vertices()
+    q = dict(p)
+    q.update(base=white, ink=ink, edge=green, outline=outline,
+             ink_poly=ink_poly, white_poly=white_poly, ring=ring,
+             top_z=total, edge_eaten_mm2=round(eaten, 2))
+    q["info"] = {**p["info"], "edge_w": edge_w, "face_t": face_t,
+                 "edge_eaten_mm2": round(eaten, 2),
+                 "white_area_mm2": round(white_poly.area, 1),
+                 "edge_area_mm2": round(ring.area, 1)}
+    return q
+
+
 def image_plate_with_hole(image_path, hole, size, **kw):
     """絵柄つきの板を作り、穴を開ける。
 
@@ -170,8 +227,49 @@ def image_plate_with_hole(image_path, hole, size, **kw):
     return q
 
 
+def export_3color(q, stem):
+    """黒い字・白い地・緑のふちを別々のSTLで書き出し、3色のプレビューを描く。"""
+    from PIL import Image, ImageDraw
+    from shapely.geometry import MultiPolygon, Polygon
+
+    paths = {"ink": stem + "_ink.stl", "base": stem + "_base.stl",
+             "edge": stem + "_edge.stl"}
+    q["ink"].export(paths["ink"])
+    q["base"].export(paths["base"])
+    q["edge"].export(paths["edge"])
+
+    sx, sy = q["info"]["size"]
+    scale = 8
+    img = Image.new("RGB", (int(sx * scale), int(sy * scale)), (235, 235, 235))
+    d = ImageDraw.Draw(img)
+
+    def draw(poly, fill):
+        geoms = poly.geoms if isinstance(poly, MultiPolygon) else [poly]
+        for g in geoms:
+            if not isinstance(g, Polygon):
+                continue
+            d.polygon([(x * scale, (sy - y) * scale) for x, y in g.exterior.coords], fill=fill)
+            for ring in g.interiors:
+                d.polygon([(x * scale, (sy - y) * scale) for x, y in ring.coords],
+                          fill=(235, 235, 235))
+
+    # ★描く順を間違えると白地が消える★ ふちは「外形から内側を引いた」形なので、
+    # 内側が穴として入っている。穴は背景色で塗り戻すので、白地より後に描くと
+    # 白地をまるごと塗りつぶしてしまう。ふちを先に描く。
+    draw(q["ring"], (34, 139, 60))
+    draw(q["white_poly"], (255, 255, 255))
+    draw(q["ink_poly"], (25, 25, 25))
+    paths["preview"] = stem + "_preview.png"
+    img.save(paths["preview"])
+
+    with open(stem + "_info.json", "w") as f:
+        json.dump({**q["info"], "top_z": q["top_z"], "outputs": paths},
+                  f, ensure_ascii=False, indent=2)
+    return paths
+
+
 def build_card(image_path, notes, l_max, stem, strap="右下", threshold=220,
-               portrait=False):
+               portrait=False, edge_w=0.0, face_t=INK_T):
     """絵入りカード1枚を作る。板を作り、その上面へ笛の帯を載せる。
 
     ★縦長では笛を90度回す★ 笛の長軸はいつも札の長辺に沿わせる（65.97mmは短辺53.98に
@@ -180,7 +278,11 @@ def build_card(image_path, notes, l_max, stem, strap="右下", threshold=220,
     """
     size = card_size(portrait)
     w, h = size
-    p = image_plate_with_hole(image_path, strap_hole(strap, size), size, threshold=threshold)
+    hole = strap_hole(strap, size)
+    if edge_w > 0:
+        p = image_plate_3color(image_path, hole, size, edge_w, face_t, threshold=threshold)
+    else:
+        p = image_plate_with_hole(image_path, hole, size, threshold=threshold)
     comb = _comb(notes, l_max)
     if portrait:
         comb.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2, [0, 0, 1]))
@@ -193,10 +295,16 @@ def build_card(image_path, notes, l_max, stem, strap="右下", threshold=220,
                                 (h - comb.extents[1]) / 2.0 - comb.bounds[0][1],
                                 p["top_z"] - SINK - comb.bounds[0][2]])
     q = dict(p)
-    q["base"] = trimesh.util.concatenate([p["base"], comb])
-    q["top_z"] = float(comb.bounds[1][2])
     q["flutes"] = comb
-    plate.export(q, stem)
+    if edge_w > 0:
+        # ★笛は緑に足す★ 白い地は絵柄の面の1層ぶんだけで、その上は全部緑である。
+        q["edge"] = trimesh.util.concatenate([p["edge"], comb])
+        q["top_z"] = float(comb.bounds[1][2])
+        export_3color(q, stem)
+    else:
+        q["base"] = trimesh.util.concatenate([p["base"], comb])
+        q["top_z"] = float(comb.bounds[1][2])
+        plate.export(q, stem)
     return q
 
 
@@ -226,6 +334,11 @@ def main(argv=None):
     ap.add_argument("--portrait", action="store_true", help="縦長の札にする")
     ap.add_argument("--threshold", type=int, default=220,
                     help="2値化のしきい値。これより暗い画素が絵柄になる")
+    ap.add_argument("--edge", type=float, default=0.0,
+                    help="ふち取りの幅[mm]。0なら付けない（2色のまま）")
+    ap.add_argument("--face-t", type=float, default=INK_T,
+                    help="絵柄の面の厚み[mm]。白い地の厚みでもある。"
+                         "0.2なら層1つで交換1回、0.4なら層2つで交換3回")
     args = ap.parse_args(argv)
 
     secret = int(args.secret)
@@ -245,10 +358,23 @@ def main(argv=None):
         notes = encode_share(share, n_data, args.parity)
         stem = "%s_%s" % (args.stem, tag)
         q = build_card(image, notes, l_max, stem, strap=args.strap,
-                       threshold=args.threshold, portrait=args.portrait)
+                       threshold=args.threshold, portrait=args.portrait,
+                       edge_w=args.edge, face_t=args.face_t)
         print("  %-6s 断片 %-12d 笛 %s" % (tag, share, " ".join(notes)))
-        print("         %s_base.stl / %s_ink.stl（%.1f×%.1f×%.1fmm）"
-              % (stem, stem, *np.round(q["base"].extents, 1)))
+        if args.edge > 0:
+            info = q["info"]
+            print("         黒 %s_ink.stl ／ 白 %s_base.stl ／ 緑 %s_edge.stl"
+                  % (stem, stem, stem))
+            print("         ふち幅 %.1fmm・絵柄の面の厚み %.2fmm"
+                  % (info["edge_w"], info["face_t"]))
+            print("         面積 白 %.1f / 緑 %.1f / 黒 %.1f mm2"
+                  % (info["white_area_mm2"], info["edge_area_mm2"], info["ink_area_mm2"]))
+            if info["edge_eaten_mm2"] > 0.01:
+                print("         ★字がふちに %.2f mm2 食い込んだので、その分は緑になる★"
+                      % info["edge_eaten_mm2"])
+        else:
+            print("         %s_base.stl / %s_ink.stl（%.1f×%.1f×%.1fmm）"
+                  % (stem, stem, *np.round(q["base"].extents, 1)))
         outs.append(q)
 
     return 0
