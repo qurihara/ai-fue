@@ -200,12 +200,16 @@ def build_rows():
         photo="ph_bookstand.jpg",
         checked="未確認（3mfに笛の名前が残っていない）"))
 
+    # ★このカードだけ符号の作りが古い★ 記号をスロットへ直に割り当ててあり，
+    # 差分の写像を通していない。したがって隣接同音の禁止も掛かっていない。
+    # 数字列がそのまま記号列になるので、吹けば「2026724」が並んで出る。
+    c = cfg(SLOT11, 0, no_repeat=False)
     rows.append(dict(
         group="B", name="カード「2026724」",
-        secret="2026724", detail="初期のカード。符号の体系は特定できていない",
-        pieces=[],
-        url=url_of(c) + "　（素のURLでも読めたと記録にある）",
-        files="（初期の版。3mfを特定できていない）",
+        secret="2026724", detail="旧11スロット・パリティ0・記号をスロットへ直に割り当て（差分の写像なし）",
+        pieces=[("1枚", enc_symbols([2, 0, 2, 6, 7, 2, 4], c))],
+        url=url_of(c) + "（cipher_config.json の既定と同じなので，素のURLでも読める）",
+        files="out/cipher_card_2026724.stl",
         photo="—",
         checked="未確認（実物は手元にある）"))
 
@@ -216,7 +220,7 @@ def build_rows():
         url=BASE + "#lo=C7&hi=F#7&mode=symbols&parity=0&pitchsplit=1&splitcents=80",
         files="out/heartbeads_secret_share.3mf",
         photo="—",
-        checked="未確認（かたわれ3本版のみ手元にある。休止中。秘密の値も残っていない）"))
+        checked="★休止★ 構造に不備があるため取り下げた。秘密の値も残っていない"))
 
     return rows
 
