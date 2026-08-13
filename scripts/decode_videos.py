@@ -64,7 +64,9 @@ CASES = [
     dict(name="bookstand_2of3", label="2-of-3 本立て（断片3）",
          cfg=cfg("G#6", "G7", 2), per=8, parts=1,
          kind="symbols", expect=[2, 0, 9, 7, 5]),
-    dict(name="heart_cards_2of2", label="ハートのカード2枚（2-of-2）",
+    # ★取り直した版を使う★ 最初の録画は1枚目の4本目（B6）が鳴っておらず、
+    # パリティ1では途中の欠落を直せないため復号できなかった。
+    dict(name="heart_cards_2of2_take2", label="ハートのカード2枚（2-of-2・取り直し）",
          cfg=cfg("G#6", "G7", 1), per=8, parts=2,
          kind="sum", expect=260729),
     dict(name="karuta_sutokuin_2of2", label="かるた札2枚（2-of-2）",
