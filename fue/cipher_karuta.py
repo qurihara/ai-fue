@@ -112,15 +112,18 @@ def card_size(portrait):
     return (CY, CX) if portrait else (CX, CY)
 
 
-def strap_hole(where, size):
+def strap_hole(where, size, margin=None):
     """ストラップ穴の平面図形。★位置は「見たときの向き」で指定する★
 
     絵柄は face_down で刷るので、plate.image_plate が版下の左右を返してから板にする
     （裏返して見たときに元の絵のとおりに見せるため）。**穴だけ返さずに置くと、
     見たときの左上に開けたつもりが、絵柄と同じ側に来て文字と重なる。**
     2026-08-12、崇徳院札の「せ」が穴と一体化して発覚した。ここで同じ反転をかける。
+
+    margin は穴の縁から板の縁までの距離である。ふち取りを付けるときは、
+    既定の3.0mmだと穴がふちにちょうど接するので、ふちの幅より広く取って離す。
     """
-    r, m = STRAP_R, STRAP_MARGIN
+    r, m = STRAP_R, STRAP_MARGIN if margin is None else margin
     w, h = size
     pos = {"右下": (w - r - m, r + m), "右上": (w - r - m, h - r - m),
            "左下": (r + m, r + m), "左上": (r + m, h - r - m)}[where]
@@ -269,7 +272,7 @@ def export_3color(q, stem):
 
 
 def build_card(image_path, notes, l_max, stem, strap="右下", threshold=220,
-               portrait=False, edge_w=0.0, face_t=INK_T):
+               portrait=False, edge_w=0.0, face_t=INK_T, strap_margin=None):
     """絵入りカード1枚を作る。板を作り、その上面へ笛の帯を載せる。
 
     ★縦長では笛を90度回す★ 笛の長軸はいつも札の長辺に沿わせる（65.97mmは短辺53.98に
@@ -278,7 +281,7 @@ def build_card(image_path, notes, l_max, stem, strap="右下", threshold=220,
     """
     size = card_size(portrait)
     w, h = size
-    hole = strap_hole(strap, size)
+    hole = strap_hole(strap, size, strap_margin)
     if edge_w > 0:
         p = image_plate_3color(image_path, hole, size, edge_w, face_t, threshold=threshold)
     else:
@@ -334,6 +337,8 @@ def main(argv=None):
     ap.add_argument("--portrait", action="store_true", help="縦長の札にする")
     ap.add_argument("--threshold", type=int, default=220,
                     help="2値化のしきい値。これより暗い画素が絵柄になる")
+    ap.add_argument("--strap-margin", type=float, default=None,
+                    help="穴の縁から板の縁までの距離[mm]。既定は3.0。ふちを付けるならふち幅より広く取る")
     ap.add_argument("--edge", type=float, default=0.0,
                     help="ふち取りの幅[mm]。0なら付けない（2色のまま）")
     ap.add_argument("--face-t", type=float, default=INK_T,
@@ -359,7 +364,8 @@ def main(argv=None):
         stem = "%s_%s" % (args.stem, tag)
         q = build_card(image, notes, l_max, stem, strap=args.strap,
                        threshold=args.threshold, portrait=args.portrait,
-                       edge_w=args.edge, face_t=args.face_t)
+                       edge_w=args.edge, face_t=args.face_t,
+                       strap_margin=args.strap_margin)
         print("  %-6s 断片 %-12d 笛 %s" % (tag, share, " ".join(notes)))
         if args.edge > 0:
             info = q["info"]
