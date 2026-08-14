@@ -12,6 +12,18 @@
         "docs"
       ],
       "port": 8765
+    },
+    {
+      "name": "docs8790",
+      "runtimeExecutable": "/usr/bin/python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8790",
+        "--directory",
+        "docs"
+      ],
+      "port": 8790
     }
   ]
 }

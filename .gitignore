@@ -13,3 +13,6 @@ temp/*
 !temp/*_profile.json
 result.json
 docs/_probe/
+
+# 紹介動画を作るときだけ使う実演の音声。実物の音なので追跡しない。
+docs/cipher/_demoaudio/

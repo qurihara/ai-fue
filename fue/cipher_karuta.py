@@ -70,15 +70,20 @@ STRAP_MARGIN = 3.0                 # 穴の縁からカードの縁までの距�
 SINK = 0.05                        # 笛を板へわずかに沈めて重ねる量[mm]
 
 
-def split_secret(secret, base, n_symbols):
+def split_secret(secret, base, n_symbols, split_base=7):
     """2-of-2 の分散。片方に乱数、もう片方に (秘密−乱数) を入れる。
 
     ★分ける先の空間は「記号の底の n_symbols 乗」に取る★ ここを取り違えると、断片が
     符号化できる範囲をはみ出し、笛の本数が合わなくなる。12スロットなら底は11なので、
     データ記号6個で 11^6 = 1,771,561 通りである。
+
+    ★1枚目は秘密の値に依存しない★ 乱数の代わりに split_base の n 乗を使う決め打ちなので、
+    秘密を変えても1枚目の断片は変わらない。したがって別の組の札を作ると、1枚目どうしが
+    同じ笛の並びになり、取り違えると別の秘密が戻ってしまう。**組ごとに split_base を
+    変えれば1枚目も変わる。**既定の7は、これまでに刷った札との後方互換のために残す。
     """
     span = base ** n_symbols
-    rnd = (7 ** n_symbols) % span
+    rnd = (split_base ** n_symbols) % span
     return rnd % span, (secret - rnd) % span
 
 
@@ -344,13 +349,18 @@ def main(argv=None):
     ap.add_argument("--face-t", type=float, default=INK_T,
                     help="絵柄の面の厚み[mm]。白い地の厚みでもある。"
                          "0.2なら層1つで交換1回、0.4なら層2つで交換3回")
+    ap.add_argument("--split-base", type=int, default=7,
+                    help="2-of-2 の分け方の種。1枚目の断片は「この数のデータ記号数乗」で"
+                         "決まり、秘密の値には依存しない。★別の組の札を作るときは変える★"
+                         "（同じままだと1枚目の笛の並びが前の組と同じになり、取り違えると"
+                         "別の秘密が戻る）。既定の7はこれまで刷った札との互換のため")
     args = ap.parse_args(argv)
 
     secret = int(args.secret)
     # ★笛の本数の内訳★ 基準笛1 ＋ データ記号 ＋ パリティ記号 = N_FLUTES
     n_data = N_FLUTES - 1 - args.parity
     base = cipher_codec._wire_params(codec_config(args.parity))[1]
-    share_a, share_b = split_secret(secret, base, n_data)
+    share_a, share_b = split_secret(secret, base, n_data, args.split_base)
     l_max = mini10.uniform_body_length(
         [mini10.length_for_note(x) for x in mini10.CALIB12])
 
