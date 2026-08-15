@@ -45,7 +45,13 @@ CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 PORT = 9333
 BASE = "http://localhost:8790/cipher/"
 # 復号の設定は崇徳院・あらざらむと同じ（12スロット・隣接同音の禁止・パリティ1）
-PARAMS = "lo=G%236&hi=G7&norepeat=1&mode=symbols&parity=1&pitchsplit=1&splitcents=80"
+# ★雑音を2つの物差しで落とす★
+# minnote=200 … 短い物音（実測93〜197ms）を落とす。本物は227〜630msある。
+# onmargin=26 … ★これが要る★ 長さ534msの物音があり、短さだけでは落ちなかった
+#   （つないだ映像の境目で出る）。大きさで見れば、雑音0.1〜4.6dBに対して本物は
+#   20〜38dBとはっきり分かれる。32dBまで上げると本物の弱い音まで落ちたので26にした。
+PARAMS = ("lo=G%236&hi=G7&norepeat=1&mode=symbols&parity=1&pitchsplit=1"
+          "&splitcents=80&minnote=200&onmargin=26")
 
 
 def launch(profile_dir, width, height):
@@ -94,6 +100,7 @@ class Tab:
 
 
 def record(audio_name, out_path, seconds, width, height, tmp, clip_h):
+    crop_h = None
     frames_dir = os.path.join(tmp, "frames")
     shutil.rmtree(frames_dir, ignore_errors=True)
     os.makedirs(frames_dir, exist_ok=True)
@@ -124,10 +131,31 @@ def record(audio_name, out_path, seconds, width, height, tmp, clip_h):
         # ★音名の列より下は隠す★ 隠さないと「録音ファイルから読む」の説明が子画面に
         # 入り込み、何を見せたいのか分からない絵になる。高さを固定で撮る以上、
         # 余った所は背景色で埋まってくれたほうがよい。
+        # ★子画面では音名だけを大きく見せる★ 親の幅の3割に縮めて置くので、周波数や
+        # 長さの小さい字は読めない。読めないものを載せても画が濁るだけなので落とす。
+        tab.evaluate("""(() => {
+          const st = document.createElement('style');
+          st.textContent = '#autoSeq .fz{display:none}'
+            + '#autoSeq .why{display:none}'
+            + '#autoSeq .cents{display:none}'
+            + '#autoSeq .nm{font-size:40px;line-height:1.15;margin:2px 0}'
+            + '#autoSeq .idx{font-size:13px;opacity:.75}'
+            + '#autoSeq .chip{padding:8px 14px}';
+          document.head.appendChild(st);
+          return 1;
+        })()""")
         tab.evaluate("""(() => {
           const seq = document.getElementById('autoSeq');
+          // ★同じ親の中だけでは足りない★ 次の節（2''の説明）は別のまとまりに入って
+          // いるので、seq を含むまとまりごと後ろを隠さないと子画面に写り込む。
           let n = seq.nextElementSibling;
           while(n){ n.style.display = 'none'; n = n.nextElementSibling; }
+          let box = seq.parentElement;
+          while(box && box !== document.body){
+            let m = box.nextElementSibling;
+            while(m){ m.style.display = 'none'; m = m.nextElementSibling; }
+            box = box.parentElement;
+          }
           return 1;
         })()""")
         clip = json.loads(tab.evaluate(("""(() => {
@@ -158,11 +186,36 @@ def record(audio_name, out_path, seconds, width, height, tmp, clip_h):
             if not ended and tab.evaluate("window.__demoAudio && window.__demoAudio.ended ? 1 : 0"):
                 tab.evaluate("document.getElementById('autoStartBtn').click(); 1")
                 ended = True
+                time.sleep(0.4)          # 復号の結果が画面に出るのを待つ
+                # ★想定の本数がそろって復号できたときだけ「認証成功」を出す★
+                # ★判定は「復号できました」の文言で行う★ decodedPayload の中身だけを
+                # 見ると、失敗しているのに成功と出してしまう（一度そうなった）。
+                tab.evaluate("""(() => {
+                  const box = document.getElementById('autoDecoded');
+                  const t = box ? (box.textContent || '') : '';
+                  if(t.indexOf('\u5fa9\u53f7\u3067\u304d\u307e\u3057\u305f') < 0) return 0;
+                  if(t.indexOf('\u3067\u304d\u307e\u305b\u3093') >= 0) return 0;
+                  const b = document.createElement('div');
+                  b.textContent = '\u8a8d\u8a3c\u6210\u529f';
+                  b.style.cssText = 'flex-basis:100%;text-align:center;font-size:46px;'
+                    + 'font-weight:700;color:#3ddc84;letter-spacing:.12em;padding:10px 0 2px';
+                  document.getElementById('autoSeq').appendChild(b);
+                  return 1;
+                })()""")
             rest = interval - (time.time() - tick)
             if rest > 0:
                 time.sleep(rest)
+        # ★最後に実際の高さを測る★ 音が何本になるかは撮ってみないと分からないので、
+        # 撮影は大きめの枠で行い、終わってから使われた高さぶんに切り詰める。
+        # そうしないと8本の素材で下半分が空白のまま残る。
+        used_h = tab.evaluate("""(() => {
+          const r = document.getElementById('autoSeq').getBoundingClientRect();
+          return Math.ceil(r.height) + 20;
+        })()""") or clip["height"]
+        crop_h = max(120, min(int(used_h), clip["height"]))
         with open(os.path.splitext(out_path)[0] + ".marks.json", "w") as f:
-            json.dump({"clip": clip, "marks": marks}, f, ensure_ascii=False)
+            json.dump({"clip": clip, "cropHeight": crop_h, "marks": marks}, f, ensure_ascii=False)
+        print("  使った高さ %d px（撮った枠は %d px）" % (crop_h, clip["height"]))
         seq = tab.evaluate("document.getElementById('autoSeq').textContent.replace(/\\s+/g,' ')")
         print("  取れた枚数 %d（%.1f秒・平均%.1f fps）" % (n, seconds, n / max(seconds, 1e-9)))
         print("  読み取り: %s" % (seq or "")[:200])
@@ -179,7 +232,8 @@ def record(audio_name, out_path, seconds, width, height, tmp, clip_h):
     # 「Could not open encoder before EOF」で落ちる（高さ1113で踏んだ）。
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", "%.3f" % fps,
                     "-i", os.path.join(frames_dir, "f%05d.jpg"),
-                    "-vf", "fps=30,scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
+                    "-vf", f"crop=iw:{crop_h}:0:0,fps=30,"
+                           "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
                     "-c:v", "libx264", "-crf", "20", out_path], check=True)
     return out_path
 
