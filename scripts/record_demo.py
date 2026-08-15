@@ -91,6 +91,14 @@ def record(audio, need, out_path, seconds, width, height, tmp, extra):
         tab.send("Page.navigate", url=url)
         time.sleep(2.0)
 
+        # ★切り取る高さは最初に決めて固定する★ コマごとに変えると、動画にしたとき
+        # ffmpeg が最初のコマの大きさへ合わせて縦に潰す（実際にそうなった）。
+        fixed_h = int(tab.evaluate("""(() => {
+          const w = document.getElementById('wrap');
+          return Math.ceil(w.getBoundingClientRect().height) + 8;
+        })()""") or 400)
+        print("  切り取る高さ %d px（最後まで変えない）" % fixed_h)
+
         n, marks = 0, []
         t0 = time.time()
         interval = 1.0 / 10
@@ -108,8 +116,7 @@ def record(audio, need, out_path, seconds, width, height, tmp, extra):
             s = json.loads(st) if st else {}
             r = tab.send("Page.captureScreenshot", format="jpeg", quality=85,
                          clip={"x": 0, "y": 0, "width": width,
-                               "height": max(120, min(int(s.get("h", 200)) + 8, height)),
-                               "scale": 1},
+                               "height": fixed_h, "scale": 1},
                          captureBeyondViewport=True)
             n += 1
             with open(os.path.join(frames, "f%05d.jpg" % n), "wb") as f:
@@ -134,14 +141,11 @@ def record(audio, need, out_path, seconds, width, height, tmp, extra):
         except Exception:
             proc.kill()
 
-    # ★コマの大きさが途中で変わる★ 音が増えると枠が下へ伸びるので、いちばん大きい
-    # コマに合わせて下を余白で埋めてから動画にする。揃えないと ffmpeg が受け付けない。
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     fps = max(1.0, n / seconds)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", "%.3f" % fps,
                     "-i", os.path.join(frames, "f%05d.jpg"),
-                    "-vf", ("fps=30,pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0:0x0f1420,"
-                            "format=yuv420p"),
+                    "-vf", "fps=30,scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p",
                     "-c:v", "libx264", "-crf", "20", out_path], check=True)
     meta = os.path.splitext(out_path)[0] + ".marks.json"
     with open(meta, "w") as f:

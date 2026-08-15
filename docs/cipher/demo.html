@@ -30,15 +30,19 @@
   html,body{ margin:0; padding:0; background:#0f1420; color:#dfe6f5;
              font-family:-apple-system,"Hiragino Sans",sans-serif; }
   #wrap{ padding:14px 16px; }
-  #seq{ display:flex; flex-wrap:wrap; gap:10px; }
+  /* ★高さは最初から確保する★ 音が増えるたびに枠が伸びると、コマごとに絵の
+     大きさが変わり、動画にしたとき縦に潰れる。必要な行数ぶんを先に取っておく。 */
+  #seq{ display:flex; flex-wrap:wrap; gap:10px; align-content:flex-start; }
   .chip{ background:#151d2e; border:1px solid #24304a; border-radius:12px;
          padding:8px 16px; min-width:76px; text-align:center; }
   .chip.ref{ border-color:#3f6fd8; }
   .chip .idx{ font-size:13px; opacity:.7; }
   .chip .nm{ font-size:42px; font-weight:700; color:#7ab4ff; line-height:1.15; }
-  #ok{ display:none; width:100%; text-align:center; font-size:52px; font-weight:700;
+  /* ★出る前から場所を取っておく★ 出た瞬間に枠が伸びると、そのコマだけ絵の
+     大きさが変わってしまう。見えないだけで高さは最初から確保する。 */
+  #ok{ visibility:hidden; width:100%; text-align:center; font-size:52px; font-weight:700;
        color:#3ddc84; letter-spacing:.14em; padding:14px 0 4px; }
-  body.done #ok{ display:block; }
+  body.done #ok{ visibility:visible; }
   /* 音が1本も来ていないうちは、枠すら描かない（黒い箱を映さないため） */
   body.idle #wrap{ visibility:hidden; }
 </style>
@@ -73,6 +77,10 @@
   const hiHz = midiToFreq(noteToMidi(hiNote)) * Math.pow(2, 1/12);
   const need = parseInt(get("need","0"), 10) || 0;
   const audioUrl = get("demoaudio", null);
+  // ★音が鳴り始めてからおよそ0.5秒で音名が出るようにする★
+  // 区切りは音の終わりで決まるので、何もしなくても0.7秒ほど遅れて出る（実測）。
+  // 狙いの0.5秒に寄せるには、むしろ待たせない。0にすると実測で0.55秒前後になる。
+  const showDelayMs = parseFloat(get("showdelay", "0"));
 
   const seg = window.SilenceSegmenter.create({
     onMarginDb: parseFloat(get("onmargin","26")),
@@ -84,6 +92,12 @@
 
   const seqEl = document.getElementById("seq");
   let count = 0;
+
+  // 1行に並ぶ数から必要な行数を見積もり、その高さを先に確保する。
+  // 3行ぶんは最低でも取る（2行で終わる素材でも、枠の大きさを揃えたいため）。
+  const perRow = Math.max(1, Math.floor((innerWidth - 32) / 150));
+  const rows = Math.max(3, Math.ceil((need || perRow * 3) / perRow));
+  seqEl.style.minHeight = (rows * 104) + "px";
 
   function add(freq){
     count++;
@@ -127,7 +141,12 @@
     const t = performance.now();
     // peakInBand が返すのは {freq, level, bin}。level が強さ[dB]である
     const ev = seg.feed(t, pk ? pk.level : -140, pk ? pk.freq : null);
-    if(ev && ev.type === "note" && ev.freq) add(ev.freq);
+    // ★音が鳴ってから少し置いて出す★ 区切りは音の終わりで決まるので、そのまま
+    // 描くと鳴り終わりと同時に出る。人が「聞いてから読む」間合いに寄せる。
+    if(ev && ev.type === "note" && ev.freq){
+      const f = ev.freq;
+      setTimeout(() => add(f), showDelayMs);
+    }
     // ★タブが前面でなくても回す★ requestAnimationFrame は隠れたタブで止まり、
     // 音だけが進んで何も検出されない。画面を持たないChromeで撮るのでこれが要る。
     setTimeout(loop, 16);

@@ -85,7 +85,7 @@ def blow_span(path, pad_head=0.6, pad_tail=1.2):
     return max(0.0, times[0] - pad_head), times[-1] + pad_tail
 
 
-def compose(base, pinp, out, width_ratio, margin, corner, span, delay=0.0):
+def compose(base, pinp, out, width_ratio, margin, corner, span, delay=0.0, at=0.0):
     marks = os.path.splitext(pinp)[0] + ".marks.json"
     off = audio_start_offset(marks)
     # 子画面の置き場所。右下が既定。実演は人物が中央に写るので隅が邪魔にならない。
@@ -101,15 +101,25 @@ def compose(base, pinp, out, width_ratio, margin, corner, span, delay=0.0):
         enable = f":enable='between(t,{span[0]:.2f},{span[1]:.2f})'"
     # 子画面を親のどの時刻から重ねるか。1本の映像に独立した吹奏が2回あるときは、
     # 見せたい吹奏の頭に合わせる（ハートとかるたを1本にした素材で必要になった）。
-    # 子画面の「1本目が出る瞬間」を、実演で最初の音が鳴る瞬間に合わせる
-    at = (span[0] - delay) if span else 0.0
+    # 子画面を実演のどの時刻から重ねるか。音源が実演の途中を切り出したものなら、
+    # その切り出し位置を渡す（s10 はかるたの部分だけを音源にしている）。
     fc = (f"[1:v]trim=start={off:.3f},setpts=PTS-STARTPTS+{at:.3f}/TB,"
           f"scale=iw*{width_ratio}/1:-2,pad=iw+6:ih+6:3:3:white[p];"
-          f"[0:v][p]overlay={pos}:shortest=1{enable}[v]")
+          # ★shortest は使わない★ 子画面のほうが短いと、そこで出力そのものが
+          # 終わってしまう（s10 で映像が14秒に切れた。音声だけ残るので気づきにくい）。
+          f"[0:v][p]overlay={pos}{enable}[v]")
+    # ★出力の長さは必ず実演の映像に合わせる★
+    # shortest を付けると子画面が短いときに出力ごと切れ（s10 で14秒に切れた）、
+    # 付けないと子画面が長いときに伸びる。どちらも実演の長さから外れる。
+    dur = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
+                          "-show_entries", "stream=duration", "-of", "csv=p=0", base],
+                         capture_output=True, text=True).stdout.strip().strip(",")
     cmd = ["ffmpeg", "-v", "error", "-y", "-i", base, "-i", pinp,
-           "-filter_complex", fc, "-map", "[v]", "-map", "0:a?",
-           "-c:v", "libx264", "-crf", "18", "-preset", "medium",
-           "-c:a", "aac", "-b:a", "192k", out]
+           "-filter_complex", fc, "-map", "[v]", "-map", "0:a?"]
+    if dur:
+        cmd += ["-t", dur]
+    cmd += ["-c:v", "libx264", "-crf", "18", "-preset", "medium",
+            "-c:a", "aac", "-b:a", "192k", out]
     subprocess.run(cmd, check=True)
     return off
 
@@ -122,6 +132,9 @@ def main(argv=None):
     ap.add_argument("--ratio", type=float, default=0.30, help="子画面の幅（親に対する割合）")
     ap.add_argument("--margin", type=int, default=24, help="端からの余白[px]")
     ap.add_argument("--corner", default="右上", choices=["右下", "左下", "右上", "左上"])
+    ap.add_argument("--at", type=float, default=0.0,
+                    help="子画面を実演のこの時刻から重ねる[秒]。音源が実演の途中を"
+                         "切り出したものなら、その切り出し位置を渡す")
     ap.add_argument("--span", default=None,
                     help="子画面を出す区間を手で決める（例 10.2,19.4）。"
                          "1本の映像に独立した吹奏が2回入るときは自動判定に任せない")
@@ -149,8 +162,13 @@ def main(argv=None):
     off0 = audio_start_offset(marks)
     delay = 0.0
     if fn is not None:
+        # 1本目の音名が出る時刻（音源の時間軸）。ここから子画面を出せば黒い枠が映らない
         delay = max(0.0, fn - off0)
-    off = compose(a.base, a.pinp, a.out, ratio, a.margin, a.corner, span, delay)
+        if span is None:
+            span = (delay, 10**6)
+        elif not a.span:
+            span = (max(span[0], delay), span[1])
+    off = compose(a.base, a.pinp, a.out, ratio, a.margin, a.corner, span, delay, a.at)
     print("重ねた: %s（幅%.0f%%・%s・出す区間 %s・解析の遅れ %.1f秒ぶん前へ）"
           % (a.out, a.ratio * 100, a.corner,
              ("%.1f〜%.1f秒" % span) if span else "全部", delay))
