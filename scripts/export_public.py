@@ -145,6 +145,37 @@ def export_decoder(out, dry=False):
         copy(os.path.join(src, f), os.path.join(d, f), dry)
 
 
+# ---------------------------------------------------------------- ウォレット
+
+def export_wallet(out, dry=False):
+    """笛から鍵と口座を導き、送金までできるページ。論文の「暗号笛ウォレット」にあたる。
+
+    ★これはテストネット（Polygon Amoy）の実験である。★ カード1枚の秘密は20.8bitしか
+    ないので、アドレスが公開の台帳に現れた時点で総当たりされる。README にその旨を書いてある。
+    """
+    d = os.path.join(out, "wallet")
+    src = os.path.join(ROOT, "docs/dapp")
+    # package.json（type: module）が無いと、Nodeで検査を走らせたときに
+    # 「import は module の外では使えない」で落ちる。ブラウザは無視する。
+    for f in ("index.html", "flute_key.js", "flute_key.test.js", "tx.js", "tx.test.js",
+              "README.md", "DESIGN.md", "package.json"):
+        copy(os.path.join(src, f), os.path.join(d, f), dry)
+    for f in ("secp256k1.js", "package.json",
+              "LICENSE.noble-hashes", "LICENSE.noble-secp256k1"):
+        copy(os.path.join(src, "vendor", f), os.path.join(d, "vendor", f), dry)
+    for f in ("sha3.js", "_u64.js", "crypto.js", "utils.js"):
+        copy(os.path.join(src, "vendor/noble-hashes", f),
+             os.path.join(d, "vendor/noble-hashes", f), dry)
+    if dry:
+        return
+    # 開発用では復号器が ../cipher/ にあるが、公開版では ../decoder/ に置いてある。
+    p = os.path.join(d, "index.html")
+    s = open(p, encoding="utf-8").read()
+    s = s.replace("../cipher/", "../decoder/")
+    open(p, "w", encoding="utf-8").write(s)
+    log("index.html の復号器への参照を公開版の置き場所に合わせた")
+
+
 # ---------------------------------------------------------------- 埋め込み
 
 def export_embed(out, dry=False):
@@ -267,6 +298,8 @@ def main(argv=None):
     export_codec(out, args.dry_run)
     print("復号器")
     export_decoder(out, args.dry_run)
+    print("ウォレット")
+    export_wallet(out, args.dry_run)
     print("埋め込み")
     export_embed(out, args.dry_run)
     print("作例")
