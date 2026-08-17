@@ -16,22 +16,22 @@ sys.path.insert(0, str(ROOT))
 from fue.cipher_codec import (CodecConfig, decode, encode,  # noqa: E402
                               encode_symbols, simulate)
 
-# 既定は cipher_config.json（11スロット G#6..F#7）。これは実機で検証済みの体系で、
-# 印刷済みのカードとスプールもこれで作ってある。configキーを持つケースだけ上書きする。
+# 既定は cipher_config.json（12スロット G#6..G7・隣接同音の禁止あり）。論文と作例が
+# この体系で、隣り合う値が11通り＝素数になるのでGF(11)がそのまま使え、本数の代償がゼロになる。
 #
-# 隣接同音を禁じる符号化(no_repeat)は12スロット G#6..G7 と組み合わせて使う。そうすると
-# 使える値が11通り＝素数となり、GF(11)がそのまま使えて本数の代償がゼロになる。11スロット
-# のまま no_repeat にすると GF(7) まで落ちて本数が増えるので、その組み合わせは使わない。
-# G7が実機で安定して鳴るかは較正コームで確認中のため、既定にはしていない。
-SLOT12 = {"hi_note": "G7"}
+# ★どのベクタも、音域を config に明示する。★ 既定を変えたときにベクタの意味が
+# 黙って変わらないようにするためである。テストはパリティ・方式・隣接同音の禁止を
+# ベクタから読むが、音域だけは既定から読むので、ここを空にすると既定に引きずられる。
+SLOT11 = {"hi_note": "F#7"}   # 旧体系。印刷済みのカードとスプールがこれで作ってある
+SLOT12 = {"hi_note": "G7"}    # 現行
 
 CASES = [
-    dict(parity=2, mode="sequential", payload_hex="a5"),
-    dict(parity=2, mode="sequential", payload_hex="00112233"),
-    dict(parity=2, mode="sequential", payload_hex=bytes(range(16)).hex()),
-    dict(parity=2, mode="sequential", payload_hex="0000a5"),
-    dict(parity=0, mode="sequential", payload_hex="00112233"),
-    dict(parity=0, mode="symbols", symbols=[3, 1, 4, 1, 5, 9]),
+    dict(parity=2, mode="sequential", payload_hex="a5", config=SLOT11),
+    dict(parity=2, mode="sequential", payload_hex="00112233", config=SLOT11),
+    dict(parity=2, mode="sequential", payload_hex=bytes(range(16)).hex(), config=SLOT11),
+    dict(parity=2, mode="sequential", payload_hex="0000a5", config=SLOT11),
+    dict(parity=0, mode="sequential", payload_hex="00112233", config=SLOT11),
+    dict(parity=0, mode="symbols", symbols=[3, 1, 4, 1, 5, 9], config=SLOT11),
     # 隣接同音を禁じる符号化。12スロットと組み合わせるのが本来の使い方である。
     dict(parity=2, mode="sequential", payload_hex="a5", no_repeat=True,
          config=SLOT12),
@@ -42,8 +42,9 @@ CASES = [
     dict(parity=0, mode="symbols", symbols=[3, 1, 4, 1, 5, 6], no_repeat=True,
          config=SLOT12),
     # 実際に印刷した物に対応するケース。カード「2026724」とスプール「pass_#26」。
-    dict(parity=0, mode="symbols", symbols=[2, 0, 2, 6, 7, 2, 4]),
-    dict(parity=2, mode="sequential", payload_hex=b"pass_#26".hex()),
+    # どちらも旧体系で、差分の写像を通していない。
+    dict(parity=0, mode="symbols", symbols=[2, 0, 2, 6, 7, 2, 4], config=SLOT11),
+    dict(parity=2, mode="sequential", payload_hex=b"pass_#26".hex(), config=SLOT11),
 ]
 
 

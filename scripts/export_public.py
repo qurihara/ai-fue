@@ -104,6 +104,8 @@ def export_codec(out, dry=False):
     """符号の参照実装（Python）と、言語をまたいで正しさを確かめる試験ベクタ。"""
     d = os.path.join(out, "codec")
     copy(os.path.join(ROOT, "fue/cipher_codec.py"), os.path.join(d, "cipher_codec.py"), dry)
+    # cipher_codec.py が音名と周波数の対応をここから読む。無いと import そのものが通らない。
+    copy(os.path.join(ROOT, "fue/notes.py"), os.path.join(d, "notes.py"), dry)
     copy(os.path.join(ROOT, "fue/threshold.py"), os.path.join(d, "threshold.py"), dry)
     copy(os.path.join(ROOT, "docs/cipher/cipher_test_vectors.json"),
          os.path.join(d, "test_vectors.json"), dry)
@@ -114,6 +116,20 @@ def export_codec(out, dry=False):
          os.path.join(d, "verify_manual_decode.py"), dry)
     copy(os.path.join(ROOT, "docs/cipher/cipher_config.json"),
          os.path.join(d, "default_config.json"), dry)
+    if dry:
+        return
+    # 開発用では cipher_codec.py が fue パッケージの中にあるが、公開用では隣に置く。
+    # 読み込み方を直さないと、そのままでは動かない。
+    p = os.path.join(d, "verify_manual_decode.py")
+    s = open(p, encoding="utf-8").read()
+    s = s.replace(
+        'sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))\n'
+        'from fue import cipher_codec as cc  # noqa: E402',
+        '# 公開版では、このファイルと同じ場所に cipher_codec.py を置いてある\n'
+        'sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))\n'
+        'import cipher_codec as cc  # noqa: E402')
+    open(p, "w", encoding="utf-8").write(s)
+    log("verify_manual_decode.py の読み込み方を公開版に合わせた")
 
 
 # ---------------------------------------------------------------- 復号器
@@ -137,13 +153,16 @@ def export_embed(out, dry=False):
     copy(os.path.join(SKILLS, "flute-embed/scripts/embed_flutes.py"),
          os.path.join(d, "embed_flutes.py"), dry)
     # 判断を伴う部分は手順書（スキル）の側にある。プログラムだけでは埋め込みは再現できない。
-    copy(os.path.join(SKILLS, "flute-embed/SKILL.md"),
+    # 手元のスキル（~/.claude/skills）は個人の環境と非公開の記録に依存しているので、
+    # そのままでは配れない。公開用に書き直したものを docs/skills に置いてあり、そちらを写す。
+    copy(os.path.join(ROOT, "docs/skills/flute-embed.md"),
          os.path.join(d, "flute-embed.md"), dry)
-    copy(os.path.join(SKILLS, "cipher-image-tiles/SKILL.md"),
-         os.path.join(d, "cipher-image-tiles.md"), dry)
     copy(os.path.join(ROOT, "fue/orient_check.py"), os.path.join(d, "orient_check.py"), dry)
     copy(os.path.join(ROOT, "scripts/check_flute_cavity.py"),
          os.path.join(d, "check_cavity.py"), dry)
+    # check_cavity.py が gcode から押し出し線を読むのに使う。無いと動かない。
+    copy(os.path.join(ROOT, "fue/check_cavity.py"),
+         os.path.join(d, "gcode_segments.py"), dry)
     copy(os.path.join(ROOT, "fue/mini10.py"), os.path.join(d, "mini10.py"), dry)
     # 笛の素の形（発音部を持つ半割りリコーダー）。mini10.py がこれを読んで
     # ボアを伸ばし縮みさせるので、これが無いと笛を作れない。栗原さんがTinkercadで
@@ -178,6 +197,14 @@ def export_embed(out, dry=False):
     open(p, "w", encoding="utf-8").write(s)
     log("mini10.py のパスと較正の読み方を公開版に合わせた")
 
+    # check_cavity.py も、開発用では fue パッケージ越しに読んでいる。公開版では隣に置く。
+    p = os.path.join(d, "check_cavity.py")
+    s = open(p, encoding="utf-8").read()
+    s = s.replace('from fue.check_cavity import load_segments  # noqa: E402',
+                  'from gcode_segments import load_segments  # noqa: E402')
+    open(p, "w", encoding="utf-8").write(s)
+    log("check_cavity.py の読み込み方を公開版に合わせた")
+
 
 # ---------------------------------------------------------------- 作例
 
@@ -190,10 +217,30 @@ GALLERY_PHOTOS = [
      "1枚を裏返したところ。笛9本が並ぶ"),
     ("out/hokusai_tiles_photo_standing.jpg", "tiles_standing.jpg",
      "脚を付けて自立させたところ"),
+    ("out/karuta_photo_front.jpg", "karuta_front.jpg",
+     "かるたの読み札2枚。右が上の句、左が下の句で、そろって歌が完成する"),
+    ("out/karuta_photo_back.jpg", "karuta_back.jpg",
+     "上の句の札を裏返したところ。笛8本が並ぶ"),
+    ("out/paircards_photo.jpg", "paircards.jpg",
+     "2枚そろって初めてハートが現れるカード"),
+    ("out/card_photo.jpg", "card.jpg",
+     "カード1枚。笛8本で20.8bitを記録する"),
+    ("out/card_2of3_photo.jpg", "card_2of3.jpg",
+     "2-of-3の断片を担うカード"),
+    ("out/box_inside_photo.jpg", "box_inside.jpg",
+     "箱の内部。床に笛を仕込み、窓は内側へ開く"),
+    ("out/box_pens_photo.jpg", "box_pens.jpg",
+     "ペンを立てたところ。机の上では文房具にしか見えない"),
 ]
 GALLERY_MODELS = [
     ("out/hokusai_frame_box_plain.stl", "frame_box.stl", "額縁（模様なし）"),
     ("out/hokusai_frame_box_plain_stand.stl", "frame_stand.stl", "自立させる脚2本"),
+    ("out/karuta/sutoku_edge_h2d.3mf", "karuta_2of2.3mf",
+     "かるたの読み札2枚（3色刷り。白い地・黒い字・緑のふち）"),
+    ("out/cipher_cardpair_v3.3mf", "paircards_2of2.3mf",
+     "ハートを抜いた2枚組のカード"),
+    ("out/cipher_card_v4_share2.3mf", "card.3mf", "カード1枚"),
+    ("out/cardbox_v1_share1.3mf", "box.3mf", "笛を床に仕込んだ枡箱"),
 ]
 
 
