@@ -63,14 +63,31 @@
   <h2>1. 笛を吹いて口座を開く</h2>
   <div class="card">
     <div class="muted">「開始」を押して笛を順に吹きます。息を切るか音が変わったところで自動的に次の笛へ進みます。吹き終えたらもう一度押してください。<br>
-      2枚組（2-of-2）の場合は、1枚目を確定してから2枚目を吹きます。<b>2枚そろうまで口座は現れません。</b></div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0">
-      <label class="muted" for="mode">笛の種類：</label>
-      <select id="mode" style="font:inherit;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.4em">
-        <option value="single">1枚（カード8本・パリティ1）</option>
-        <option value="pair" selected>2枚組（2-of-2 のハートカード）</option>
-        <option value="spool">スプール2枚（128ビット・49本）</option>
-      </select>
+      複数枚の場合は、1枚目を確定してから2枚目を吹きます。<b>全部そろうまで口座は現れません。</b></div>
+    <div id="cfgBox" style="margin:10px 0;padding:10px;border:1px solid var(--line);border-radius:8px">
+      <div class="muted">いまの設定（<b id="cfgName">—</b>）</div>
+      <div id="cfgDesc" style="margin-top:4px"></div>
+      <div class="muted" style="margin-top:6px">★この設定はURLで決まります★
+        別の笛を読むときはURLを変えてください。<a href="#" id="cfgHelp">書き方</a></div>
+      <div id="cfgHelpBox" style="display:none;margin-top:8px;font-size:0.92rem" class="muted">
+        <code>?lo=G%236&amp;hi=G7&amp;norepeat=1&amp;mode=symbols&amp;parity=1&amp;cards=2&amp;name=かるた2枚</code><br>
+        <b>lo・hi</b> 音域（#は %23 と書く）／<b>parity</b> パリティ記号の数／<b>mode</b> symbols か sequential／
+        <b>norepeat</b> 隣接同音の禁止（1で有効）／<b>cards</b> 何枚吹くか／<b>expect</b> 1枚あたりの本数／
+        <b>name</b> 画面に出す名前／<b>label</b> 口座のラベル（変えると同じ笛から別の口座になる）／
+        <b>ref・step・useref</b> 基準笛・刻み・基準笛を使うか。<br>
+        復号ページと同じ書き方です。台帳のURLの <code>#</code> から後ろをそのまま貼れば読めます。
+        <b>★設定が違っても読めてしまうことがあります★</b> その場合は黙って別の口座が開きます
+        （たとえばパリティ2の札をパリティ1で読むと、エラーにならないまま違う値になります）。
+      </div>
+      <div class="muted" style="margin-top:8px">よく使う設定：
+        <a href="?lo=G%236&hi=G7&norepeat=1&mode=symbols&parity=1&cards=1&expect=8&name=%E3%81%8B%E3%82%8B%E3%81%9F%E3%83%BB%E3%83%8F%E3%83%BC%E3%83%88%E3%81%AE1%E6%9E%9A">かるた・ハートの1枚</a> ／
+        <a href="?lo=G%236&hi=G7&norepeat=1&mode=symbols&parity=1&cards=2&expect=8&name=2-of-2%EF%BC%882%E6%9E%9A%E7%B5%84%EF%BC%89">2枚組（2-of-2）</a> ／
+        <a href="?lo=G%236&hi=G7&norepeat=1&mode=symbols&parity=2&cards=1&expect=8&name=2-of-3%E3%81%AE%E6%96%AD%E7%89%871%E3%81%A4">2-of-3の断片1つ</a> ／
+        <a href="?lo=G%236&hi=G7&norepeat=1&mode=symbols&parity=2&cards=2&expect=8&name=2-of-3%EF%BC%883%E3%81%A4%E3%81%AE%E3%81%86%E3%81%A12%E3%81%A4%EF%BC%89">2-of-3（2つ）</a> ／
+        <a href="?lo=G%236&hi=G7&norepeat=1&mode=symbols&parity=2&cards=1&expect=9&name=%E5%8C%97%E6%96%8E%E3%81%AE%E3%82%BF%E3%82%A4%E3%83%AB1%E6%9E%9A">北斎のタイル1枚</a> ／
+        <a href="?lo=G%236&hi=G7&norepeat=1&mode=symbols&parity=2&cards=2&expect=9&name=2-of-9%EF%BC%889%E6%9E%9A%E3%81%AE%E3%81%86%E3%81%A12%E6%9E%9A%EF%BC%89">2-of-9（2枚）</a> ／
+        <a href="?lo=G%236&hi=G7&norepeat=1&mode=sequential&parity=2&cards=1&expect=49&name=%E3%82%B9%E3%83%97%E3%83%BC%E3%83%AB2%E6%9E%9A%EF%BC%88128%E3%83%93%E3%83%83%E3%83%88%EF%BC%89">スプール2枚（128ビット）</a>
+      </div>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <button id="blowBtn">開始</button>
@@ -102,10 +119,11 @@
       <input class="wide" id="rpc" value="https://polygon-amoy-bor-rpc.publicnode.com" list="rpcList" spellcheck="false">
       <datalist id="rpcList">
         <option value="https://polygon-amoy-bor-rpc.publicnode.com"></option>
-        <option value="https://rpc-amoy.polygon.technology"></option>
         <option value="https://polygon-amoy.drpc.org"></option>
       </datalist>
-      <span class="muted">繋がらないときは別の接続先を選んでください。どれもPolygon Amoy（chainId 80002）です。</span></div>
+      <span class="muted">繋がらないときは別の接続先を選んでください。どれもPolygon Amoy（chainId 80002）です。
+        ★Polygon公式の <code>rpc-amoy.polygon.technology</code> は2026年7月17日に廃止されました★
+        （ホスト名ごと消えているので、MetaMaskなど他の道具でも設定を変える必要があります）。</span></div>
     <span class="status" id="acctStatus"></span>
   </div>
 
@@ -154,11 +172,60 @@ const EXPLORER = "https://amoy.polygonscan.com/tx/";
 const el = (id) => document.getElementById(id);
 const CFG_BASE = {lo_note:"G#6", hi_note:"G7", step_cents:100, reference_note:"C7",
                   no_repeat:true, use_reference:true};
-const MODES = {
-  single: {label:"カード1枚",     cfg:{...CFG_BASE, ecc_parity:1, mode:"symbols"}, cards:1, expect:8},
-  pair:   {label:"2枚組",         cfg:{...CFG_BASE, ecc_parity:1, mode:"symbols"}, cards:2, expect:8},
-  spool:  {label:"スプール2枚",   cfg:{...CFG_BASE, ecc_parity:2, mode:"sequential"}, cards:1, expect:49},
-};
+
+/* ★読む笛の設定はURLで決まる★
+ *
+ * 一覧から選ぶ作りにしていたが、[* 物が増えるたびに選択肢が増え、第三者が自分の笛を
+ * 読めない]。復号ページ（docs/cipher/）と同じパラメータの書き方にして、URLで指定する。
+ * 台帳に載せているURLの # から後ろをそのまま貼れば読める。
+ *
+ * 検索の側（?）と断片の側（#）のどちらでも受ける。断片で書くと、設定がサーバの記録に
+ * 残らない。台帳のURLに合わせるならこちらである。
+ */
+const MODE = (function readConfig(){
+  const search = new URLSearchParams(location.search);
+  const frag = new URLSearchParams(location.hash.replace(/^#/, ""));
+  const q = (name) => frag.has(name) ? frag.get(name) : search.get(name);
+  const cfg = {...CFG_BASE, ecc_parity: 1, mode: "symbols"};
+  const noteRe = /^[A-Ga-g][#b]?-?\d+$/;
+  const lo = q("lo"), hi = q("hi"), ref = q("ref"), step = q("step");
+  if(lo && noteRe.test(lo)) cfg.lo_note = lo;
+  if(hi && noteRe.test(hi)) cfg.hi_note = hi;
+  if(ref && noteRe.test(ref)) cfg.reference_note = ref;
+  if(step !== null && /^\d+(\.\d+)?$/.test(step ?? "")) cfg.step_cents = parseFloat(step);
+  const mode = q("mode");
+  if(mode === "symbols" || mode === "sequential") cfg.mode = mode;
+  const parity = q("parity");
+  if(parity !== null && /^\d+$/.test(parity ?? "")) cfg.ecc_parity = parseInt(parity, 10);
+  const norepeat = q("norepeat");
+  if(norepeat === "0" || norepeat === "false") cfg.no_repeat = false;
+  const useref = q("useref");
+  if(useref === "0" || useref === "false") cfg.use_reference = false;
+  const cards = parseInt(q("cards") ?? "2", 10);
+  const expect = parseInt(q("expect") ?? "8", 10);
+  return {
+    cfg,
+    cards: Number.isFinite(cards) && cards >= 1 ? cards : 2,
+    expect: Number.isFinite(expect) && expect >= 1 ? expect : 8,
+    label: q("label") || "amoy",
+    name: q("name") || "指定なし（既定の設定）",
+  };
+})();
+
+// いまの設定を画面に出す。何を読もうとしているのかが分からないまま吹かせない。
+(function showConfig(){
+  const c = MODE.cfg;
+  el("cfgName").textContent = MODE.name;
+  el("cfgDesc").textContent =
+    `音域 ${c.lo_note}〜${c.hi_note}／基準笛 ${c.reference_note}／パリティ ${c.ecc_parity}記号／`
+    + `${c.mode === "symbols" ? "記号" : "バイト列"}／隣接同音の禁止 ${c.no_repeat ? "あり" : "なし"}／`
+    + `${MODE.cards}枚 × 各${MODE.expect}本／口座のラベル ${MODE.label}`;
+  el("cfgHelp").onclick = (e) => {
+    e.preventDefault();
+    const b = el("cfgHelpBox");
+    b.style.display = b.style.display === "none" ? "" : "none";
+  };
+})();
 
 // --- マイクと音程 ---
 /* ★音の高さは山を追って読む（自己相関は使わない）★
@@ -232,7 +299,7 @@ function renderSeq(){
     d.innerHTML = '<div class="idx">' + (i+1) + '</div><div class="nm">' + (s.skipped ? "—" : s.note) + '</div>';
     box.appendChild(d);
   });
-  const m = MODES[el("mode").value];
+  const m = MODE;
   el("blowBtn").textContent = active ? "終了して読む"
       : (cards.length ? (cards.length+1) + "枚目を吹く" : "開始");
   el("blowBtn").classList.toggle("ok", active);
@@ -248,7 +315,7 @@ async function blowStart(){
 }
 function blowEnd(){
   active = false;
-  const m = MODES[el("mode").value];
+  const m = MODE;
   const freqs = seq.map(s => s.skipped ? window.CipherCodec.noteToFreq(CFG_BASE.lo_note)/2 : s.freq);
   seg = null;
   if(!freqs.length){ el("blowStatus").textContent = "1本も入っていません。"; renderSeq(); return; }
@@ -269,7 +336,7 @@ function blowToggle(){ active ? blowEnd() : blowStart(); }
 // --- 口座を開く ---
 let account = null;
 async function openAccount(){
-  const m = MODES[el("mode").value];
+  const m = MODE;
   let secret;
   try{
     if(m.cfg.mode === "symbols"){
@@ -393,7 +460,6 @@ el("sendBtn").onclick = send;
 el("pass").onchange = () => { if(account) forget(); };
 el("skipBtn").onclick = ()=>{ if(active){ seq.push({skipped:true}); renderSeq(); } };
 el("undoBtn").onclick = ()=>{ if(seq.length){ seq.pop(); renderSeq(); } };
-el("mode").onchange = forget;
 renderSeq();
 </script>
 </body>
