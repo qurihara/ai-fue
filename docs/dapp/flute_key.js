@@ -40,6 +40,26 @@ export function toHex(bytes) {
   return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** 秘密と合言葉をつないで、鍵導出への入力を作る。
+ *
+ * 合言葉は[* 秘密の側に混ぜる]（saltではなく）。saltは公開してよいものとして扱っており、
+ * 合言葉は秘密の一部だからである。笛と合言葉の両方がそろわないと同じ鍵にならない。
+ *
+ * 区切りに 0x1f を入れるのは、境目を曖昧にしないためである。区切りが無いと
+ * 秘密"26"＋合言葉"0812" と 秘密"260"＋合言葉"812" が同じ入力になってしまう。
+ *
+ * 合言葉が空のときは何も足さない。[* これまでに作った口座を変えないため]である。
+ */
+export function buildPassword(secretBytes, passphrase) {
+  if (!passphrase) return secretBytes;
+  const p = new TextEncoder().encode(passphrase);
+  const out = new Uint8Array(secretBytes.length + 1 + p.length);
+  out.set(secretBytes, 0);
+  out[secretBytes.length] = 0x1f;
+  out.set(p, secretBytes.length + 1);
+  return out;
+}
+
 /** 32バイトの種を秘密鍵として使えるか確かめる。曲線の位数の外なら使えない。 */
 function isValidPrivateKey(bytes) {
   let v = 0n;
@@ -62,14 +82,16 @@ export function toChecksumAddress(addrLower) {
  * 笛の秘密から口座を作る。
  * @param secret 記号の配列（例 [1,6,8,9,8,7]）またはバイト列
  * @param opts.label 用途のラベル。同じ笛から別の口座を作りたいときに変える
+ * @param opts.passphrase 合言葉。笛と合わせて2要素にする。空なら笛だけで決まる
  * @param opts.iterations PBKDF2の繰り返し回数
- * @returns {privateKey, privateKeyHex, address, salt, iterations, version}
+ * @returns {privateKey, privateKeyHex, address, salt, iterations, version, hasPassphrase}
  */
 export async function deriveAccount(secret, opts = {}) {
   const label = opts.label ?? "default";
   const iterations = opts.iterations ?? DEFAULT_ITERATIONS;
   const version = opts.version ?? KDF_VERSION;
-  const bytes = secretToBytes(secret);
+  const passphrase = opts.passphrase ?? "";
+  const bytes = buildPassword(secretToBytes(secret), passphrase);
   const salt = `${version}|${label}`;
   const s = await subtle();
 
@@ -91,6 +113,7 @@ export async function deriveAccount(secret, opts = {}) {
       salt: saltFull,
       iterations,
       version,
+      hasPassphrase: passphrase !== "",
     };
   }
   throw new Error("秘密鍵を作れなかった（起こらないはずの事態）");
