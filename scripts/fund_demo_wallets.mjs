@@ -159,11 +159,15 @@ function readKey() {
   return line;
 }
 
-const KEY = readKey();
-if (!/^0x[0-9a-fA-F]{64}$/.test(KEY)) {
-  console.error("秘密鍵の形が違う。0x で始まる64桁の16進を1行で書くこと（長さ " + KEY.length + "）。");
+// MetaMask は 0x を付けずに書き出す。どちらで貼られても受けるよう、ここで揃える。
+const RAW_KEY = readKey().replace(/^0x/i, "");
+if (!/^[0-9a-fA-F]{64}$/.test(RAW_KEY)) {
+  console.error("秘密鍵の形が違う。16進64桁を1行で書くこと（0x は付けても付けなくてよい）。");
+  console.error("いま読めたのは " + RAW_KEY.length + "文字。MetaMaskの「アカウントの詳細」→「秘密鍵」で"
+                + "「長押しして秘密鍵を表示」を押し続けると出る値である。");
   process.exit(1);
 }
+const KEY = "0x" + RAW_KEY;
 const priv = tx.hexToBytes(KEY);
 const from = tx.addressOf(priv);
 const valueWei = tx.parseEther(AMOUNT);
