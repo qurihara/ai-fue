@@ -1,11 +1,19 @@
 /* デモ映像で使う笛の口座へ、Polygon Amoy のテスト用トークンをまとめて送る。
  *
  * ★秘密鍵はこのファイルにも、このリポジトリのどこにも書かない。★
- * 実行するときに環境変数で渡す。履歴に残らないよう、行の先頭に空白を1つ置くとよい
- * （zsh/bash の HISTCONTROL=ignorespace が効く場合）。
+ * 次の場所に置いたテキストファイルから読む。
  *
- *   AMOY_KEY=0x… node scripts/fund_demo_wallets.mjs            送る内容を見せるだけ
- *   AMOY_KEY=0x… node scripts/fund_demo_wallets.mjs --yes      実際に送る
+ *   ~/.config/cipherflute/amoy_key.txt
+ *
+ * [* この置き場所はGoogle Driveの外である。] このリポジトリはDriveの中にあるので、
+ * リポジトリに置くと鍵がクラウドへ同期されてしまう。ファイルは本人だけが読める
+ * 権限（600）にしてある。# で始まる行と空の行は読み飛ばすので、覚え書きを書いてよい。
+ *
+ *   node scripts/fund_demo_wallets.mjs            送る内容を見せるだけ
+ *   node scripts/fund_demo_wallets.mjs --yes      実際に送る
+ *
+ * 環境変数 AMOY_KEY があれば、そちらが優先される（ファイルを使わない運用もできる）。
+ * --key-file <パス> で別のファイルを指せる。
  *
  * 主な指定
  *   --amount 1        1口座あたりの金額[POL]。既定 1
@@ -28,6 +36,8 @@
 import { webcrypto } from "node:crypto";
 import https from "node:https";
 import path from "node:path";
+import fs from "node:fs";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 
 if (!globalThis.crypto?.subtle) globalThis.crypto = webcrypto;
@@ -122,10 +132,36 @@ if (flag("--list")) {
   process.exit(0);
 }
 
-const KEY = process.env.AMOY_KEY;
-if (!KEY || !/^0x?[0-9a-fA-F]{64}$/.test(KEY.replace(/^0x/, "0x"))) {
-  console.error("環境変数 AMOY_KEY に送り主の秘密鍵を渡すこと（0x で始まる64桁の16進）。");
-  console.error("例:  AMOY_KEY=0x… node scripts/fund_demo_wallets.mjs --list");
+/** 秘密鍵を読む。環境変数が先、無ければファイル。★中身は決して表示しない。★ */
+function readKey() {
+  if (process.env.AMOY_KEY) return process.env.AMOY_KEY.trim();
+  const file = opt("--key-file", path.join(os.homedir(), ".config", "cipherflute", "amoy_key.txt"));
+  if (!fs.existsSync(file)) {
+    console.error("秘密鍵のファイルが無い: " + file);
+    console.error("次の行で作って、MetaMask から取り出した鍵を貼ること。");
+    console.error("  code " + file);
+    process.exit(1);
+  }
+  const st = fs.statSync(file);
+  if (st.mode & 0o077) {
+    console.error("★このファイルは他の人からも読める★ " + file);
+    console.error("次の行で直すこと。  chmod 600 " + file);
+    process.exit(1);
+  }
+  // # で始まる行と空の行は覚え書きとみなして読み飛ばす
+  const line = fs.readFileSync(file, "utf8").split("\n")
+    .map((l) => l.trim()).filter((l) => l && !l.startsWith("#"))[0];
+  if (!line) {
+    console.error("秘密鍵がまだ書かれていない: " + file);
+    console.error("  code " + file);
+    process.exit(1);
+  }
+  return line;
+}
+
+const KEY = readKey();
+if (!/^0x[0-9a-fA-F]{64}$/.test(KEY)) {
+  console.error("秘密鍵の形が違う。0x で始まる64桁の16進を1行で書くこと（長さ " + KEY.length + "）。");
   process.exit(1);
 }
 const priv = tx.hexToBytes(KEY);
