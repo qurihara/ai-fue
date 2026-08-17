@@ -93,9 +93,16 @@
       <button class="sec" id="forgetBtn" disabled>鍵を忘れる</button>
     </div>
     <div class="muted" style="margin-top:10px">受け取りは笛なしでできます。このアドレスを相手に伝えるだけです。送るときだけ笛が要ります。
-      テスト用トークンは <a href="https://faucet.polygon.technology/" target="_blank" rel="noopener">Polygonの蛇口</a> から入れられます。</div>
+      テスト用トークンは <a href="https://www.alchemy.com/faucets/polygon-amoy" target="_blank" rel="noopener">Alchemyの蛇口</a>
+      や <a href="https://faucet.quicknode.com/polygon/amoy" target="_blank" rel="noopener">QuickNodeの蛇口</a> から入れられます（Polygon公式の蛇口は終了しました）。</div>
     <div class="muted" style="margin-top:10px">接続先（RPC）
-      <input class="wide" id="rpc" value="https://rpc-amoy.polygon.technology" spellcheck="false"></div>
+      <input class="wide" id="rpc" value="https://polygon-amoy-bor-rpc.publicnode.com" list="rpcList" spellcheck="false">
+      <datalist id="rpcList">
+        <option value="https://polygon-amoy-bor-rpc.publicnode.com"></option>
+        <option value="https://rpc-amoy.polygon.technology"></option>
+        <option value="https://polygon-amoy.drpc.org"></option>
+      </datalist>
+      <span class="muted">繋がらないときは別の接続先を選んでください。どれもPolygon Amoy（chainId 80002）です。</span></div>
     <span class="status" id="acctStatus"></span>
   </div>
 
