@@ -166,13 +166,13 @@
   <p class="muted">鍵の作り方は <a href="flute_key.js">flute_key.js</a>（PBKDF2 60万回・salt は「版｜ラベル」・合言葉は秘密の側に混ぜる）。送金は <a href="tx.js">tx.js</a>（EIP-1559の取引をこの場で組み立てて署名します。財布アプリは使いません）。音の復号は <a href="../cipher/cipher_codec.js">cipher_codec.js</a>。設計の検討は <a href="DESIGN.md">DESIGN.md</a>。外部のCDNは使わず、必要なライブラリは <a href="vendor/">vendor/</a> に置いています。</p>
 </div>
 
-<script src="../cipher/cipher_codec.js"></script>
-<script src="../cipher/silence_segmenter.js"></script>
-<script src="../cipher/fft_peak.js"></script>
+<script src="../cipher/cipher_codec.js?v=2"></script>
+<script src="../cipher/silence_segmenter.js?v=2"></script>
+<script src="../cipher/fft_peak.js?v=2"></script>
 <script type="module">
-import { deriveAccount } from "./flute_key.js";
+import { deriveAccount } from "./flute_key.js?v=2";
 import { buildTransfer, signTransaction, sendRaw, maxFeeWei,
-         parseEther, formatEther } from "./tx.js";
+         parseEther, formatEther } from "./tx.js?v=2";
 
 const CHAIN_ID = 80002n;                       // Polygon Amoy
 const EXPLORER = "https://amoy.polygonscan.com/tx/";
