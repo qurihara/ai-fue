@@ -85,6 +85,35 @@ def blow_span(path, pad_head=0.6, pad_tail=1.2):
     return max(0.0, times[0] - pad_head), times[-1] + pad_tail
 
 
+def extend_tail(base, seconds, fade, tmp_dir):
+    """実演の末尾を静止したまま伸ばし、暗くしていく。伸ばした映像の道を返す。
+
+    ★なぜ要るか★
+    実演は吹き終えたところで終わるが、子画面が口座を開いて残高を出すのはその後である。
+    そのまま重ねると[* 残高が出る前に映像が終わる]。かといって元の録画から長く切り出すと、
+    次の札を吹き始める場面が入ってしまう（かるたの実演がそうであった）。
+
+    そこで最後のコマで止めたまま数秒足し、そのあいだに暗くする。人物は動かないので
+    「吹き終えて手を止めている」ように見え、子画面の側だけが進む。
+    """
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
+                                "-show_entries", "stream=duration", "-of", "csv=p=0", base],
+                               capture_output=True, text=True).stdout.strip().strip(","))
+    out_path = os.path.join(tmp_dir, "extended.mp4")
+    # tpad で最後のコマを複製して伸ばし、伸ばし始めから fade 秒かけて黒へ落とす。
+    # 音は伸ばした分だけ無音を足す（apad）。付けないと音声が先に終わって長さが揃わない。
+    vf = (f"tpad=stop_mode=clone:stop_duration={seconds},"
+          f"fade=t=out:st={dur:.3f}:d={fade:.3f}")
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", base,
+                    "-vf", vf, "-af", f"apad=pad_dur={seconds}",
+                    "-t", "%.3f" % (dur + seconds),
+                    "-c:v", "libx264", "-crf", "18", "-preset", "medium",
+                    "-c:a", "aac", "-b:a", "192k", out_path], check=True)
+    print("  実演を %.1f秒 → %.1f秒 に伸ばした（末尾で静止し、%.1f秒かけて暗くする）"
+          % (dur, dur + seconds, fade))
+    return out_path
+
+
 def compose(base, pinp, out, width_ratio, margin, corner, span, delay=0.0, at=0.0):
     marks = os.path.splitext(pinp)[0] + ".marks.json"
     off = audio_start_offset(marks)
@@ -140,7 +169,17 @@ def main(argv=None):
                          "1本の映像に独立した吹奏が2回入るときは自動判定に任せない")
     ap.add_argument("--whole", action="store_true",
                     help="吹いている区間だけでなく、最初から最後まで子画面を出す")
+    ap.add_argument("--extend", type=float, default=0.0,
+                    help="実演の末尾を静止したまま伸ばす秒数。子画面が口座を開いて"
+                         "残高を出すまで映像を持たせるために使う")
+    ap.add_argument("--fade", type=float, default=1.5,
+                    help="伸ばし始めてから暗くなるまでの秒数")
     a = ap.parse_args(argv)
+    tmp_dir = None
+    if a.extend > 0:
+        import tempfile
+        tmp_dir = tempfile.mkdtemp(prefix="pinp_")
+        a.base = extend_tail(a.base, a.extend, a.fade, tmp_dir)
     # 子画面の実寸は「親の幅 × ratio」。scale へ渡すため、親の幅を測って係数にする。
     def vwidth(path):
         # ★"634," のように余計な区切りが付いて返ることがある★ 数字だけ取り出す。

@@ -252,6 +252,9 @@ const MODE = (function readConfig(){
  */
 const LO_HZ = 1479, HI_HZ = 3520;   // 笛の音域（G#6の下からG7の上まで）に少し余白を取る
 const MIC_ON_DB = -75;              // 山がこれより強ければ鳴っているとみなす
+const DROP_DB = 15;                 // いちばん強い笛からこれ以上小さい音は物音とみなす
+let peakDb = -Infinity;             // いま鳴っている音の、これまででいちばん強いところ
+let loudest = -Infinity;            // この録音で拾った笛の、いちばん強いところ
 let ac, analyser, freqData, running = false, demoAudioEl = null;
 async function startMic(){
   try{
@@ -298,19 +301,33 @@ function loop(){
   el("noteName").textContent = good ? noteOf(pitch) : "–";
   // 区切り検出へ流す。時刻・音量(dB)・いま聞こえている高さ、の順で渡す仕様である。
   if(seg && active){
+    // 鳴っている最中のいちばん強いところを覚えておく。1本ぶんが確定したときに、
+    // それが本物の笛か物音かを見分けるのに使う（区切り器は音量を返さない）。
+    if(good) peakDb = Math.max(peakDb, db);
     const ev = seg.feed(performance.now() - t0, db, good ? pitch : 0);
     if(ev.type === "note"){
-      seq.push({freq: ev.freq, note: noteOf(ev.freq)});
-      renderSeq();
-      if(navigator.vibrate) navigator.vibrate(20);
-      /* ★録画のときは、1枚ぶんたまったところで自動的に確定する★
-       * 人が吹くときは1枚ごとに「終了して読む」を押すが、録画では音を通しで流すので
-       * 押す人がいない。本数で区切って次の1枚へ移る。
-       *
-       * [* 区切り器は作り直さない。] 作り直すと暗騒音の測り直し（0.4秒）が入り、
-       * その間の音を落とす。落ちたぶんは後からまとめて出るので、映像では
-       * 「吹いていないのに音名が出る」ように見えてしまう。 */
-      if(MODE.demoAudio && seq.length >= MODE.expect) setTimeout(demoAdvance, 0);
+      /* ★物音を笛と取り違えない★
+       * 実演では、札を持ち替えるときの物音を拾うことがある。本物の笛は20〜38dBだが、
+       * 物音は2〜5dBで、はっきり差がある。いちばん強い笛から DROP_DB 以上小さい音は
+       * 捨てる。捨てないと本数がずれ、口座が開かない（demo_2of2 で実際に起きた）。
+       * 録画の音源を読むときだけ効かせる。マイクで吹くときは、その場で吹き直せばよい。 */
+      const thisPeak = peakDb; peakDb = -Infinity;
+      loudest = Math.max(loudest, thisPeak);
+      // 列が空でも判定する。1枚目を確定した直後の1本は、まさに持ち替えの物音に当たる。
+      const noise = MODE.demoAudio && loudest > -Infinity && thisPeak < loudest - DROP_DB;
+      if(!noise){
+        seq.push({freq: ev.freq, note: noteOf(ev.freq)});
+        renderSeq();
+        if(navigator.vibrate) navigator.vibrate(20);
+        /* ★録画のときは、1枚ぶんたまったところで自動的に確定する★
+         * 人が吹くときは1枚ごとに「終了して読む」を押すが、録画では音を通しで流すので
+         * 押す人がいない。本数で区切って次の1枚へ移る。
+         *
+         * [* 区切り器は作り直さない。] 作り直すと暗騒音の測り直し（0.4秒）が入り、
+         * その間の音を落とす。落ちたぶんは後からまとめて出るので、映像では
+         * 「吹いていないのに音名が出る」ように見えてしまう。 */
+        if(MODE.demoAudio && seq.length >= MODE.expect) setTimeout(demoAdvance, 0);
+      }
     }else if(ev.type === "calibrating"){
       el("blowStatus").textContent = "部屋の静けさを測っています。少しだけ静かにしてください。";
     }else if(ev.type === "idle" && seq.length === 0){
