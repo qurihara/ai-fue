@@ -105,7 +105,7 @@ def serve():
     raise SystemExit("配信を始められなかった")
 
 
-def record(audio, query, out_path, after, width, height, tmp):
+def record(audio, query, out_path, after, width, height, tmp, meter=False):
     frames = os.path.join(tmp, "frames")
     shutil.rmtree(frames, ignore_errors=True)
     os.makedirs(frames, exist_ok=True)
@@ -121,6 +121,8 @@ def record(audio, query, out_path, after, width, height, tmp):
         q = query.lstrip("?&")
         url = (f"http://localhost:{SERVE_PORT}/dapp/?{q}"
                f"&demoaudio=_demoaudio/{urllib.parse.quote(audio)}")
+        if meter:
+            url += "&meter=1"
         tab.send("Page.navigate", url=url)
         time.sleep(2.5)
 
@@ -139,12 +141,20 @@ def record(audio, query, out_path, after, width, height, tmp):
         # 口座だけでなく[* 音の高さと、読み取った音名の列]まで入れる。吹くたびに
         # 何が読めているかが子画面で分かるようにするためである（栗原さんの指示）。
         # 列の場所は CSS（body.demo .seq）で先に空けてあるので、本数が増えても高さは動かない。
-        fixed_h = int(tab.evaluate("""(() => {
-          const cards = document.querySelectorAll('.wrap > .card');
-          const last = cards[1] || cards[0];
-          return Math.ceil(last.getBoundingClientRect().bottom) + 12;
-        })()""") or 520)
-        print("  切り取る高さ %d px（題名・口座・音の高さ・音名の列が入る）" % fixed_h)
+        if meter:
+            # メーターだけの子画面。音の高さと音名の箱だけを切り取る。
+            fixed_h = int(tab.evaluate("""(() => {
+              const c = document.getElementById('blowCard');
+              return Math.ceil(c.getBoundingClientRect().bottom) + 8;
+            })()""") or 120)
+            print("  切り取る高さ %d px（音の高さと音名だけ）" % fixed_h)
+        else:
+            fixed_h = int(tab.evaluate("""(() => {
+              const cards = document.querySelectorAll('.wrap > .card');
+              const last = cards[1] || cards[0];
+              return Math.ceil(last.getBoundingClientRect().bottom) + 12;
+            })()""") or 520)
+            print("  切り取る高さ %d px（題名・口座・音の高さ・音名の列が入る）" % fixed_h)
 
         started = tab.evaluate("window.__startDemo().then(r => JSON.stringify(r))")
         if not started:
@@ -159,6 +169,7 @@ def record(audio, query, out_path, after, width, height, tmp):
               const card = document.getElementById('acctCard');
               return JSON.stringify({
                 n: document.querySelectorAll('#seq .chip').length,
+                hz: document.getElementById('hz').textContent,
                 peaks: (window.__seqPeaks || []).map(v => Math.round(v)),
                 msg: document.getElementById('blowStatus').textContent.slice(0, 40),
                 open: card.classList.contains('open'),
@@ -176,6 +187,7 @@ def record(audio, query, out_path, after, width, height, tmp):
             marks.append({"frame": n, "wall": round(tick - t0, 3),
                           "audio": round(s.get("at", 0) or 0, 3),
                           "n": s.get("n", 0), "open": bool(s.get("open")),
+                          "hz": s.get("hz", ""),
                           "bal": s.get("bal", ""), "peaks": s.get("peaks", []),
                           "msg": s.get("msg", "")})
             if first_note_t is None and s.get("n"):
@@ -225,10 +237,13 @@ def main(argv=None):
     ap.add_argument("--width", type=int, default=680)
     ap.add_argument("--height", type=int, default=900)
     ap.add_argument("--tmp", default="/tmp/record_wallet")
+    ap.add_argument("--meter", action="store_true",
+                    help="音の高さと音名だけの子画面にする（口座は出さない）")
     args = ap.parse_args(argv)
 
     os.makedirs(args.tmp, exist_ok=True)
-    record(args.audio, args.url, args.out, args.after, args.width, args.height, args.tmp)
+    record(args.audio, args.url, args.out, args.after, args.width, args.height, args.tmp,
+           meter=args.meter)
     return 0
 
 

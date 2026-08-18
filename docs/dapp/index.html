@@ -45,6 +45,14 @@
      空けないと本数が増えるたびに高さが変わり、動画にしたとき縦に潰れる。 */
   body.demo .seq{min-height:108px;align-content:flex-start}
   body.demo .status{min-height:1.4em}
+  /* メーターだけの子画面（meter=1）。口座も操作も出さず、音の高さと音名だけを大きく出す。
+     復号の成立に依存しないので、どの実演にも安全に重ねられる。 */
+  body.meteronly .wrap{max-width:400px;padding:6px 8px}
+  body.meteronly .wrap > *{display:none !important}
+  body.meteronly #blowCard{display:block !important}
+  body.meteronly #blowCard > *:not(.meter){display:none !important}
+  body.meteronly #blowCard{padding:10px 14px;margin:4px 0}
+  body.meteronly .hz,body.meteronly .note{font-size:3rem}
 </style>
 </head>
 <body>
@@ -62,7 +70,7 @@
     <span class="status" id="acctStatus"></span>
   </div>
 
-  <div class="card">
+  <div class="card" id="blowCard">
     <div class="meter"><span class="hz"><span id="hz">–</span><span style="font-size:.8rem;color:var(--muted)"> Hz</span></span>
       <span class="note" id="noteName">–</span></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
@@ -227,11 +235,16 @@ const MODE = (function readConfig(){
     name: q("name") || "指定なし（既定の設定）",
     // 紹介動画を撮るための入口。マイクの代わりに、この音声を流して同じ道で解析する。
     demoAudio: q("demoaudio") || null,
+    // meter=1 で、音の高さと音名だけの表示にする（子画面用）。
+    meter: q("meter") === "1",
+    // 鳴っているとみなす山の強さ[dB]。素材の物音が強いときに引き上げる。
+    onDb: parseFloat(q("ondb") ?? "") || null,
     dropDb: parseFloat(q("dropdb") ?? "") || null,
   };
 })();
 
 if(MODE.demoAudio) document.body.classList.add("demo");
+if(MODE.meter) document.body.classList.add("meteronly");
 
 // いまの設定を画面に出す。何を読もうとしているのかが分からないまま吹かせない。
 // 上には1行だけ置き、細かい中身は末尾の折りたたみに送る（紹介動画で上端だけを映すため）。
@@ -304,7 +317,7 @@ function loop(){
   analyser.getFloatFrequencyData(freqData);
   const binHz = ac.sampleRate / analyser.fftSize;
   const pk = window.FftPeak.peakInBand(freqData, binHz, LO_HZ, HI_HZ);
-  const good = !!(pk && pk.level > MIC_ON_DB);
+  const good = !!(pk && pk.level > (MODE.onDb ?? MIC_ON_DB));
   const pitch = good ? pk.freq : 0;
   const db = pk ? pk.level : -120;
   /* 口座が開いたら、音の高さの表示は止める。吹き終えたあとの残響や物音を拾って
