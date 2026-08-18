@@ -41,6 +41,10 @@
   #bal.live{color:var(--ok)}
   input.wide{width:100%;background:#0c0f1d;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.55em;
              font-family:ui-monospace,Menlo,monospace}
+  /* 紹介動画を撮るとき（demoaudio=）だけ、音名の列の場所を先に空けておく。
+     空けないと本数が増えるたびに高さが変わり、動画にしたとき縦に潰れる。 */
+  body.demo .seq{min-height:108px;align-content:flex-start}
+  body.demo .status{min-height:1.4em}
 </style>
 </head>
 <body>
@@ -223,8 +227,11 @@ const MODE = (function readConfig(){
     name: q("name") || "指定なし（既定の設定）",
     // 紹介動画を撮るための入口。マイクの代わりに、この音声を流して同じ道で解析する。
     demoAudio: q("demoaudio") || null,
+    dropDb: parseFloat(q("dropdb") ?? "") || null,
   };
 })();
+
+if(MODE.demoAudio) document.body.classList.add("demo");
 
 // いまの設定を画面に出す。何を読もうとしているのかが分からないまま吹かせない。
 // 上には1行だけ置き、細かい中身は末尾の折りたたみに送る（紹介動画で上端だけを映すため）。
@@ -252,7 +259,10 @@ const MODE = (function readConfig(){
  */
 const LO_HZ = 1479, HI_HZ = 3520;   // 笛の音域（G#6の下からG7の上まで）に少し余白を取る
 const MIC_ON_DB = -75;              // 山がこれより強ければ鳴っているとみなす
-const DROP_DB = 15;                 // いちばん強い笛からこれ以上小さい音は物音とみなす
+/* いちばん強い笛からこれ以上小さい音は物音とみなす。実測では、本物の笛が18〜40dB、
+   物音が-7〜5dBで、あいだが広く空いている。25を既定にすると両側とも取りこぼさない。
+   素材によっては URLの dropdb= で調節する。 */
+const DROP_DB = 25;
 let peakDb = -Infinity;             // いま鳴っている音の、これまででいちばん強いところ
 let loudest = -Infinity;            // この録音で拾った笛の、いちばん強いところ
 let ac, analyser, freqData, running = false, demoAudioEl = null;
@@ -314,9 +324,19 @@ function loop(){
       const thisPeak = peakDb; peakDb = -Infinity;
       loudest = Math.max(loudest, thisPeak);
       // 列が空でも判定する。1枚目を確定した直後の1本は、まさに持ち替えの物音に当たる。
-      const noise = MODE.demoAudio && loudest > -Infinity && thisPeak < loudest - DROP_DB;
+      const dropDb = MODE.dropDb || DROP_DB;
+      const noise = MODE.demoAudio && loudest > -Infinity && thisPeak < loudest - dropDb;
+      /* ★先に拾った弱い音を、あとから捨て直す★
+       * 1本目には比べる相手がいないので、冒頭の物音は必ず通ってしまう。あとから
+       * 本物の笛（ずっと強い）が来た時点で、それより DROP_DB 以上弱いものを列から外す。
+       * 外さないと本数がずれ、記号が1つずつずれて別の口座が開く（demo_box で実際に起きた）。 */
+      if(MODE.demoAudio && !noise && seq.length){
+        const before = seq.length;
+        seq = seq.filter(x => x.peak === undefined || x.peak >= loudest - dropDb);
+        if(seq.length !== before) renderSeq();
+      }
       if(!noise){
-        seq.push({freq: ev.freq, note: noteOf(ev.freq)});
+        seq.push({freq: ev.freq, note: noteOf(ev.freq), peak: thisPeak});
         renderSeq();
         if(navigator.vibrate) navigator.vibrate(20);
         /* ★録画のときは、1枚ぶんたまったところで自動的に確定する★

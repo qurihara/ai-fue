@@ -136,11 +136,15 @@ def record(audio, query, out_path, after, width, height, tmp):
 
         # ★切り取る高さは最初に決めて固定する★ コマごとに変えると、動画にしたとき
         # ffmpeg が最初のコマの大きさへ合わせて縦に潰す。
+        # 口座だけでなく[* 音の高さと、読み取った音名の列]まで入れる。吹くたびに
+        # 何が読めているかが子画面で分かるようにするためである（栗原さんの指示）。
+        # 列の場所は CSS（body.demo .seq）で先に空けてあるので、本数が増えても高さは動かない。
         fixed_h = int(tab.evaluate("""(() => {
-          const c = document.getElementById('acctCard');
-          return Math.ceil(c.getBoundingClientRect().bottom) + 12;
-        })()""") or 260)
-        print("  切り取る高さ %d px（題名と口座が入る。最後まで変えない）" % fixed_h)
+          const cards = document.querySelectorAll('.wrap > .card');
+          const last = cards[1] || cards[0];
+          return Math.ceil(last.getBoundingClientRect().bottom) + 12;
+        })()""") or 520)
+        print("  切り取る高さ %d px（題名・口座・音の高さ・音名の列が入る）" % fixed_h)
 
         started = tab.evaluate("window.__startDemo().then(r => JSON.stringify(r))")
         if not started:
