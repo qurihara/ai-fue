@@ -307,8 +307,11 @@ function loop(){
   const good = !!(pk && pk.level > MIC_ON_DB);
   const pitch = good ? pk.freq : 0;
   const db = pk ? pk.level : -120;
-  el("hz").textContent = good ? pitch.toFixed(1) : "–";
-  el("noteName").textContent = good ? noteOf(pitch) : "–";
+  /* 口座が開いたら、音の高さの表示は止める。吹き終えたあとの残響や物音を拾って
+     数字が動き続けると、映像では「吹いていないのに動いている」ように見える。 */
+  const showLive = !(MODE.demoAudio && account);
+  el("hz").textContent = (good && showLive) ? pitch.toFixed(1) : "–";
+  el("noteName").textContent = (good && showLive) ? noteOf(pitch) : "–";
   // 区切り検出へ流す。時刻・音量(dB)・いま聞こえている高さ、の順で渡す仕様である。
   if(seg && active){
     // 鳴っている最中のいちばん強いところを覚えておく。1本ぶんが確定したときに、
