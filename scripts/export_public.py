@@ -163,7 +163,7 @@ def export_wallet(out, dry=False):
     for f in ("secp256k1.js", "package.json",
               "LICENSE.noble-hashes", "LICENSE.noble-secp256k1"):
         copy(os.path.join(src, "vendor", f), os.path.join(d, "vendor", f), dry)
-    for f in ("sha3.js", "_u64.js", "crypto.js", "utils.js"):
+    for f in ("sha3.js", "u64.js", "crypto.js", "utils.js"):
         copy(os.path.join(src, "vendor/noble-hashes", f),
              os.path.join(d, "vendor/noble-hashes", f), dry)
     if dry:
