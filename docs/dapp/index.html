@@ -334,12 +334,18 @@ function loop(){
        * 本物の笛（ずっと強い）が来た時点で、それより DROP_DB 以上弱いものを列から外す。
        * 外さないと本数がずれ、記号が1つずつずれて別の口座が開く（demo_box で実際に起きた）。 */
       if(MODE.demoAudio && !noise && seq.length){
-        const before = seq.length;
-        seq = seq.filter(x => x.peak === undefined || x.peak >= loudest - dropDb);
-        if(seq.length !== before) renderSeq();
+        // ★入れ物ごと作り直さず、中身を詰め替える★ seq は他からも参照されているので、
+        // 別の配列に差し替えると、そちらが古い中身を持ったままになる。
+        const kept = seq.filter(x => x.peak === undefined || x.peak >= loudest - dropDb);
+        if(kept.length !== seq.length){
+          seq.length = 0;
+          for(const x of kept) seq.push(x);
+          renderSeq();
+        }
       }
       if(!noise){
         seq.push({freq: ev.freq, note: noteOf(ev.freq), peak: thisPeak});
+        window.__seqPeaks = seq.map(x => x.peak);   // 録画から強さを確かめられるように
         renderSeq();
         if(navigator.vibrate) navigator.vibrate(20);
         /* ★録画のときは、1枚ぶんたまったところで自動的に確定する★
@@ -650,10 +656,17 @@ window.__startDemo = async () => {
   await demoAudioEl.play();
   return {started: true, duration: demoAudioEl.duration};
 };
-// 音が終わったら、吹き終えたものとして読む（人が押す「終了して読む」の代わり）。
+/* 音が終わったら、吹き終えたものとして読む（人が押す「終了して読む」の代わり）。
+ * ★すぐには読まない。★ 区切り器は「無音が続いたら1本確定」という作りなので、
+ * 最後の音が音源の終わりまで鳴っていると、その1本が確定しないまま終わる。
+ * 音が止まったあとの無音を聞かせるために少し待つ（実際、待たないと最後の1本が
+ * 落ちて box_2of3 と card_2026724 が読めなかった）。 */
 if(MODE.demoAudio){
   const t = setInterval(() => {
-    if(demoAudioEl && demoAudioEl.ended && active){ clearInterval(t); blowEnd(); }
+    if(demoAudioEl && demoAudioEl.ended && active){
+      clearInterval(t);
+      setTimeout(() => { if(active) blowEnd(); }, 700);
+    }
   }, 200);
 }
 </script>

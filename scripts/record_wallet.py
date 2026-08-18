@@ -159,6 +159,8 @@ def record(audio, query, out_path, after, width, height, tmp):
               const card = document.getElementById('acctCard');
               return JSON.stringify({
                 n: document.querySelectorAll('#seq .chip').length,
+                peaks: (window.__seqPeaks || []).map(v => Math.round(v)),
+                msg: document.getElementById('blowStatus').textContent.slice(0, 40),
                 open: card.classList.contains('open'),
                 bal: document.getElementById('bal').textContent,
                 addr: document.getElementById('addr').textContent.slice(0, 12),
@@ -174,7 +176,8 @@ def record(audio, query, out_path, after, width, height, tmp):
             marks.append({"frame": n, "wall": round(tick - t0, 3),
                           "audio": round(s.get("at", 0) or 0, 3),
                           "n": s.get("n", 0), "open": bool(s.get("open")),
-                          "bal": s.get("bal", "")})
+                          "bal": s.get("bal", ""), "peaks": s.get("peaks", []),
+                          "msg": s.get("msg", "")})
             if first_note_t is None and s.get("n"):
                 first_note_t = tick - t0
             rest = interval - (time.time() - tick)
