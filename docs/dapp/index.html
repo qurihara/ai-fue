@@ -221,6 +221,8 @@ const MODE = (function readConfig(){
     shares: Number.isFinite(shares) && shares >= 2 ? shares : 0,
     label: q("label") || "amoy",
     name: q("name") || "指定なし（既定の設定）",
+    // 紹介動画を撮るための入口。マイクの代わりに、この音声を流して同じ道で解析する。
+    demoAudio: q("demoaudio") || null,
   };
 })();
 
@@ -250,12 +252,26 @@ const MODE = (function readConfig(){
  */
 const LO_HZ = 1479, HI_HZ = 3520;   // 笛の音域（G#6の下からG7の上まで）に少し余白を取る
 const MIC_ON_DB = -75;              // 山がこれより強ければ鳴っているとみなす
-let ac, analyser, freqData, running = false;
+let ac, analyser, freqData, running = false, demoAudioEl = null;
 async function startMic(){
   try{
-    const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
     ac = new (window.AudioContext||window.webkitAudioContext)();
-    const src = ac.createMediaStreamSource(stream);
+    let src;
+    if(MODE.demoAudio){
+      /* ★実演の録画を音源にする（紹介動画を作るための入口）★
+       * マイクの代わりに音声ファイルを流し込む。解析の道はマイクとまったく同じなので、
+       * 1本ずつ音名が出て、そろうと口座が現れる様子がそのまま撮れる。
+       * 復号ページ（docs/cipher/）の demoaudio= と同じ仕掛けである。 */
+      const a = new Audio(MODE.demoAudio);
+      a.crossOrigin = "anonymous";
+      demoAudioEl = a;
+      window.__demoAudio = a;            // 録画の段取りを外から確かめられるように
+      src = ac.createMediaElementSource(a);
+      src.connect(ac.destination);       // 何を流しているか耳でも分かるように
+    }else{
+      const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
+      src = ac.createMediaStreamSource(stream);
+    }
     analyser = ac.createAnalyser(); analyser.fftSize = 4096; analyser.smoothingTimeConstant = 0;
     src.connect(analyser);
     freqData = new Float32Array(analyser.frequencyBinCount);
@@ -287,13 +303,23 @@ function loop(){
       seq.push({freq: ev.freq, note: noteOf(ev.freq)});
       renderSeq();
       if(navigator.vibrate) navigator.vibrate(20);
+      /* ★録画のときは、1枚ぶんたまったところで自動的に確定する★
+       * 人が吹くときは1枚ごとに「終了して読む」を押すが、録画では音を通しで流すので
+       * 押す人がいない。本数で区切って次の1枚へ移る。
+       *
+       * [* 区切り器は作り直さない。] 作り直すと暗騒音の測り直し（0.4秒）が入り、
+       * その間の音を落とす。落ちたぶんは後からまとめて出るので、映像では
+       * 「吹いていないのに音名が出る」ように見えてしまう。 */
+      if(MODE.demoAudio && seq.length >= MODE.expect) setTimeout(demoAdvance, 0);
     }else if(ev.type === "calibrating"){
       el("blowStatus").textContent = "部屋の静けさを測っています。少しだけ静かにしてください。";
     }else if(ev.type === "idle" && seq.length === 0){
       el("blowStatus").textContent = "準備できました。1本目を吹いてください。";
     }
   }
-  requestAnimationFrame(loop);
+  // ★タブが前面にないと requestAnimationFrame が止まる★ 録画のときは音だけが先へ進み、
+  // 解析が一度も回らないまま終わってしまう。エラーも出ないので気づきにくい。
+  if(MODE.demoAudio) setTimeout(loop, 16); else requestAnimationFrame(loop);
 }
 function noteOf(freq){
   return window.CipherCodec.midiToNote(Math.round(69 + 12*Math.log2(freq/440)));
@@ -346,6 +372,24 @@ function blowEnd(){
   if(cards.length >= m.cards) openAccount();
 }
 function blowToggle(){ active ? blowEnd() : blowStart(); }
+
+/** 録画のとき、1枚ぶんを確定して次の1枚へ移る。区切り器と吹き取りは続けたままにする。 */
+function demoAdvance(){
+  const m = MODE;
+  if(!active || seq.length < m.expect) return;
+  const freqs = seq.map(s => s.skipped ? window.CipherCodec.noteToFreq(CFG_BASE.lo_note)/2 : s.freq);
+  const r = window.CipherCodec.decode(freqs, m.cfg, true);
+  if(r.status.startsWith("error:")){
+    el("blowStatus").textContent = "読めませんでした（" + r.status + "）。";
+    seq = []; renderSeq(); return;
+  }
+  cards.push(m.cfg.mode === "symbols" ? {symbols:r.symbols} : {payload:r.payload});
+  seq = [];
+  el("blowStatus").textContent = cards.length + "枚目を読み取りました（" + r.status + "）。"
+      + (cards.length < m.cards ? "続けて次の1枚を吹いてください。" : "");
+  renderSeq();
+  if(cards.length >= m.cards){ active = false; seg = null; openAccount(); }
+}
 
 /* ★k-of-n では、担体の番号を総当たりする★
  *
@@ -544,8 +588,6 @@ el("forgetBtn").onclick = forget;
 el("refreshBtn").onclick = refresh;
 el("prepareBtn").onclick = prepare;
 el("sendBtn").onclick = send;
-// 設定を # で受けることもあるので、末尾へのリンクで hash を書き換えない。
-el("aboutLink").onclick = (e) => { e.preventDefault(); el("about").scrollIntoView({behavior:"smooth"}); };
 // 合言葉を変えたら別の口座になるので、いまの鍵は捨てる。
 el("pass").onchange = () => { if(account) forget(); };
 el("skipBtn").onclick = ()=>{ if(active){ seq.push({skipped:true}); renderSeq(); } };
@@ -555,6 +597,25 @@ renderSeq();
 // ページを開いたら自動でマイクを開く。実演のたびに許可を押させないためである。
 // ブラウザに拒否されたときだけ「マイクを開始」のボタンが現れる。
 startMic();
+
+/* ★紹介動画を撮るときの段取り★
+ * demoaudio= を渡されたときは、外から window.__startDemo() を呼ぶと、吹き取りを始めて
+ * 音声を流す。録画の側は、その時刻を起点に子画面を出せばよい。
+ * 自分で勝手に始めないのは、録画の開始と音の頭を合わせたいからである。
+ */
+window.__startDemo = async () => {
+  if(!MODE.demoAudio) throw new Error("demoaudio= が指定されていない");
+  if(!running) await startMic();
+  if(!active) await blowStart();
+  await demoAudioEl.play();
+  return {started: true, duration: demoAudioEl.duration};
+};
+// 音が終わったら、吹き終えたものとして読む（人が押す「終了して読む」の代わり）。
+if(MODE.demoAudio){
+  const t = setInterval(() => {
+    if(demoAudioEl && demoAudioEl.ended && active){ clearInterval(t); blowEnd(); }
+  }, 200);
+}
 </script>
 </body>
 </html>
